@@ -189,17 +189,17 @@ legacy에서 답을 찾으면 그 자리에서 종류별 족보로 **옮긴다**
 
 GitHub `schedule`은 지연(최대 80분)·누락이 잦아 external cron (cron-job.org)을 주 트리거로 사용한다. PAT 만료 시 401로 실패하므로 cron-job.org 실패 알림 및 PAT 만료일을 관리할 것.
 
-**PAT (fine-grained):** repository access = `SJBaek7790/DocAuto`만, permissions = **Actions: Read and write** + Metadata(자동).
+**PAT (fine-grained):** repository access = `econ-blog/DocAuto`만, permissions = **Actions: Read and write** + Metadata(자동).
 
 **1) DocAuto seminar block (`seminar_block.yml`):**
-- URL: `https://api.github.com/repos/SJBaek7790/DocAuto/actions/workflows/seminar_block.yml/dispatches`
+- URL: `https://api.github.com/repos/econ-blog/DocAuto/actions/workflows/seminar_block.yml/dispatches`
 - Method / Body: `POST` / `{"ref":"main"}`
 - Headers: `Accept: application/vnd.github+json`, `Authorization: Bearer <PAT>`, `X-GitHub-Api-Version: 2022-11-28`, `Content-Type: application/json`
 - Timezone: `Asia/Seoul`
 - Schedule: Minutes `0,30` / Hours `11,12,13,14,17,18,19,20,21` (하루 18회)
 
 **2) DocAuto daily (`daily.yml`):**
-- URL: `https://api.github.com/repos/SJBaek7790/DocAuto/actions/workflows/daily.yml/dispatches`
+- URL: `https://api.github.com/repos/econ-blog/DocAuto/actions/workflows/daily.yml/dispatches`
 - Method / Body: `POST` / `{"ref":"main"}`
 - Headers: `Accept: application/vnd.github+json`, `Authorization: Bearer <PAT>`, `X-GitHub-Api-Version: 2022-11-28`, `Content-Type: application/json`
 - Timezone: `Asia/Seoul`
