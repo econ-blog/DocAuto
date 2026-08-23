@@ -83,6 +83,7 @@ credentials 스키마·계정별 id 규칙 → [MEMORY.md](MEMORY.md) "credentia
    일반 문항은 항상 2번으로 자동 제출되므로 여기 올라오지 않는다. `bank: null`이면 보기가 2개 미만인 DOM 이상이니 스크린샷을 본다.
 3. `failed` / `unverified` 알림 → 텔레그램 메시지보다 **Actions artifact 스크린샷을 먼저** 본다(`gh run download <run-id>`).
 4. 연속 출석일이 10의 배수에 근접하면 룰렛 안내.
+5. 사용자가 채팅으로 텔레그램 인박스 형식 그대로 `제품명 시퀀스`(예: `징코샷 O24`)를 주면 → 절차는 [MEMORY.md](MEMORY.md) "채팅으로 시퀀스 답 받기" 참고. 반영 후 사용자가 명시적으로 요청하면 `main`에 merge·push한다.
 
 ### 금지
 - 정답을 추측해 제출하지 않는다. 미등록이면 미시도(`no_answer` / `incomplete_bank`).
