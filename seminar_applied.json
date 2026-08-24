@@ -1,21 +1,5 @@
 {
   "bjh7790": {
-    "5576": {
-      "applied_at": "2026-08-18T14:32:58.194758+09:00",
-      "date": "2026-08-24",
-      "day": 24,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-24(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-24",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "라이브세미나",
-      "year": 2026
-    },
     "5577": {
       "applied_at": "2026-08-18T18:32:51.205881+09:00",
       "date": "2026-08-24",
@@ -157,38 +141,6 @@
       "start_hour": 17,
       "start_minute": 0,
       "start_time": "17:00",
-      "title": "라이브세미나",
-      "year": 2026
-    },
-    "5586": {
-      "applied_at": "2026-08-19T12:33:09.153872+09:00",
-      "date": "2026-08-24",
-      "day": 24,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-24(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-24",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "라이브세미나",
-      "year": 2026
-    },
-    "5587": {
-      "applied_at": "2026-08-19T12:33:00.848382+09:00",
-      "date": "2026-08-24",
-      "day": 24,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-24(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-24",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
       "title": "라이브세미나",
       "year": 2026
     },
@@ -434,22 +386,6 @@
     }
   },
   "wonju": {
-    "5576": {
-      "applied_at": "2026-08-18T14:33:50.805116+09:00",
-      "date": "2026-08-24",
-      "day": 24,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-24(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-24",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "라이브세미나",
-      "year": 2026
-    },
     "5577": {
       "applied_at": "2026-08-18T17:32:53.122027+09:00",
       "date": "2026-08-24",
@@ -591,38 +527,6 @@
       "start_hour": 17,
       "start_minute": 0,
       "start_time": "17:00",
-      "title": "라이브세미나",
-      "year": 2026
-    },
-    "5586": {
-      "applied_at": "2026-08-19T12:34:36.982858+09:00",
-      "date": "2026-08-24",
-      "day": 24,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-24(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-24",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "라이브세미나",
-      "year": 2026
-    },
-    "5587": {
-      "applied_at": "2026-08-19T12:34:25.258349+09:00",
-      "date": "2026-08-24",
-      "day": 24,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-24(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-24",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
       "title": "라이브세미나",
       "year": 2026
     },
