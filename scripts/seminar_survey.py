@@ -676,6 +676,39 @@ def dump_survey_dom(survey_page, seminar_id) -> str:
     return str(path)
 
 
+def probe_questions(survey_page) -> list[dict]:
+    """빈 문항의 원인을 가리는 구조 정보만 읽는다(문항 텍스트는 담지 않는다).
+
+    innerText는 비었는데 textContent가 있으면 요소가 숨겨진 것(렌더 안 됨)이고,
+    둘 다 비었으면 내용 자체가 아직 없는 것이다. `head`가 null이면 문항 텍스트가
+    `label > div`가 아닌 다른 자리에 있다는 뜻이다. 길이·태그명만 담으므로 이름·
+    소속 같은 개인정보가 로그로 새지 않는다.
+    """
+    try:
+        return survey_page.evaluate(
+            """() => Array.from(document.querySelectorAll('li[data-question-number]')).map(li => {
+                const head = li.querySelector('label > div');
+                const r = li.getBoundingClientRect();
+                return {
+                    n: li.getAttribute('data-question-number'),
+                    li_inner: (li.innerText || '').length,
+                    li_text: (li.textContent || '').length,
+                    head_inner: head ? (head.innerText || '').length : -1,
+                    head_text: head ? (head.textContent || '').length : -1,
+                    hidden: li.offsetParent === null,
+                    height: Math.round(r.height),
+                    fields: Array.from(li.querySelectorAll('input, select, textarea'))
+                        .map(e => e.tagName.toLowerCase() + ':' + (e.type || '')).join(','),
+                    kids: Array.from(li.children)
+                        .map(e => e.tagName.toLowerCase() + '.' + String(e.className || '').slice(0, 30)).join(' | '),
+                    iframes: li.querySelectorAll('iframe').length,
+                };
+            })"""
+        )
+    except Exception:
+        return []
+
+
 def dismiss_alerts(survey_page, max_rounds: int = 3) -> list[str]:
     """설문 창의 headlessui 모달(알림)을 닫는다. 닫은 메시지 목록을 반환.
 
@@ -897,6 +930,7 @@ def run_survey(
                 if blanks:
                     result["blank_questions"] = len(blanks)
                     result["questions_total"] = len(questions)
+                    result["blank_probe"] = probe_questions(survey_page)
                     result["screenshot"] = common.save_screenshot(
                         survey_page, f"survey_{seminar_id}_blank"
                     )
