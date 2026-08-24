@@ -886,12 +886,17 @@ def run_survey(
         promoted = {}
         for _ in range(MAX_PAGES):
             questions = read_questions(survey_page)
-            if questions and all(is_blank_question(q) for q in questions):
+            if any(is_blank_question(q) for q in questions):
                 # 렌더가 덜 끝났을 수 있으니 한 번 더 읽는다. 그래도 비어 있으면
                 # 마크업이 다른 것이므로 스크린샷·DOM을 남겨 다음 작업 거리로 삼는다.
+                # 한 페이지에 정상 문항과 빈 문항이 섞여 나오므로(2026-08-24 세미나
+                # 5587) 전부가 아니라 하나라도 비면 걸러야 한다.
                 survey_page.wait_for_timeout(BLANK_RETRY_WAIT_MS)
                 questions = read_questions(survey_page)
-                if questions and all(is_blank_question(q) for q in questions):
+                blanks = [q for q in questions if is_blank_question(q)]
+                if blanks:
+                    result["blank_questions"] = len(blanks)
+                    result["questions_total"] = len(questions)
                     result["screenshot"] = common.save_screenshot(
                         survey_page, f"survey_{seminar_id}_blank"
                     )
