@@ -86,6 +86,9 @@ MAX_PAGES = 10  # 무한 루프 방지 (실측 설문은 1~2페이지)
 # (실측: 세미나 3건 × 계정 2개 × 30초).
 SURVEY_POPUP_TIMEOUT_MS = 8000
 
+# 문항이 통째로 빈 값으로 읽혔을 때 렌더를 한 번 더 기다리는 시간.
+BLANK_RETRY_WAIT_MS = 5000
+
 
 # ---------------------------------------------------------------------------
 # 순수 함수 (테스트 대상)
@@ -638,6 +641,41 @@ def read_questions(survey_page) -> list[dict]:
     )
 
 
+def is_blank_question(q: dict) -> bool:
+    """문항 텍스트·보기·입력란이 모두 비어 있는 문항(추출 실패 의심).
+
+    2026-08-24 세미나 5587(전공의를 위한 응급실 증례강의)에서 `li[data-question-number]`
+    10건이 전부 이 상태로 읽혔다. 문항이 실제로 비어 있을 수는 없으므로 렌더가
+    아직 안 끝났거나 마크업이 다른 경우다.
+    """
+    return (
+        not normalize(q.get("question", ""))
+        and not q.get("options")
+        and q.get("kind") != "input"
+    )
+
+
+def dump_survey_dom(survey_page, seminar_id) -> str:
+    """설문 페이지 DOM을 logs/에 저장하고 경로를 반환한다(실패 시 빈 문자열).
+
+    문항 추출이 통째로 실패했을 때 마크업을 확인할 유일한 수단이다. 설문 페이지에는
+    이름·소속이 들어가므로 **artifact 전용이며 커밋하지 않는다**(scripts/logs/는
+    gitignore 대상).
+    """
+    try:
+        html = survey_page.content()
+    except Exception:
+        return ""
+    common.LOG_DIR.mkdir(exist_ok=True)
+    ts = datetime.now(kst).strftime("%Y%m%d_%H%M%S")
+    path = common.LOG_DIR / f"survey_{seminar_id}_dom_{ts}.html"
+    try:
+        path.write_text(html, encoding="utf-8")
+    except OSError:
+        return ""
+    return str(path)
+
+
 def dismiss_alerts(survey_page, max_rounds: int = 3) -> list[str]:
     """설문 창의 headlessui 모달(알림)을 닫는다. 닫은 메시지 목록을 반환.
 
@@ -848,6 +886,16 @@ def run_survey(
         promoted = {}
         for _ in range(MAX_PAGES):
             questions = read_questions(survey_page)
+            if questions and all(is_blank_question(q) for q in questions):
+                # 렌더가 덜 끝났을 수 있으니 한 번 더 읽는다. 그래도 비어 있으면
+                # 마크업이 다른 것이므로 스크린샷·DOM을 남겨 다음 작업 거리로 삼는다.
+                survey_page.wait_for_timeout(BLANK_RETRY_WAIT_MS)
+                questions = read_questions(survey_page)
+                if questions and all(is_blank_question(q) for q in questions):
+                    result["screenshot"] = common.save_screenshot(
+                        survey_page, f"survey_{seminar_id}_blank"
+                    )
+                    result["dom_dump"] = dump_survey_dom(survey_page, seminar_id)
             if not questions:
                 if pages_done:
                     page_text = body_text(survey_page)
