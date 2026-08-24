@@ -21,6 +21,9 @@ seminar_live.py로 입장에 성공한 세미나는 방송 팝업에서 설문�
     - general — 나머지 선택형(만족도·선호도 등). 정답이 없으므로 족보를 보지 않고
                 항상 **2번 보기**를 고른다. 미등록으로 막히지 않는다.
 
+    분류 이전에, 응답 컨트롤(라디오·체크박스·입력란)이 하나도 없는 항목은
+    `resolve_page`가 건너뛴다. 안내문·읽기 전용 표시이지 문항이 아니다.
+
     `[퀴즈]` 배지는 같은 문항이라도 세미나에 따라 빠질 때가 있다(실측). 그래서
     배지가 없더라도 **퀴즈 족보에 키가 이미 있으면 quiz로 분류**한다 — 값이 빈
     문자열이면 general로 새는 대신 incomplete_bank로 막힌다.
@@ -52,6 +55,13 @@ DOM 근거 (2026-07-27 실측):
       input[type=radio|checkbox] + span.col-start-2
     진행:     input[type=submit][value="제출하기"] (마지막 페이지)
               여러 페이지 설문은 마지막 페이지 전까지 "다음" 버튼이 대신 나온다.
+
+    2026-08-24 세미나 5587 추가 실측 — 같은 `li[data-question-number]` 안에
+    **응답 컨트롤이 없는 `<p>` 기반 항목**이 섞여 나온다. 구조는
+    `span(번호 배지) | p | p`이고 `label > div`가 없다. 화면에는 보이며
+    (`hidden:false`, 높이 84px) 텍스트도 44~83자로 들어 있다. 그 항목이
+    무엇인지(이미 응답된 문항의 읽기 전용 표시인지 안내문인지)는 미확인 —
+    MEMORY.md "설문 `<p>` 기반 항목" 참고.
 """
 
 import argparse
@@ -353,6 +363,8 @@ def resolve_page(questions: list[dict], banks: dict) -> tuple[list[dict], list[d
     일반 문항은 족보를 보지 않고 항상 2번 보기를 고르므로 미등록이 되지 않는다.
     퀴즈·주관식만 미등록이 될 수 있고, 미등록 항목에는 채워 넣을 족보를 가리키는
     `bank` 키가 붙는다(고를 보기 자체가 없으면 None).
+
+    응답 컨트롤이 없는 항목(kind="unknown")은 계획에도 미등록에도 넣지 않는다.
     """
     plan, missing = [], []
     indexes = {k: build_canonical_index(banks.get(k, {})) for k in ("quiz", "text", "legacy")}
@@ -369,6 +381,14 @@ def resolve_page(questions: list[dict], banks: dict) -> tuple[list[dict], list[d
                 "option_texts": list(options),
                 "bank": bank_name,
             })
+
+        if q.get("kind") == "unknown":
+            # 라디오·체크박스·입력란이 하나도 없는 항목. 답할 컨트롤이 없으므로
+            # 문항이 아니라 안내문·읽기 전용 표시다(2026-08-24 세미나 5587 실측:
+            # `<p>` 두 개로만 된 항목 10건). 미등록으로 막지 않고 건너뛴다.
+            # 만약 이것이 실제로는 답해야 하는 필수 문항이었다면 진행 버튼이
+            # 먹지 않아 `seen_pages` 지문 검사가 잡는다 — 오답이 제출되지는 않는다.
+            continue
 
         kind = classify_question(q, banks.get("quiz", {}))
 
@@ -613,7 +633,10 @@ def read_questions(survey_page) -> list[dict]:
     """현재 설문 페이지의 문항·보기·입력란을 읽는다."""
     return survey_page.evaluate(
         """() => Array.from(document.querySelectorAll('li[data-question-number]')).map(li => {
-            const head = li.querySelector('label > div');
+            // 문항 텍스트 자리가 세미나마다 다르다. 선택형은 label > div,
+            // 안내문·읽기 전용 항목은 p다(2026-08-24 세미나 5587 실측).
+            // 셀렉터 목록은 문서 순서상 먼저 나오는 요소를 주므로 둘 다 커버된다.
+            const head = li.querySelector('label > div, p');
             const question = head ? (head.innerText || '').split('\\n')[0] : '';
             const qnum = li.getAttribute('data-question-number');
             const options = Array.from(li.querySelectorAll('input[type=radio], input[type=checkbox]')).map((inp, i) => {
@@ -979,6 +1002,9 @@ def run_survey(
                 bank_paths.get("legacy", DEFAULT_LEGACY_BANK_FILE),
             )
             plan, missing = resolve_page(questions, banks)
+            static_items = sum(1 for q in questions if q.get("kind") == "unknown")
+            if static_items:
+                result["static_items"] = static_items
             if missing:
                 counts = add_missing_to_banks(banks, missing)
                 result["status"] = "incomplete_bank"

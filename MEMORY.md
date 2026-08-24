@@ -314,11 +314,98 @@ GitHub `schedule`은 지연(최대 80분)·누락이 잦아 external cron (cron-
 - **척도형 보기 텍스트:** 보기 텍스트가 input을 감싼 label이 아니라 `label[for="<input id>"]`에 있어 전부 빈 문자열이었다 → `label[for]` 폴백 추가.
 - **제출 후에도 `a#surveyEnter`가 사라진다** → "이미 참여"와 "마감"이 구분되지 않고 둘 다 `no_questions`.
 - 설문은 페이지 순차 제출형이라 전체 사전 검증 불가. **페이지 단위 검증이 도달 가능한 최대 안전선**이라 미등록 1건이면 그 페이지를 제출하지 않고 `incomplete_bank`로 중단한다.
+- **응답 컨트롤이 없는 `<p>` 기반 항목(2026-08-24, 미확정):** → 아래 "설문 `<p>` 기반 항목" 절 참고. 그 항목이 무엇인지 아직 모른다.
 
 ### seminar_live.py (2026-07-20 신규)
 - 로컬 sandbox에서 Playwright 시스템 라이브러리 설치 불가(sudo 필요)해 DOM 조사는 Claude in Chrome MCP로 실제 로그인 세션에 붙어 수행했다.
 - `playOnPopup` 소스 직접 검사는 도구 필터에 걸려 `usesWindowOpen` 등 구조만 간접 확인.
 - 목록에 있어도 방문 시점에 방송 종료/미시작이면 상세에 `a.btn_bn.btn_enter`가 없다 → `skipped` 후 다음 세미나.
+
+---
+
+## 설문 `<p>` 기반 항목 (2026-08-24) — **미확정, 이어서 분석 필요**
+
+세미나 5587(전공의를 위한 응급실 증례강의) 설문이 `incomplete_bank`로 반복 차단됐다.
+당일 4회 런으로 좁힌 내용이며 **결론은 확정되지 않았다.** 롤백하거나 이어받을 수 있게 남긴다.
+
+### 관측 (run 32693921094, `blank_probe`)
+
+`li[data-question-number]` 11개 중 1개만 정상 문항, 나머지 10개가 다른 마크업이었다.
+
+| 항목 | `li_inner` | `head_inner` | `hidden` | `height` | `fields` | `kids` |
+|---|---|---|---|---|---|---|
+| 1 (정상) | 30 | 27 | false | 112 | `input:radio,input:radio` | `span.absolute… \| label.block` |
+| 2~11 | 44~83 | **-1** | false | **84** | **없음** | `span.absolute… \| p.block \| p.text-base my-2 md:my-4 break-w` |
+
+- `head_inner: -1` = `label > div`가 없다. 문항 텍스트가 `<p>`에 있다.
+- `fields` 비었음 = 라디오·체크박스·textarea·text input이 **하나도 없다**.
+- `hidden: false`, 높이 84px, 텍스트 44~83자 = **화면에는 멀쩡히 보인다.**
+
+### 배제된 가설
+
+- **렌더 지연 아님.** 5초 재대기 후에도 동일. 11개 중 1개는 정상이라 "폼 전체 미완"도 아니다.
+- **숨겨진 요소라 `innerText`가 빈 값 아님.** `hidden: false`, 높이 84px.
+- **셀렉터 스코프 문제 아님.** (중간에 유력 가설로 세웠다가 프로브로 기각됐다.)
+  `document` 전체를 훑는 것은 사실이나(`read_questions`), 문제의 10개는 숨은 템플릿이 아니라
+  같은 페이지에 실제로 렌더된 항목이다.
+- **정답 미등록이 원인 아님.** 유일하게 읽힌 1번 문항이 라디오 2개("전공의인가요?" 예/아니오로 추정)였고,
+  10개는 등록 여부와 무관하게 컨트롤이 없어 막혔다.
+
+### 확정된 결함 2개 (수정함)
+
+1. `read_questions`가 문항 텍스트를 **`label > div`에서만** 읽어, `<p>` 기반 항목은 `question: ""`이 됐다.
+   화면에 글자가 있는데 스크립트만 못 봤다.
+2. `resolve_page`에 "응답 컨트롤이 없는 항목" 분류가 없어, 그런 항목이 `general` → 보기 2개 미만 →
+   `_miss(None)`으로 떨어져 **페이지 전체를 막았다**.
+
+### 아직 모르는 것 (여기서부터 이어서)
+
+**그 10개 `<p>` 항목이 무엇인지 미확정.** 후보:
+- (a) 이미 응답된 문항의 읽기 전용 표시 — 질문 `<p>` + 답변 `<p>` 두 개 구조와 맞는다
+- (b) 안내문·섹션 헤더
+- (c) 그 외
+
+확인 방법: DOM 덤프에 실제 텍스트가 있다. artifact는 7일 보관이므로 **2026-08-31까지**만 가능하다.
+
+```
+gh run download 32693921094 -n seminar-block-logs-12
+# survey_5587_dom_*.html / survey_5587_blank_*.png
+```
+
+덤프에는 이름·소속이 들어갈 수 있다 — **커밋 금지**(`scripts/logs/`는 gitignore).
+
+만료 후 재수집하려면 같은 마크업이 나오는 세미나에서 `blank_probe`가 다시 찍히길 기다려야 하는데,
+아래 수정으로 이제 그 항목들은 텍스트가 읽히므로 `is_blank_question`에 걸리지 않아 **프로브가 안 찍힌다.**
+재수집이 필요하면 `dump_survey_dom()`을 임시로 무조건 호출하도록 바꿔야 한다.
+
+### 이번에 바꾼 것 / 롤백 지점
+
+브랜치 `claude/seminar-survey-registration-r2jgfw`의 커밋 4개. 전부 `scripts/seminar_survey.py` + 족보.
+
+| 변경 | 위치 | 되돌릴 때 |
+|---|---|---|
+| 문항 텍스트 폴백 `label > div, p` | `read_questions` | `label > div` 단독으로 되돌리면 `<p>` 항목이 다시 빈 문자열이 된다 |
+| 컨트롤 없는 항목(`kind == "unknown"`) 건너뛰기 | `resolve_page` 루프 선두 | 되돌리면 5587류 설문이 다시 `incomplete_bank`로 막힌다 |
+| `is_blank_question` / `dump_survey_dom` / `probe_questions` + 5초 재대기 | `run_survey` 루프 선두 | 진단 전용. 지워도 제출 동작에는 영향 없다 |
+| `"전공의인가요?"` / `"전공의 이신가요? (인턴, 레지던트)"` → `"아니오"` | `survey_quiz_answers.json` | legacy의 같은 항목(`"2"`)은 이때 제거했다. 되돌리려면 legacy에 복원 |
+
+**건너뛰기의 안전성 근거:** 건너뛴 항목이 사실은 답해야 하는 필수 문항이었다면 진행 버튼이 먹지 않고,
+`seen_pages` 지문 검사가 "같은 문항 재표시"로 잡아 `failed`로 끊는다. 오답이 제출되지는 않는다.
+다만 **선택 문항이었다면 조용히 빈 채로 제출된다** — 이건 감수한 트레이드오프다.
+
+### 검증 상태
+
+**실제 런에서 검증되지 않았다.** 5587·5576 모두 설문 마감(15:00 KST)이 지나 당일 확인 불가였고,
+사용자가 수동으로 처리했다. 단위 테스트 3건만 추가돼 있다
+(`tests/test_seminar_survey.py`의 `test_static_item_*`, `test_option_less_choice_question_is_still_missing`).
+다음에 `<p>` 항목이 섞인 설문을 만나면 결과 JSON의 `static_items`(건너뛴 개수)와 제출 성공 여부를 확인할 것.
+
+### 곁다리 관측
+
+- 요가 세미나(5576)는 주관식 `"오늘 경험한 온라인 웨비나 / 9월 예정된 오프라인 클래스와…"`가 빈 값이라
+  계속 `incomplete_bank`였다. 사용자 지시로 **의도적으로 미등록 유지** — 설문 안 함.
+- 같은 날 bjh7790 계정이 `net::ERR_CONNECTION_CLOSED`로 설문 스텝 전체를 날린 런이 1회 있었다
+  (run 32692942892). 계정 레벨 예외라 세미나 2건 모두 미시도.
 
 ---
 

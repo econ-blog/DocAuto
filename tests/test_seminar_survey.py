@@ -467,3 +467,31 @@ def test_page_fingerprint_distinguishes_pages():
     p2 = [{"number": "2", "question": "문항2"}]
     assert page_fingerprint(p1) == page_fingerprint([{"number": "1", "question": " 문항1 *"}])
     assert page_fingerprint(p1) != page_fingerprint(p2)
+
+
+def _static_item(text):
+    """응답 컨트롤이 없는 항목 (2026-08-24 세미나 5587의 `<p>` 기반 항목)."""
+    return {"number": "2", "question": text, "kind": "unknown", "name": "", "options": []}
+
+
+def test_static_item_is_skipped_not_missing():
+    # 답할 컨트롤이 없는 항목은 미등록으로 페이지를 막지 않고 그냥 건너뛴다.
+    plan, missing = resolve_page([_static_item("안내문입니다.")], _banks())
+    assert plan == []
+    assert missing == []
+
+
+def test_static_item_does_not_block_real_question_on_same_page():
+    q = _choice_q("이번 세미나에 만족하셨습니까?", ["매우 만족", "만족", "보통"])
+    questions = [q] + [_static_item(f"항목{i}") for i in range(10)]
+    plan, missing = resolve_page(questions, _banks())
+    assert missing == []
+    assert len(plan) == 1
+    assert [t["value"] for t in plan[0]["targets"]] == ["1"]
+
+
+def test_option_less_choice_question_is_still_missing():
+    # 보기가 1개뿐인 선택형은 여전히 미등록이다. static 건너뛰기와 혼동하지 않는다.
+    plan, missing = resolve_page([_choice_q("보기가 하나뿐", ["가"])], _banks())
+    assert plan == []
+    assert missing[0]["bank"] is None
