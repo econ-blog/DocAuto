@@ -79,7 +79,7 @@ credentials 스키마·계정별 id 규칙 → [MEMORY.md](MEMORY.md) "credentia
 무인 실행이므로 일상 개입 없음. 개입 조건은 텔레그램 알림뿐이다.
 
 1. `no_answer` 알림 → `quiz_answers.json`의 해당 제품에 **키와 보기가 이미 깔려 있다**(아래 2번과 같은 방식). 정답만 남기고 나머지 줄을 지운다. 깔아둔 문항 수는 결과 JSON의 `bank_seeded`.
-2. `incomplete_bank` 알림 → 알림의 각 문항에 붙은 `bank` 값(`quiz`/`text`)이 가리키는 족보(`survey_quiz_answers.json` / `survey_text_answers.json`)를 채운다. 키는 스크립트가 이미 만들어 두며, **값 자리엔 표시줄(`※ 정답만 남기고…`) + 보기 전부가 깔려 있다** — 정답만 남기고 나머지 줄(표시줄 포함)을 지우면 끝이다. 표시줄이 남아 있으면 미등록으로 취급되어 제출에 쓰이지 않는다. 주관식은 보기가 없으므로 빈 문자열이다.
+2. `incomplete_bank` 알림 → 알림의 각 문항에 붙은 `bank` 값(`quiz`/`text`)이 가리키는 족보(`survey_quiz_answers.json` / `survey_text_answers.json`)를 채운다. 키는 스크립트가 이미 만들어 두며, **값 자리엔 표시줄(`※ 정답만 남기고…`) + 보기 전부가 깔려 있다** — 정답만 남기고 나머지 줄(표시줄 포함)을 지우면 끝이다. 표시줄이 남아 있으면 미등록으로 취급되어 제출에 쓰이지 않는다. 주관식은 보기가 없으므로 빈 문자열이다. 작성 톤·글자수 규칙은 [MEMORY.md](MEMORY.md) "설문 족보 파일 형식" 참고.
    일반 문항은 항상 2번으로 자동 제출되므로 여기 올라오지 않는다. `bank: null`이면 보기가 2개 미만인 DOM 이상이니 스크린샷을 본다.
 3. `failed` / `unverified` 알림 → 텔레그램 메시지보다 **Actions artifact 스크린샷을 먼저** 본다(`gh run download <run-id>`).
 4. 연속 출석일이 10의 배수에 근접하면 룰렛 안내.
