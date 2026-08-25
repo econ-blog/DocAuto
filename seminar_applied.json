@@ -783,6 +783,22 @@
       "start_time": "18:30",
       "title": "엠서클 통합회원",
       "year": 2026
+    },
+    "5638": {
+      "applied_at": "2026-08-25T20:02:43.030411+09:00",
+      "date": "2026-09-02",
+      "day": 2,
+      "end_hour": 20,
+      "end_minute": 0,
+      "end_time": "20:00",
+      "month": 9,
+      "start": "2026-09-02(수) 18:30 ~ 20:00",
+      "start_date": "2026-09-02",
+      "start_hour": 18,
+      "start_minute": 30,
+      "start_time": "18:30",
+      "title": "엠서클 통합회원",
+      "year": 2026
     }
   },
   "wonju": {
