@@ -993,6 +993,22 @@
       "start_time": "13:00",
       "title": "엠서클 통합회원",
       "year": 2026
+    },
+    "5617": {
+      "applied_at": "2026-08-25T12:33:01.717079+09:00",
+      "date": "2026-09-03",
+      "day": 3,
+      "end_hour": 19,
+      "end_minute": 30,
+      "end_time": "19:30",
+      "month": 9,
+      "start": "2026-09-03(목) 18:00 ~ 19:30",
+      "start_date": "2026-09-03",
+      "start_hour": 18,
+      "start_minute": 0,
+      "start_time": "18:00",
+      "title": "엠서클 통합회원",
+      "year": 2026
     }
   }
 }
