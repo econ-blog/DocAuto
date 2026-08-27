@@ -1,0 +1,160 @@
+name: 수동 실행 (단일 모듈)
+
+# 닥터빌 퀴즈/세미나 신청/세미나 입장/세미나 설문을 하나씩 골라 돌린다.
+# 두 계정(--account all)을 항상 함께 실행한다.
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "실행할 모듈"
+        type: choice
+        required: true
+        default: "닥터빌 퀴즈"
+        options:
+          - "닥터빌 퀴즈"
+          - "세미나 신청"
+          - "세미나 입장"
+          - "세미나 설문"
+      stay_seconds:
+        description: "세미나 팝업 체류 시간(초) — '세미나 입장'에만 적용"
+        type: string
+        default: "20"
+      ignore_state:
+        description: "상태 파일 무시하고 전체 시도 — '세미나 입장'에만 적용"
+        type: boolean
+        default: false
+      send_table:
+        description: "끝나고 세미나 표를 텔레그램으로 전송 (세미나 3종에만 적용)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+# 세미나 상태 파일을 공유하므로 seminar_block과 동시에 돌면 안 된다.
+concurrency:
+  group: seminar-block
+  cancel-in-progress: false
+
+env:
+  NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
+
+jobs:
+  manual-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: KST 날짜 설정
+        run: echo "KST_DATE=$(TZ='Asia/Seoul' date +'%Y-%m-%d')" >> $GITHUB_ENV
+
+      - name: 세미나 상태 캐시 복원
+        uses: actions/cache/restore@v4
+        with:
+          path: scripts/state
+          key: seminar-state-${{ env.KST_DATE }}-${{ github.run_id }}
+          restore-keys: |
+            seminar-state-${{ env.KST_DATE }}-
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: 의존성 설치
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+          # xvfb: 포털 사이트는 headless에서 막힌 이력이 있어 --headed로 돈다.
+          # 폰트: 표 PNG의 한글·컬러 이모지 렌더링용.
+          sudo apt-get install -y xvfb fonts-nanum fonts-noto-color-emoji
+          fc-cache -f
+
+      - name: credentials.json 생성
+        env:
+          CREDENTIALS_JSON: ${{ secrets.CREDENTIALS_JSON }}
+        run: echo "$CREDENTIALS_JSON" > credentials.json
+
+      - name: 닥터빌 퀴즈
+        if: inputs.task == '닥터빌 퀴즈'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
+        run: xvfb-run -a python3 scripts/doctorville.py --account all --task quiz --headed
+
+      - name: 세미나 신청
+        if: inputs.task == '세미나 신청'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
+        run: xvfb-run -a python3 scripts/doctorville.py --account all --task seminar --headed
+
+      - name: 세미나 입장
+        if: inputs.task == '세미나 입장'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
+        run: |
+          xvfb-run -a python3 scripts/seminar_live.py --account all \
+            --stay-seconds ${{ inputs.stay_seconds || '20' }} \
+            --block auto \
+            --state-file scripts/state/seminar_entered.json \
+            ${{ inputs.ignore_state && '--ignore-state' || '' }} \
+            --headed
+
+      - name: 세미나 설문
+        if: inputs.task == '세미나 설문'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
+        run: |
+          xvfb-run -a python3 scripts/seminar_survey.py --account all \
+            --state-file scripts/state/seminar_entered.json \
+            --headed
+
+      - name: 세미나 결과 표 전송
+        if: always() && inputs.send_table && inputs.task != '닥터빌 퀴즈'
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 scripts/seminar_report.py
+
+      - name: 정답·족보·이력·로그 커밋 및 푸시
+        if: always()
+        continue-on-error: true
+        run: |
+          FILES="quiz_answers.json quiz_answers_legacy.json seminar_applied.json \
+                 survey_quiz_answers.json survey_text_answers.json survey_answers_legacy.json logs"
+          if [ -n "$(git status --porcelain $FILES)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add $FILES
+            git commit -m "chore: manual run (${{ inputs.task }}) results [skip ci]"
+            git pull --rebase
+            git push
+          fi
+
+      - name: 세미나 상태 캐시 저장
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: scripts/state
+          key: seminar-state-${{ env.KST_DATE }}-${{ github.run_id }}
+
+      - name: 스크린샷 로그 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manual-logs-${{ github.run_number }}
+          path: scripts/logs/
+          if-no-files-found: ignore
+          retention-days: 7

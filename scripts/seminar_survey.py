@@ -80,6 +80,7 @@ import doctorville
 import seminar_live
 from seminar_live import upgrade_to_v2
 import notify
+import runlog
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_TIMEOUT_MS = doctorville.DEFAULT_TIMEOUT_MS
@@ -1079,6 +1080,18 @@ def run_survey(
 run_survey_for_item = run_survey
 
 
+def _log_seminar(seminar_id, status: str, account: str, item: dict = None) -> None:
+    """세미나 표의 '설문' 칸을 채운다. 로깅 실패가 설문 자체를 죽이면 안 된다."""
+    item = item or {}
+    try:
+        runlog.update_seminar(
+            seminar_id, phase="survey", status=status, account=account or "_",
+            title=item.get("title") or "", start=item.get("start") or "",
+        )
+    except Exception as e:
+        print(f"[seminar_survey] 세미나 로그 기록 실패({seminar_id}): {e}", file=sys.stderr)
+
+
 def run_account(
     account: str,
     credentials_path: Path,
@@ -1121,6 +1134,7 @@ def run_account(
                 except Exception as e:
                     r = {"seminarId": int(sid) if str(sid).isdigit() else sid, "status": "failed", "message": f"예외 발생: {e}"}
                 output["surveys"].append(r)
+                _log_seminar(sid, r["status"], account, item if isinstance(item, dict) else {})
                 if r["status"] == "success" and state is not None:
                     mark_survey_status(state, account, sid, "done", state_file)
                 elif r["status"] == "closed" and state is not None:

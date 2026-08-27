@@ -29,6 +29,7 @@ from pathlib import Path
 import common
 import doctorville
 import notify
+import runlog
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PYTHON = sys.executable
@@ -143,6 +144,21 @@ def build_execution_plan(creds: dict) -> dict:
     return plan
 
 
+def send_daily_table(date_str: str, credentials_path: Path) -> dict:
+    """그날의 daily 로그 전체를 표 1장으로 렌더해 전송한다."""
+    try:
+        headers, rows = runlog.daily_table(date_str)
+        return runlog.send_table(
+            f"📋 {date_str} 일일 자동화",
+            headers,
+            rows,
+            png_name=f"daily-table-{date_str}.png",
+            credentials_path=str(credentials_path),
+        )
+    except Exception as e:
+        return {"status": "failed", "message": f"표 전송 예외: {e}"}
+
+
 def main():
     parser = argparse.ArgumentParser(description="일일 자동화 통합 실행")
     parser.add_argument("--headed", action="store_true", help="브라우저 창 표시 (디버깅용)")
@@ -198,6 +214,14 @@ def main():
     print("\n=== 최종 결과 ===")
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
+    # 실행 로그 적재 — 이 런을 run{N} 행으로 append 하고, 오래된 로그를 지운다.
+    # 텔레그램 전송보다 먼저 해야 전송이 실패해도 기록은 남는다.
+    try:
+        runlog.append_daily_run(runlog.daily_cells(results, creds), date_str=date_str)
+        runlog.prune(runlog.KIND_DAILY)
+    except Exception as e:
+        print(f"[daily_runner] 실행 로그 적재 실패: {e}", file=sys.stderr)
+
     if not args.no_telegram:
         if notify.should_send(results, notify_level):
             msg = notify.build_message(results, notify_level, date_str)
@@ -206,6 +230,11 @@ def main():
             print(f"[telegram] {'성공' if ok else '실패'}")
         else:
             print(f"\n[telegram] 메시지 억제됨 ({notify_level} 모드)")
+
+        # 표는 NOTIFY_LEVEL과 무관하게 항상 보낸다. 하루 실행 현황 전체를 한 장으로
+        # 보여주는 게 목적이라, 조용한 런이라고 빼면 표가 비어 보인다.
+        table_result = send_daily_table(date_str, credentials_path)
+        print(f"[telegram] 표: {table_result.get('status')}")
     else:
         print("\n[telegram] 건너뜀 (--no-telegram)")
 

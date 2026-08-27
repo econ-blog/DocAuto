@@ -49,6 +49,7 @@ from playwright.sync_api import (
 
 import common
 import notify
+import runlog
 
 DOCTORVILLE_BASE    = "https://www.doctorville.co.kr"
 ATTEND_URL          = f"{DOCTORVILLE_BASE}/event/attend"
@@ -1094,6 +1095,17 @@ def _seminar_detail_meta(page) -> tuple[str, str]:
         return "", ""
 
 
+def _log_seminar(sid, status: str, account: str, title: str = "", start: str = "") -> None:
+    """세미나 표의 '신청' 칸을 채운다. 로깅 실패가 신청 자체를 죽이면 안 된다."""
+    try:
+        runlog.update_seminar(
+            sid, phase="apply", status=status, account=account or "_",
+            title=title, start=start,
+        )
+    except Exception as e:
+        print(f"[doctorville] 세미나 로그 기록 실패({sid}): {e}", file=sys.stderr)
+
+
 def task_seminar(page, creds: dict, account: str = None, applied_path: Path = None) -> dict:
     result = {"status": "failed", "applied": [], "count": 0}
 
@@ -1145,6 +1157,7 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
             if account:
                 record_applied(applied_data, account, sid, title, start)
                 dirty = True
+            _log_seminar(sid, "already_done", account, title, start)
             continue
 
         if "신청하기" not in btn_text:
@@ -1178,10 +1191,13 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
                 if account:
                     record_applied(applied_data, account, sid, title, start)
                     dirty = True
+                _log_seminar(sid, "success", account, title, start)
             else:
                 failed.append(sid)
+                _log_seminar(sid, "unverified", account, title, start)
         except Exception:
             failed.append(sid)
+            _log_seminar(sid, "unverified", account, title, start)
 
     if dirty:
         save_applied(applied_data, applied_path)
