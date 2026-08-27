@@ -12,6 +12,7 @@ daily와 seminar_block은 실행 단위가 다르므로 로그도 두 종류로 
 종류별로 최근 ``KEEP_FILES`` 일치만 남기고 오래된 파일은 지운다.
 """
 
+import os
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -19,7 +20,10 @@ from pathlib import Path
 import common
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-LOG_DIR = REPO_ROOT / "logs"
+
+# 기본은 레포의 logs/. 테스트는 DOCAUTO_LOG_DIR로 tmp를 가리켜, 스크립트 내부에서
+# 로그를 쓰는 함수(task_seminar 등)를 호출해도 레포가 더럽혀지지 않게 한다.
+LOG_DIR = Path(os.environ.get("DOCAUTO_LOG_DIR") or (REPO_ROOT / "logs"))
 
 KIND_DAILY = "daily"
 KIND_SEMINAR = "seminar"
@@ -64,9 +68,15 @@ def today_str() -> str:
     return datetime.now(common.KST).strftime("%Y-%m-%d")
 
 
+def resolve_log_dir(log_dir: Path | str = None) -> Path:
+    """인자 → DOCAUTO_LOG_DIR 환경변수 → 레포의 logs/ 순으로 로그 디렉터리를 정한다."""
+    if log_dir:
+        return Path(log_dir)
+    return Path(os.environ.get("DOCAUTO_LOG_DIR") or (REPO_ROOT / "logs"))
+
+
 def log_path(kind: str, date_str: str = None, log_dir: Path | str = None) -> Path:
-    d = Path(log_dir) if log_dir else LOG_DIR
-    return d / f"{kind}-{date_str or today_str()}.json"
+    return resolve_log_dir(log_dir) / f"{kind}-{date_str or today_str()}.json"
 
 
 def load(kind: str, date_str: str = None, log_dir: Path | str = None) -> dict:
@@ -87,7 +97,7 @@ def load(kind: str, date_str: str = None, log_dir: Path | str = None) -> dict:
 
 
 def save(data: dict, log_dir: Path | str = None) -> Path:
-    d = Path(log_dir) if log_dir else LOG_DIR
+    d = resolve_log_dir(log_dir)
     d.mkdir(parents=True, exist_ok=True)
     path = log_path(data["kind"], data["date"], d)
     # 세미나 블록은 세 스크립트가 같은 파일을 번갈아 쓴다. 중간에 죽어도
@@ -98,7 +108,7 @@ def save(data: dict, log_dir: Path | str = None) -> Path:
 
 def prune(kind: str, keep: int = KEEP_FILES, log_dir: Path | str = None) -> list[str]:
     """종류별로 최근 keep개만 남기고 삭제. 지운 파일명 목록을 반환한다."""
-    d = Path(log_dir) if log_dir else LOG_DIR
+    d = resolve_log_dir(log_dir)
     if not d.exists():
         return []
     # 파일명이 kind-YYYY-MM-DD.json 이라 사전순 = 날짜순이다.

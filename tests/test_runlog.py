@@ -269,3 +269,18 @@ def test_daily_cells_prefers_task_columns_when_present():
     results = {"doctorville_wonju": {"status": "failed", "attend": {"status": "success", "verified_by": "x"}}}
     cells = runlog.daily_cells(results)
     assert cells == {"출석\nwonju": "success"}
+
+
+def test_log_dir_honors_env_override(monkeypatch, tmp_path):
+    """conftest가 이 훅으로 테스트 로그를 격리한다 — 깨지면 레포 logs/가 더럽혀진다."""
+    monkeypatch.setenv("DOCAUTO_LOG_DIR", str(tmp_path / "elsewhere"))
+    assert runlog.resolve_log_dir() == tmp_path / "elsewhere"
+    assert runlog.resolve_log_dir(tmp_path / "explicit") == tmp_path / "explicit"
+
+
+def test_seminar_hook_writes_to_isolated_dir_not_repo():
+    """doctorville._log_seminar 같은 내부 훅도 격리된 디렉터리를 써야 한다."""
+    import doctorville
+    doctorville._log_seminar("9999", "success", "acct", "격리 확인", "2026-01-01(금) 09:00 ~ 10:00")
+    assert not (runlog.REPO_ROOT / "logs" / "seminar-2026-01-01.json").exists()
+    assert runlog.resolve_log_dir() != runlog.REPO_ROOT / "logs"
