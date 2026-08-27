@@ -54,7 +54,9 @@ jobs:
         run: |
           pip install -r requirements.txt
           playwright install chromium --with-deps
-          sudo apt-get install -y xvfb
+          # 폰트: 결과 표 PNG의 한글·컬러 이모지 렌더링용.
+          sudo apt-get install -y xvfb fonts-nanum fonts-noto-color-emoji
+          fc-cache -f
 
       - name: 단위 테스트 실행
         continue-on-error: true
@@ -137,19 +139,30 @@ jobs:
             --state-file scripts/state/seminar_entered.json \
             --headed
 
+      # Step 5: 블록 결과 표 전송 — 신청·입장·설문이 각자 남긴 로그를 모아 한 장으로.
+      # 세 스텝이 continue-on-error라 어디서 죽어도 여기까지는 온다(always).
+      # 표 전송 실패는 런 성패에 반영하지 않는다(id 없음 = 실패 집계 대상 아님).
+      - name: 세미나 결과 표 전송
+        if: always()
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 scripts/seminar_report.py
+
       # legacy는 승격(legacy → quiz/text)으로 줄어들기만 한다. 세 파일이 같은
       # 커밋에 들어가야 승격이 런 사이에 유실되지 않는다.
       # seminar_applied.json이 같이 커밋돼야 다음 런이 이미 신청한 세미나의 상세를
       # 다시 열지 않는다. 정리(prune)는 daily가 하루 1회 맡는다.
-      - name: 설문 족보·신청 이력 커밋 및 푸시
+      - name: 설문 족보·신청 이력·실행 로그 커밋 및 푸시
         continue-on-error: true
         run: |
-          BANKS="survey_quiz_answers.json survey_text_answers.json survey_answers_legacy.json seminar_applied.json"
+          BANKS="survey_quiz_answers.json survey_text_answers.json survey_answers_legacy.json seminar_applied.json logs"
           if [ -n "$(git status --porcelain $BANKS)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add $BANKS
-            git commit -m "chore: collect survey questions and seminar applications [skip ci]"
+            git commit -m "chore: collect survey questions, seminar applications and run log [skip ci]"
             git pull --rebase
             git push
           fi

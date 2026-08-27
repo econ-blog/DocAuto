@@ -238,7 +238,8 @@ def resolve_credentials(
 
 
 def send_telegram(
-    text: str, bot_token: str = "", chat_id: str = "", credentials_path=None
+    text: str, bot_token: str = "", chat_id: str = "", credentials_path=None,
+    parse_mode: str = ""
 ) -> bool:
     """Send Telegram message via Telegram Bot API."""
     # 보낼 내용이 없으면 자격증명 유무와 무관하게 no-op 성공
@@ -254,7 +255,10 @@ def send_telegram(
         text = text[: TELEGRAM_MAX_LEN - 20] + "\n…(생략)"
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = json.dumps({"chat_id": cid, "text": text}).encode("utf-8")
+    body = {"chat_id": cid, "text": text}
+    if parse_mode:
+        body["parse_mode"] = parse_mode
+    payload = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(
         url, data=payload, headers={"Content-Type": "application/json"}, method="POST"
     )
@@ -269,4 +273,76 @@ def send_telegram(
         return False
     except Exception as e:
         print(f"[telegram] 전송 실패: {e}", file=sys.stderr)
+        return False
+
+
+def _multipart(fields: dict, filename: str, file_bytes: bytes,
+               file_field: str = "photo") -> tuple[bytes, str]:
+    """sendPhoto용 multipart/form-data 본문을 만든다.
+
+    requests를 쓰지 않는 프로젝트라(표준 라이브러리만 사용) 직접 조립한다.
+    """
+    boundary = "----DocAutoBoundary" + os.urandom(8).hex()
+    sep = f"--{boundary}\r\n".encode()
+    out = bytearray()
+    for key, value in fields.items():
+        out += sep
+        out += f'Content-Disposition: form-data; name="{key}"\r\n\r\n'.encode()
+        out += f"{value}\r\n".encode("utf-8")
+    out += sep
+    out += (
+        f'Content-Disposition: form-data; name="{file_field}"; filename="{filename}"\r\n'
+        "Content-Type: image/png\r\n\r\n"
+    ).encode()
+    out += file_bytes + b"\r\n"
+    out += f"--{boundary}--\r\n".encode()
+    return bytes(out), f"multipart/form-data; boundary={boundary}"
+
+
+TELEGRAM_CAPTION_MAX_LEN = 1024
+
+
+def send_photo(
+    photo_path, caption: str = "", bot_token: str = "", chat_id: str = "",
+    credentials_path=None, parse_mode: str = ""
+) -> bool:
+    """PNG 1장을 sendPhoto로 전송한다. 실패 시 False(호출부가 텍스트로 폴백)."""
+    path = Path(photo_path)
+    if not path.exists():
+        print(f"[telegram] 사진 없음: {path}", file=sys.stderr)
+        return False
+
+    token, cid = resolve_credentials(bot_token, chat_id, credentials_path)
+    if not token or not cid:
+        print("[telegram] 토큰/chat_id 없음", file=sys.stderr)
+        return False
+
+    if len(caption) > TELEGRAM_CAPTION_MAX_LEN:
+        caption = caption[: TELEGRAM_CAPTION_MAX_LEN - 20] + "\n…(생략)"
+
+    fields = {"chat_id": cid}
+    if caption:
+        fields["caption"] = caption
+    if parse_mode:
+        fields["parse_mode"] = parse_mode
+
+    try:
+        body, content_type = _multipart(fields, path.name, path.read_bytes())
+    except OSError as e:
+        print(f"[telegram] 사진 읽기 실패: {e}", file=sys.stderr)
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    req = urllib.request.Request(
+        url, data=body, headers={"Content-Type": content_type}, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return resp.status == 200
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", "replace")[:300]
+        print(f"[telegram] 사진 전송 실패: {e} / {detail}", file=sys.stderr)
+        return False
+    except Exception as e:
+        print(f"[telegram] 사진 전송 실패: {e}", file=sys.stderr)
         return False

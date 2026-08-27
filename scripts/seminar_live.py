@@ -33,6 +33,7 @@ import common
 from common import KST as kst, parse_dd_date
 import doctorville
 import notify
+import runlog
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_TIMEOUT_MS = doctorville.DEFAULT_TIMEOUT_MS
@@ -341,6 +342,27 @@ def enter_and_wait(page, seminar_id: str, stay_seconds: int, now_dt: datetime = 
 # 계정별 세미나 종합 수행
 # ---------------------------------------------------------------------------
 
+def _state_start(state: dict, account: str, seminar_id: int) -> str:
+    """상태 파일에 남은 세미나 시작 일시 원문을 찾는다(표의 시간 칸 채우기용)."""
+    if not state or not account:
+        return ""
+    for item in state.get("accounts", {}).get(account, {}).get("entered", []):
+        if isinstance(item, dict) and item.get("id") == seminar_id:
+            return item.get("start") or ""
+    return ""
+
+
+def _log_seminar(seminar_id, status: str, account: str, title: str = "", start: str = "") -> None:
+    """세미나 표의 '입장' 칸을 채운다. 로깅 실패가 입장 자체를 죽이면 안 된다."""
+    try:
+        runlog.update_seminar(
+            seminar_id, phase="live", status=status, account=account or "_",
+            title=title or "", start=start or "",
+        )
+    except Exception as e:
+        print(f"[seminar_live] 세미나 로그 기록 실패({seminar_id}): {e}", file=sys.stderr)
+
+
 def task_live_seminar(
     page,
     stay_seconds: int,
@@ -386,6 +408,7 @@ def task_live_seminar(
         sid_int = int(sid)
         if sid_int in already_entered_set:
             already_entered.append(sid_int)
+            _log_seminar(sid, "already_done", account, title, _state_start(state, account, sid_int))
             continue
 
         if dry_run:
@@ -394,6 +417,7 @@ def task_live_seminar(
             continue
 
         r = enter_and_wait(page, sid, stay_seconds)
+        _log_seminar(sid, r["status"], account, title, r.get("start"))
         if r["status"] == "success":
             entered.append(sid_int)
             start_val = r.get("start")

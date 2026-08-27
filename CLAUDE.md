@@ -22,6 +22,7 @@
 | 10 | 닥터빌 세미나 입장(방송 중) | `seminar_live.py` | 운영 |
 | 11 | 닥터빌 세미나 설문(종료 후) | `seminar_survey.py` | 운영 |
 | 12 | 텔레그램 정답 수신·반영 | `telegram_inbox.py` | 운영 |
+| 13 | 세미나 블록 결과 표 전송 | `seminar_report.py` | 신규(미검증) |
 | — | 인터엠디 오늘의 퀴즈 | `intermd.py` | **수동 전용**(러너 IP 403) |
 
 ---
@@ -31,9 +32,12 @@
 | 워크플로우 | 트리거 | 실행 순서 |
 |---|---|---|
 | `daily.yml` | cron-job.org 00:15 KST (주) + GitHub cron `0 7 * * *` (16:00 KST 백스톱) | ① inbox fetch → ② 닥터빌(출석·퀴즈) → ③ 키메디 → ④ HMP(캡슐·룰렛·댓글·글쓰기) → ⑤ 익일 퀴즈 사전 확인 (`daily_runner.py`) → 정답 커밋 |
-| `seminar_block.yml` | cron-job.org → `workflow_dispatch` (11:00~14:30, 17:00~21:30 KST 30분 간격) | ① inbox fetch (11:00 KST 런만) → ② 닥터빌 세미나 신청 (`doctorville.py --task seminar`) → ③ 라이브 세미나 입장 (`seminar_live.py`) → ④ 세미나 설문 (`seminar_survey.py`) |
+| `seminar_block.yml` | cron-job.org → `workflow_dispatch` (11:00~14:30, 17:00~21:30 KST 30분 간격) | ① inbox fetch (11:00 KST 런만) → ② 닥터빌 세미나 신청 (`doctorville.py --task seminar`) → ③ 라이브 세미나 입장 (`seminar_live.py`) → ④ 세미나 설문 (`seminar_survey.py`) → ⑤ 결과 표 전송 (`seminar_report.py`) |
+| `manual.yml` | `workflow_dispatch` 전용 (수동) | `task` 드롭다운으로 닥터빌 퀴즈 / 세미나 신청 / 세미나 입장 / 세미나 설문 중 **하나만** 실행. 항상 두 계정(`--account all`). `seminar_block`과 같은 concurrency group |
 
 - 중앙 알림 게이트(`scripts/notify.py`)가 `NOTIFY_LEVEL` 환경변수 (미설정/빈값 시 `"all"` 기본값 / `"actionable"`)에 따라 알림 여부를 결정한다.
+- **결과 표(PNG)는 `NOTIFY_LEVEL`과 무관하게 항상 전송된다.** 기존 텍스트 알림은 그대로 두고 표를 한 장 더 보내는 구조다 (2026-08-27 도입, 표가 잘 돌면 텍스트 알림을 걷어낼 예정).
+- 표는 Playwright로 HTML을 렌더해 스크린샷한 PNG를 `sendPhoto`로 보낸다. 새 pip 의존성은 없고, CI에 apt 폰트(`fonts-nanum`, `fonts-noto-color-emoji`)만 필요하다. 렌더·전송 실패 시 고정폭 텍스트 표(`<pre>`)로 폴백한다.
 - 각 스크립트는 결과 JSON 1건을 stdout에 출력, `daily_runner.py` 및 알림 게이트가 파싱·취합·전송.
 - 서브프로세스는 `sys.executable`로 호출. **venv 절대경로 하드코딩 금지.**
 - 실패 1건이라도 있으면 exit 1.
@@ -58,6 +62,9 @@
 | `scripts/notify.py` | 중앙 알림 게이트 (severity 판정, messaging, Telegram 전송) |
 | `scripts/recon.py` | 정찰 스크립트 (CLI R3/R4, RECON=1 환경변수 R1/R2) |
 | `scripts/daily_runner.py` | daily 워크플로우 오케스트레이터 + 알림 필터링 |
+| `scripts/runlog.py` | 실행 로그 적재(`logs/`) + 표 데이터 구성 + 표 전송(PNG→텍스트 폴백) |
+| `scripts/tablepng.py` | 표 HTML을 Playwright로 렌더해 PNG로 저장 |
+| `scripts/seminar_report.py` | 세미나 블록 결과 표 렌더·전송 (블록 매 런 끝) |
 | `quiz_answers.json` | 닥터빌 퀴즈 문제은행 `{제품명: {문항텍스트: 정답보기텍스트}}`. 미등록 문항은 값이 `[표시줄, 보기…]` 리스트로 깔린다(정답만 남기고 지우면 등록) |
 | `quiz_answers_legacy.json` | 구형식 폴백 `{제품명: "111"}` (보기 번호 시퀀스 문자열) |
 | `intermd_answer.json` | 인터엠디 최신 정답 1건 `{answer, updated_at}` (덮어쓰기) |
@@ -67,7 +74,9 @@
 | `survey_answers_legacy.json` | 3분류 도입 전 단일 족보. 폴백 전용이며 조회될 때마다 위 두 족보로 **승격·제거**된다(최종 삭제 목표) |
 | `scripts/state/seminar_entered.json` | 세미나 입장·설문 이력 (State v2 schema, Actions cache 유지) |
 | `credentials.json` | 로컬 전용(gitignore). CI는 `CREDENTIALS_JSON` secret |
-| `scripts/logs/` | 실패 스크린샷 (artifact 7일 보관) |
+| `scripts/logs/` | 실패 스크린샷 + 생성된 표 PNG (gitignore, artifact 7일 보관) |
+| `logs/daily-YYYY-MM-DD.json` | daily 실행 로그. 런마다 `run{N}` 행을 append. 표의 행=run, 열=모듈 |
+| `logs/seminar-YYYY-MM-DD.json` | 세미나 실행 로그. 신청·입장·설문 세 스크립트가 각자 자기 칸만 갱신. 표의 행=세미나 |
 
 Secrets: `CREDENTIALS_JSON`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
 credentials 스키마·계정별 id 규칙 → [MEMORY.md](MEMORY.md) "credentials 스키마".
@@ -117,6 +126,7 @@ venv/bin/pytest
 venv/bin/python3 scripts/daily_runner.py --no-telegram --headed
 venv/bin/python3 scripts/doctorville.py --account bjh7790 --task quiz --headed
 venv/bin/python3 scripts/recon.py --item R3
+venv/bin/python3 scripts/seminar_report.py --no-telegram   # 세미나 표를 콘솔에만 출력
 ```
 
 ---
@@ -126,6 +136,7 @@ venv/bin/python3 scripts/recon.py --item R3
 - **개인정보 활용 동의: 항상 동의**(`button.btn_confirm`). 사용자 사전 승인 완료(제3자 제공, 12개월 보유).
 - **텔레그램 정답 마감:** daily 주 실행이 **00:15 KST**라, 낮에 보낸 정답은 **그날 자정 런**에 반영된다(실질 마감 24:00). `precheck_quiz`가 익일 퀴즈를 미리 알려주므로 하루 여유가 있다.
 - **CI는 워킹트리가 아니라 HEAD를 돌린다.** 동작이 "옛날 코드" 같으면 `git show HEAD:<파일>`부터 확인.
+- **실행 로그는 레포에 커밋된다.** 러너는 런마다 새 체크아웃이라 커밋하지 않으면 `run2` 이후 append가 불가능하다. 종류별 최근 **7개 파일**만 남기고 자동 삭제(`runlog.prune`).
 - **성공의 양성 증거 (`verified_by`):** `status: "success"`에는 항상 `verified_by`가 동반되어야 하며, 없으면 `unverified`(`alert`)로 강등된다.
 
 ---
@@ -150,6 +161,22 @@ venv/bin/python3 scripts/recon.py --item R3
 ### 2026-08-24 변경분 — **미확정**
 
 설문에서 응답 컨트롤이 없는 `<p>` 기반 항목을 건너뛰도록 바꿨다(세미나 5587). **그 항목이 무엇인지는 아직 확정되지 않았고, 실제 런에서 검증되지 않았다.** 배경·롤백 지점·이어서 볼 것은 전부 [MEMORY.md](MEMORY.md) "설문 `<p>` 기반 항목"에 있다. 다음 설문 런에서 결과 JSON의 `static_items`(건너뛴 항목 수)와 제출 성공 여부를 확인할 것.
+
+---
+
+## 다음 런에서 확인할 것 (2026-08-27 표 알림 도입분)
+
+**실제 런에서 아직 검증되지 않았다.** 다음 `daily` / `seminar_block` 결과에서 아래를 본다.
+
+| 확인 대상 | 어디서 | 기대값 | 아니면 |
+|---|---|---|---|
+| 표 PNG가 도착하나 | 텔레그램 | 기존 텍스트 알림 + 표 사진 1장 | 텍스트 `<pre>` 표만 오면 PNG 렌더 실패 — Actions 로그의 `[tablepng]` 줄 확인 |
+| 한글·이모지 렌더 | 표 PNG | 글자 깨짐(두부) 없음 | apt 폰트 설치 스텝 확인(`fonts-nanum`, `fonts-noto-color-emoji`) |
+| run 행 누적 | daily 표 | 2번째 런부터 `run2` 행이 붙음 | 매번 `run1`만 나오면 `logs/` 커밋이 안 된 것 |
+| 세미나 행 구성 | 세미나 표 | 그날 신청한 세미나가 전부 행으로 | 비면 `seminar_applied.json`의 `start_date`가 오늘과 안 맞는 것 |
+| 로그 파일 7개 유지 | `logs/` | 종류별 7개 이하 | 넘치면 `runlog.prune` 미호출 |
+
+표가 안정되면 기존 텍스트 알림을 걷어낸다(사용자 지시, 2026-08-27).
 
 ---
 
