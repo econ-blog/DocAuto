@@ -104,3 +104,133 @@ def test_run_survey_collects_new_text_question_into_survey_text_answers(tmp_path
     # 3. survey_quiz_answers.json이나 legacy_file에는 쓰이지 않아야 함
     assert json.loads(quiz_file.read_text(encoding="utf-8")) == {}
     assert json.loads(legacy_file.read_text(encoding="utf-8")) == {}
+
+
+# ---------------------------------------------------------------------------
+# 설문 완료 판정 — 제출 직후 화면이 아니라 세미나 상세 재접속으로 확인한다
+# (2026-08-28). 상세에는 참여했으면 '설문 참여 완료', 아니면 '세미나 종료'만 뜬다.
+# ---------------------------------------------------------------------------
+
+def test_detect_survey_marker_reads_the_detail_buttons():
+    done = seminar_survey.detect_survey_marker(["설문 참여 완료", "세미나 종료"])
+    not_done = seminar_survey.detect_survey_marker(["세미나 종료"])
+    unknown = seminar_survey.detect_survey_marker(["입장하기", "신청취소"])
+
+    # 완료 화면에는 두 문구가 나란히 뜬다 — 완료 표시가 이긴다.
+    assert done == "done"
+    assert not_done == "not_done"
+    assert unknown == "unknown"
+    assert seminar_survey.detect_survey_marker([]) == "unknown"
+
+
+def test_detect_survey_marker_ignores_whitespace_splits():
+    """버튼 문구가 줄바꿈으로 쪼개져 와도 같은 판정이어야 한다."""
+    assert seminar_survey.detect_survey_marker(["설문\n참여  완료"]) == "done"
+
+
+def _stub_detail(monkeypatch, verdict, buttons=None):
+    calls = []
+
+    def fake(page, seminar_id, retries=0):
+        calls.append((seminar_id, retries))
+        return verdict, buttons if buttons is not None else []
+
+    monkeypatch.setattr(seminar_survey, "confirm_survey_done", fake)
+    return calls
+
+
+def _submitted_survey_page():
+    """1페이지 제출 후 문항이 사라진 설문 창 mock."""
+    page = MagicMock()
+    page.is_closed.return_value = False
+    page.evaluate.side_effect = [
+        [{"number": "1", "question": "만족하셨습니까?", "kind": "radio", "name": "q1",
+          "options": [{"text": "예", "id": "o1", "name": "q1", "value": "1", "qnum": "1", "index": 0},
+                      {"text": "아니오", "id": "o2", "name": "q1", "value": "2", "qnum": "1", "index": 1}]}],
+        [],   # 제출 후 — 문항 없음
+    ]
+    return page
+
+
+def test_run_survey_verified_by_detail_button_after_submit(monkeypatch):
+    """제출 후 상세에 '설문 참여 완료'가 보이면 success + 양성 증거."""
+    survey_page = _submitted_survey_page()
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (survey_page, ""))
+    monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda page: [])
+    monkeypatch.setattr(seminar_survey, "apply_plan", lambda page, plan: None)
+    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda page: (MagicMock(), "submit"))
+    calls = _stub_detail(monkeypatch, "done", ["설문 참여 완료", "세미나 종료"])
+
+    result = seminar_survey.run_survey(MagicMock(), 5600, bank_paths={})
+
+    assert result["status"] == "success"
+    assert result["verified_by"] == f"detail_button: {seminar_survey.SURVEY_DONE_MARKER}"
+    assert result["pages"] == 1
+    # 제출 직후에는 표시가 늦을 수 있으니 한 번은 다시 열어 본다.
+    assert calls == [(5600, 1)]
+
+
+def test_run_survey_unverified_when_detail_shows_only_seminar_end(monkeypatch):
+    """'세미나 종료'만 남았으면 설문에 참여하지 못한 것 — 성공으로 올리지 않는다."""
+    survey_page = _submitted_survey_page()
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (survey_page, ""))
+    monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda page: [])
+    monkeypatch.setattr(seminar_survey, "apply_plan", lambda page, plan: None)
+    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda page: (MagicMock(), "submit"))
+    monkeypatch.setattr(seminar_survey.common, "save_screenshot", lambda page, name: "shot.png")
+    _stub_detail(monkeypatch, "not_done", ["세미나 종료"])
+
+    result = seminar_survey.run_survey(MagicMock(), 5600, bank_paths={})
+
+    assert result["status"] == "unverified"
+    assert "verified_by" not in result
+    # 사이트가 문구를 바꿨을 때를 대비해 무엇이 보였는지 결과에 남긴다.
+    assert result["detail_buttons"] == ["세미나 종료"]
+    assert seminar_survey.SEMINAR_END_MARKER in result["message"]
+
+
+def test_run_survey_confirms_success_even_when_the_window_closes(monkeypatch):
+    """제출 후 창이 닫혀도 상세에 완료 표시가 있으면 성공이다(예전엔 무조건 unverified)."""
+    survey_page = MagicMock()
+    survey_page.is_closed.side_effect = [False, True, True, True]
+    survey_page.evaluate.return_value = [
+        {"number": "1", "question": "만족하셨습니까?", "kind": "radio", "name": "q1",
+         "options": [{"text": "예", "id": "o1", "name": "q1", "value": "1", "qnum": "1", "index": 0},
+                     {"text": "아니오", "id": "o2", "name": "q1", "value": "2", "qnum": "1", "index": 1}]}
+    ]
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (survey_page, ""))
+    monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda page: [])
+    monkeypatch.setattr(seminar_survey, "apply_plan", lambda page, plan: None)
+    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda page: (MagicMock(), "submit"))
+    _stub_detail(monkeypatch, "done", ["설문 참여 완료", "세미나 종료"])
+
+    result = seminar_survey.run_survey(MagicMock(), 5600, bank_paths={})
+
+    assert result["status"] == "success"
+    assert result["verified_by"] == f"detail_button: {seminar_survey.SURVEY_DONE_MARKER}"
+
+
+def test_run_survey_marks_already_done_when_popup_never_opens_but_detail_says_done(monkeypatch):
+    """설문 창이 안 열리는 이유가 '이미 참여'인지 상세로 가른다 — 이력이 날아간 경우."""
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (None, "팝업 안 열림"))
+    _stub_detail(monkeypatch, "done", ["설문 참여 완료", "세미나 종료"])
+    state = {"version": 2, "accounts": {"bjh7790": {"entered": [{"id": 5600}]}}}
+
+    result = seminar_survey.run_survey(
+        MagicMock(), 5600, bank_paths={}, state=state, account="bjh7790",
+    )
+
+    assert result["status"] == "already_done"
+    assert result["verified_by"] == f"detail_button: {seminar_survey.SURVEY_DONE_MARKER}"
+    # 다음 런이 같은 세미나를 또 붙들지 않도록 이력에 못을 박는다.
+    assert state["accounts"]["bjh7790"]["survey"]["5600"] == "done"
+
+
+def test_run_survey_still_not_ready_when_detail_has_no_done_marker(monkeypatch):
+    """상세에 완료 표시가 없으면 종전대로 not_ready — 30분 뒤 다시 시도한다."""
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (None, "팝업 안 열림"))
+    _stub_detail(monkeypatch, "unknown")
+
+    result = seminar_survey.run_survey(MagicMock(), 5600, bank_paths={})
+
+    assert result["status"] == "not_ready"

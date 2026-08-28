@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 import doctorville
+import seminar_survey
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 
@@ -59,6 +60,30 @@ def test_seminar_list_js_scopes_lookup_to_the_list_anchor():
     js = doctorville.SEMINAR_LIST_JS
     assert "aEl.querySelector" in js
     assert "document.querySelector('.tit'" not in js
+
+
+def test_detail_button_js_is_a_raw_string_and_intact():
+    """설문 완료 판정이 이 JS가 긁는 버튼 텍스트에 걸려 있다 (2026-08-28)."""
+    js = seminar_survey.DETAIL_BUTTON_JS
+    assert_no_broken_string_literals(js, "DETAIL_BUTTON_JS")
+    # /\s+/g 의 \s는 JS 정규식의 것이다 — 파이썬이 먹으면 안 된다.
+    assert "\\s+" in js
+
+
+JS_CONSTANT = re.compile(r'^([A-Z][A-Z0-9_]*_JS)\s*=\s*(r?)"""(.*?)"""', re.DOTALL | re.MULTILINE)
+
+
+@pytest.mark.parametrize("path", sorted(SCRIPTS.glob("*.py")), ids=lambda p: p.name)
+def test_module_level_js_constants_have_no_broken_string_literals(path):
+    """모듈 상수로 뺀 JS도 인라인 JS와 같은 검사를 받는다.
+
+    evaluate() 호출부에 직접 박히지 않아 EVALUATE_BLOCK 정규식이 못 보는 자리다.
+    2026-08-28 사고를 낸 SEMINAR_LIST_JS가 바로 이 형태였다.
+    """
+    source = path.read_text(encoding="utf-8")
+    for name, raw_prefix, block in JS_CONSTANT.findall(source):
+        js = block if raw_prefix else block.encode().decode("unicode_escape")
+        assert_no_broken_string_literals(js, f"{path.name} {name}")
 
 
 EVALUATE_BLOCK = re.compile(r'evaluate\(\s*(r?)"""(.*?)"""', re.DOTALL)

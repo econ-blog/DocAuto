@@ -61,10 +61,10 @@ def test_verified_by_contracts_all_10_modules():
     assert severity_of(res_live) == "ok"
     assert res_live["verified_by"] == "popup_acquired"
 
-    # 10. Seminar Survey
-    res_survey = {"status": "success", "verified_by": "completion_screen_verified"}
+    # 10. Seminar Survey — 상세 재접속의 '설문 참여 완료' 버튼 (2026-08-28)
+    res_survey = {"status": "success", "verified_by": "detail_button: 설문 참여 완료"}
     assert severity_of(res_survey) == "ok"
-    assert res_survey["verified_by"] == "completion_screen_verified"
+    assert res_survey["verified_by"] == "detail_button: 설문 참여 완료"
 
 
 from datetime import datetime

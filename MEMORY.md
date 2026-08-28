@@ -52,6 +52,11 @@ DocAuto의 상세 지식 저장소. 셀렉터·파일 포맷·설계 근거·버
 - 라이브 입장: 목록 마커 `span.ico_enter` → 상세 `a.btn_bn.btn_enter`("입장하기", `onclick="playOnPopup(...)"` → `window.open`) → Playwright `expect_popup()`.
 - 설문: `/seminar/broadcastSeminarPopup?viewType=2&seminarId=X` → `a#surveyEnter` → `button.btn_answer:has-text("설문하기")` → `survey.villeway.com` 새 창.
 - 설문 폼: `form[id^="surveyForm"]`, 문항 `li[data-question-number]`, 문항 텍스트 = `label > div` 첫 줄(`[퀴즈]` 배지·후행 `*` 포함), 보기 = `ol li label` 내 `input[type=radio|checkbox]` + `span.col-start-2`, 제출 `input[type=submit][value="제출하기"]`.
+- **설문 완료 표식 = 상세 페이지의 버튼 (2026-08-28 사용자 실측, m.doctorville.co.kr):** 세미나가 끝난 뒤 `/seminar/seminarDetail?seminarId=X`에 재접속하면
+  - 설문까지 마쳤으면 **`설문 참여 완료` + `세미나 종료`** 두 버튼(둘 다 회색·비활성)
+  - 입장을 못 했거나 제한 시간 내에 답을 못 냈으면 **`세미나 종료`** 한 버튼
+  두 문구는 상호 배타가 아니므로 **완료 표시를 먼저 본다**(`detect_survey_marker`). 버튼 텍스트는 `DETAIL_BUTTON_JS`가 `a.btn_bn`·`.btn_area`·`[class*=btn]` 등을 훑어 모으고, 거기서 못 찾으면 본문 전체로 한 번 더 대조한다.
+  - **www(데스크톱)에서 같은 문구인지는 미검증.** 판정이 `unknown`이면 결과 JSON의 `detail_buttons`에 그때 보인 버튼이 전부 실려 오므로, 첫 런 결과로 문구를 확정하면 된다.
 
 ### 키메디 (`keymedi.py`)
 - 로그인: `input[name="uid"]`, `input[name="password"]`, `button:has-text("로그인")`.
@@ -322,7 +327,12 @@ GitHub `schedule`은 지연(최대 80분)·누락이 잦아 external cron (cron-
 - **headlessui 모달이 제출을 막음:** 임시저장 초안이 있으면 "작성 중인 정보를 불러왔습니다" 모달의 backdrop이 포인터 이벤트를 가로채 제출 클릭이 30초 타임아웃(실패한 실행이 초안을 남겨 재시도할수록 재현). `dismiss_alerts()`를 창 오픈 직후·제출 직전·직후에 호출.
   - **함정: 모달 루트는 크기 0이라 `is_visible()`이 False.** 이 프로젝트에서 "가시성으로 판단"이 정석이던 것과 반대로, 여기서는 `count()`로만 판정해야 한다.
 - **척도형 보기 텍스트:** 보기 텍스트가 input을 감싼 label이 아니라 `label[for="<input id>"]`에 있어 전부 빈 문자열이었다 → `label[for]` 폴백 추가.
-- **제출 후에도 `a#surveyEnter`가 사라진다** → "이미 참여"와 "마감"이 구분되지 않고 둘 다 `no_questions`.
+- **제출 후에도 `a#surveyEnter`가 사라진다** → "이미 참여"와 "마감"이 구분되지 않고 둘 다 `no_questions`. **2026-08-28 해결** — 설문 창이 안 열리면 상세를 열어 `설문 참여 완료`를 본다. 있으면 `already_done`(+`verified_by`)로 확정하고 이력에 `done`을 박아 다음 런이 다시 붙들지 않게 한다. 없으면 종전대로 `not_ready`/`closed`.
+- **완료 판정을 완료 화면 문구 → 상세 재접속으로 교체 (2026-08-28 사용자 지시):** 옛 판정(`verify_survey_completion_text`)은 본문에 `완료`·`감사`·`제출`·`참여`·`응답` 중 하나만 있으면 성공으로 봤다. `제출`은 제출 버튼에도 있어 오탐이 났고, 제출 후 창이 닫히면 아예 읽을 수도 없어 무조건 `unverified`였다. 상세 재접속 판정에는 두 약점이 다 없다 — **창이 닫힌 경우에도 성공을 확정할 수 있다.**
+  - 판정 자리 4곳: ① 제출 후 문항 없음 ② 제출 후 창 닫힘 ③ 같은 페이지 재표시(제출은 됐는지 확인) ④ 설문 창 자체가 안 열림(→ `already_done` 판별).
+  - 제출 직후에는 표시 갱신이 늦을 수 있어 `finalize_after_submit`만 상세를 **한 번 더** 연다(`retries=1`).
+  - 다중 페이지 설문은 페이지마다 상세를 열지 않는다. 앞 세미나 응답의 잔상으로 중간에 성공으로 끊길 수 있고 왕복 비용도 붙는다.
+  - `verified_by`가 `completion_screen_verified` → `detail_button: 설문 참여 완료`로 바뀌었다.
 - 설문은 페이지 순차 제출형이라 전체 사전 검증 불가. **페이지 단위 검증이 도달 가능한 최대 안전선**이라 미등록 1건이면 그 페이지를 제출하지 않고 `incomplete_bank`로 중단한다.
 - **응답 컨트롤이 없는 `<p>` 기반 항목(2026-08-24, 미확정):** → 아래 "설문 `<p>` 기반 항목" 절 참고. 그 항목이 무엇인지 아직 모른다.
 
@@ -452,6 +462,24 @@ C안(한 칸에 이모지 2개)은 순서 규칙을 외워야 해서 버렸다.
 | 계정이 하나도 없을 때 | `seminar_table()` | 단계당 한 칸으로 되돌아가 `merge_status`로 합친다(옛 로그 호환) |
 
 `merge_status`는 daily 표(HMP 룰렛·글쓰기)에서 계속 쓰이므로 **지우지 않았다.**
+
+### 한 번 초록이면 계속 초록 (2026-08-28 사용자 지시)
+
+세미나 블록은 30분마다 같은 세미나를 다시 훑는다. 첫 런에서 실제로 신청·입장에
+성공(✅)한 뒤, 다음 런은 이력을 보고 `already_done`(☑️)을 적어 **표가 성공을
+잃어버렸다.** `already_done`은 새 결과가 아니라 옛 결과의 재확인이므로 칸을 덮을
+근거가 없다.
+
+`runlog.NON_OVERWRITING_STATUSES = {"already_done"}` — 이 상태는 **칸이 비어 있을
+때만** 쓰이고, 이미 무언가 적혀 있으면 `updated_at`조차 건드리지 않는다.
+
+- 빈 칸은 여전히 채운다. 어제 신청해둔 세미나는 오늘 첫 기록이 `already_done`이다.
+- 계정별로 따로 판단한다. 승진의 재확인이 원주 칸을 막지 않는다.
+- 다른 상태의 갱신은 그대로다. 정답을 채워 ❓(`incomplete_bank`) → ✅(`success`)로
+  올라가는 정상 경로가 막히면 안 된다.
+- ❌도 덮지 않는다. 실패를 "이미 완료"로 덧칠하면 알림과 표가 어긋난다.
+- daily 표는 런마다 **행이 새로 붙으므로**(run1, run2 …) 해당 없음. 세미나 표만
+  같은 칸을 read-modify-write 한다.
 
 **검증 상태:** 실제 세미나 블록 런에서는 아직 안 돌았다. 로컬에서 표 렌더(PNG·텍스트)와
 **2026-08-28 실제 로그 재렌더**까지는 확인했다(두 계정이 각자 칸에 찍힘).

@@ -46,6 +46,16 @@ seminar_live.py로 입장에 성공한 세미나는 방송 팝업에서 설문�
 (status=incomplete_bank). 설문은 페이지 순차 제출형이라 뒷 페이지는 앞 페이지를
 제출해야 볼 수 있으므로, 페이지 단위 검증이 도달 가능한 최대 안전선이다.
 
+완료 판정 (2026-08-28 변경):
+    제출 직후 완료 화면 문구가 아니라, **세미나 상세에 재접속했을 때** 사이트가
+    보여주는 버튼으로 판정한다(`confirm_survey_done`).
+      - '설문 참여 완료'가 보이면 설문을 마친 것 → success (`detail_button: …`)
+      - '세미나 종료'만 보이면 입장을 못 했거나 제한 시간 내에 답하지 못한 것
+      - 둘 다 없으면 판정 불가 → unverified
+    완료 화면 대조는 '제출'·'참여' 같은 흔한 단어에 걸려 오탐이 났고, 제출 후
+    창이 닫혀 버리면 아예 읽을 수도 없었다. 재접속 판정에는 두 약점이 다 없어
+    창이 닫힌 경우에도 성공을 확정할 수 있다.
+
 DOM 근거 (2026-07-27 실측):
     방송 팝업: /seminar/broadcastSeminarPopup?viewType=2&seminarId=<ID>
       → a#surveyEnter("설문 참여") → button.btn_answer:has-text("설문하기")
@@ -100,6 +110,20 @@ SURVEY_POPUP_TIMEOUT_MS = 8000
 # 문항이 통째로 빈 값으로 읽혔을 때 렌더를 한 번 더 기다리는 시간.
 BLANK_RETRY_WAIT_MS = 5000
 
+# 설문 완료의 양성 증거. 제출 직후 완료 화면이 아니라 **세미나 상세에 재접속했을
+# 때** 사이트가 보여주는 버튼으로 판정한다(2026-08-28 사용자 실측 화면):
+#   - 설문까지 마친 세미나  → '설문 참여 완료' + '세미나 종료' 두 버튼
+#   - 입장 못 했거나 제한 시간 내 미응답 → '세미나 종료' 한 버튼
+# 완료 화면 문구 대조는 '제출'·'참여' 같은 흔한 단어에 걸려 오탐이 났고, 창이
+# 닫혀 버리면 아예 읽을 수도 없었다. 재접속 판정에는 두 약점이 다 없다.
+SURVEY_DONE_MARKER = "설문 참여 완료"
+SEMINAR_END_MARKER = "세미나 종료"
+
+# 상세 페이지 로드 후 버튼 영역이 그려질 때까지의 여유.
+DETAIL_SETTLE_MS = 2000
+# 제출 직후에는 표시가 아직 안 바뀌었을 수 있어 한 번 더 열어 본다.
+DETAIL_RECHECK_WAIT_MS = 3000
+
 
 # ---------------------------------------------------------------------------
 # 순수 함수 (테스트 대상)
@@ -109,11 +133,28 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "")).strip()
 
 
-def verify_survey_completion_text(text: str) -> bool:
-    if not text:
-        return False
-    keywords = ["완료", "감사", "제출", "참여", "응답"]
-    return any(kw in text for kw in keywords)
+def strip_spaces(text: str) -> str:
+    """공백을 전부 없앤 대조용 문자열. 사이트가 버튼 문구를 줄바꿈으로 쪼개도 걸린다."""
+    return re.sub(r"\s+", "", text or "")
+
+
+def detect_survey_marker(texts) -> str:
+    """세미나 상세에서 읽은 문자열들로 설문 참여 여부를 판정한다.
+
+    - ``done``     — '설문 참여 완료'가 있다. 설문을 실제로 마쳤다는 사이트의 표시.
+    - ``not_done`` — '세미나 종료'만 있다. 입장을 못 했거나 제한 시간 내에
+                     답을 못 낸 경우로, 설문에 참여하지 못한 상태다(실측 화면).
+    - ``unknown``  — 둘 다 없다. 방송 전·중이거나 마크업이 바뀐 것.
+
+    두 문구는 상호 배타가 아니다 — 참여 완료 화면에는 '설문 참여 완료'와
+    '세미나 종료'가 나란히 뜬다. 그래서 완료 표시를 먼저 본다.
+    """
+    joined = " ".join(strip_spaces(t) for t in texts if t)
+    if strip_spaces(SURVEY_DONE_MARKER) in joined:
+        return "done"
+    if strip_spaces(SEMINAR_END_MARKER) in joined:
+        return "not_done"
+    return "unknown"
 
 
 _QUIZ_BADGE_RE = re.compile(r"^\[\s*퀴즈\s*\]\s*")
@@ -843,6 +884,97 @@ def apply_plan(survey_page, plan: list[dict]) -> None:
             option_locator(survey_page, t).check(force=True)
 
 
+# 상세 페이지의 버튼 텍스트를 긁는다. 브라우저에 넘기는 JS는 r-문자열로 쓴다
+# (2026-08-28 사고: 일반 문자열의 \n이 파이썬 단계에서 줄바꿈이 되어 SyntaxError).
+DETAIL_BUTTON_JS = r"""
+() => {
+    const sel = 'a.btn_bn, .btn_area a, .btn_area button, .btn_wrap a, .btn_wrap button, '
+              + 'a[class*="btn"], button[class*="btn"], button, input[type=button], input[type=submit]';
+    const out = [];
+    document.querySelectorAll(sel).forEach(el => {
+        const t = ((el.innerText || el.value || '') + '').replace(/\s+/g, ' ').trim();
+        if (t && t.length <= 40) out.push(t);
+    });
+    return out;
+}
+"""
+
+
+def read_detail_buttons(page) -> list[str]:
+    """세미나 상세의 버튼 텍스트 목록(중복 제거). 읽기에 실패하면 빈 목록."""
+    seen, out = set(), []
+    try:
+        for t in page.evaluate(DETAIL_BUTTON_JS) or []:
+            t = normalize(t)
+            if t and t not in seen:
+                seen.add(t)
+                out.append(t)
+    except Exception:
+        # 버튼을 못 읽는 것은 판정 불가일 뿐이다. 여기서 죽으면 설문 전체가 죽는다.
+        return []
+    return out
+
+
+def confirm_survey_done(page, seminar_id, retries: int = 0) -> tuple[str, list[str]]:
+    """세미나 상세에 재접속해 '설문 참여 완료' 표시로 설문 완료 여부를 판정한다.
+
+    반환: (판정, 상세에서 읽은 버튼 텍스트들). 판정은 done / not_done / unknown.
+    버튼 텍스트를 함께 돌려주는 이유는, 사이트가 문구를 바꿨을 때 결과 JSON만
+    보고도 무엇이 있었는지 알 수 있어야 하기 때문이다.
+
+    retries는 판정이 done이 아닐 때 다시 열어 보는 횟수다. 제출 직후에는 표시가
+    아직 안 바뀌었을 수 있어 1회를 준다.
+    """
+    detail_url = f"{doctorville.SEMINAR_DETAIL_URL}?seminarId={seminar_id}"
+    buttons: list[str] = []
+    verdict = "unknown"
+    for attempt in range(retries + 1):
+        if attempt:
+            page.wait_for_timeout(DETAIL_RECHECK_WAIT_MS)
+        try:
+            common.goto_with_retry(
+                page, detail_url, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS
+            )
+            page.wait_for_timeout(DETAIL_SETTLE_MS)
+        except Exception as e:
+            return "unknown", [f"상세 재접속 실패: {e}"]
+
+        buttons = read_detail_buttons(page)
+        verdict = detect_survey_marker(buttons)
+        if verdict == "unknown":
+            # 버튼 셀렉터가 안 맞을 수도 있으니 본문 전체로 한 번 더 본다.
+            verdict = detect_survey_marker([body_text(page)])
+        if verdict == "done":
+            return verdict, buttons
+    return verdict, buttons
+
+
+def finalize_after_submit(page, seminar_id, pages_done: int, title: str = "") -> dict:
+    """제출한 뒤 상세를 재확인해 success / unverified를 가른다."""
+    verdict, buttons = confirm_survey_done(page, seminar_id, retries=1)
+    prefix = f"[{title}] " if title else ""
+    out = {"pages": pages_done}
+    if verdict == "done":
+        out["status"] = "success"
+        out["verified_by"] = f"detail_button: {SURVEY_DONE_MARKER}"
+        out["message"] = f"{prefix}설문 제출 완료({pages_done}페이지) — 상세에서 '{SURVEY_DONE_MARKER}' 확인."
+        return out
+
+    out["status"] = "unverified"
+    out["detail_buttons"] = buttons
+    reason = (
+        f"'{SEMINAR_END_MARKER}'만 표시됨(설문 미참여)"
+        if verdict == "not_done"
+        else f"'{SURVEY_DONE_MARKER}' 표시를 찾지 못함"
+    )
+    out["message"] = (
+        f"{prefix}설문 제출({pages_done}페이지) 후 상세 재확인 — {reason}. "
+        f"버튼: {', '.join(buttons) if buttons else '없음'}"
+    )
+    out["screenshot"] = common.save_screenshot(page, f"survey_{seminar_id}_unverified")
+    return out
+
+
 def open_survey(page, seminar_id) -> tuple[object, str]:
     """방송 팝업에서 설문 창을 연다. (설문 페이지, 실패 사유) 중 하나를 반환."""
     common.goto_with_retry(
@@ -929,11 +1061,23 @@ def run_survey(
 
     survey_page, err = open_survey(page, seminar_id)
     if survey_page is None:
+        prefix = f"[{title}] " if title else ""
+        # 설문 창이 안 열리는 이유는 "아직 안 열림"과 "이미 참여함" 두 가지인데
+        # 팝업만 봐서는 구분이 안 됐다. 상세의 '설문 참여 완료'가 그걸 가른다 —
+        # 이력 파일이 날아갔거나 사용자가 손으로 응답한 경우가 여기로 온다.
+        verdict, _ = confirm_survey_done(page, seminar_id)
+        if verdict == "done":
+            result["status"] = "already_done"
+            result["verified_by"] = f"detail_button: {SURVEY_DONE_MARKER}"
+            result["message"] = f"{prefix}이미 설문 참여 완료 — 상세에서 '{SURVEY_DONE_MARKER}' 확인."
+            if state is not None and account:
+                mark_survey_status(state, account, sid_val, "done", state_file)
+            return result
+
         st = evaluate_survey_cutoff(item, now_dt)
         result["status"] = "closed" if st == "closed" else "not_ready"
         if result["status"] == "closed" and state is not None and account:
             mark_survey_status(state, account, sid_val, "closed", state_file)
-        prefix = f"[{title}] " if title else ""
         result["message"] = f"{prefix}{result['status']}: {err}"
         return result
 
@@ -961,16 +1105,7 @@ def run_survey(
                     result["dom_dump"] = dump_survey_dom(survey_page, seminar_id)
             if not questions:
                 if pages_done:
-                    page_text = body_text(survey_page)
-                    if verify_survey_completion_text(page_text):
-                        result["status"] = "success"
-                        result["verified_by"] = "completion_screen_verified"
-                        result["pages"] = pages_done
-                        result["message"] = f"설문 제출 완료({pages_done}페이지)."
-                    else:
-                        result["status"] = "unverified"
-                        result["pages"] = pages_done
-                        result["message"] = f"설문 제출 시도했으나 완료 화면 문구 미확인({pages_done}페이지)."
+                    result.update(finalize_after_submit(page, seminar_id, pages_done, title))
                 else:
                     st = evaluate_survey_cutoff(item, now_dt)
                     result["status"] = "closed" if st == "closed" else "not_ready"
@@ -984,11 +1119,11 @@ def run_survey(
             # (필수 미응답 등). 같은 페이지를 반복 제출하지 않고 끊는다.
             fp = page_fingerprint(questions)
             if fp in seen_pages:
-                if pages_done and verify_survey_completion_text(body_text(survey_page)):
+                if pages_done and confirm_survey_done(page, seminar_id)[0] == "done":
                     result["status"] = "success"
-                    result["verified_by"] = "completion_screen_verified"
+                    result["verified_by"] = f"detail_button: {SURVEY_DONE_MARKER}"
                     result["pages"] = pages_done
-                    result["message"] = f"설문 제출 완료({pages_done}페이지)."
+                    result["message"] = f"설문 제출 완료({pages_done}페이지) — 상세에서 '{SURVEY_DONE_MARKER}' 확인."
                     return result
                 result["status"] = "failed"
                 result["pages"] = pages_done
@@ -1056,16 +1191,16 @@ def run_survey(
                     pass
 
             if survey_page.is_closed():
-                # 창이 닫히면 완료 문구를 읽을 수 없다. 마지막이 "다음"이었다면
-                # 남은 페이지를 못 채운 것이므로 어느 쪽이든 양성 증거가 없다.
-                result["status"] = "unverified"
-                result["pages"] = pages_done
-                result["message"] = f"설문 창이 닫혔으나 완료 화면 문구 미확인({pages_done}페이지)."
+                # 창이 닫히면 완료 화면은 읽을 수 없다. 예전엔 여기서 무조건
+                # unverified였지만, 판정 근거가 상세 페이지로 옮겨 왔으므로
+                # 창이 닫힌 것은 더 이상 판정을 막지 않는다. 마지막이 "다음"이라
+                # 남은 페이지를 못 채웠다면 상세에 완료 표시가 안 뜬다.
+                result.update(finalize_after_submit(page, seminar_id, pages_done, title))
                 return result
 
-            # 완료 판정은 다음 반복의 "문항 없음" 분기가 맡는다. 여기서 본문 문구만
-            # 보고 성공으로 끊으면, 뒷 페이지의 "제출"·"참여" 같은 단어에 걸려
-            # 미응답 페이지를 남긴 채 성공으로 보고하게 된다.
+            # 완료 판정은 다음 반복의 "문항 없음" 분기가 맡는다. 여기서 상세를
+            # 매 페이지 열어 보면 다중 페이지 설문이 중간에 성공으로 끊길 수 있고
+            # (앞 세미나 응답의 잔상), 페이지마다 왕복이 붙는다.
 
         result["message"] = f"페이지가 {MAX_PAGES}회를 넘어 중단."
         return result
@@ -1135,7 +1270,7 @@ def run_account(
                     r = {"seminarId": int(sid) if str(sid).isdigit() else sid, "status": "failed", "message": f"예외 발생: {e}"}
                 output["surveys"].append(r)
                 _log_seminar(sid, r["status"], account, item if isinstance(item, dict) else {})
-                if r["status"] == "success" and state is not None:
+                if r["status"] in ("success", "already_done") and state is not None:
                     mark_survey_status(state, account, sid, "done", state_file)
                 elif r["status"] == "closed" and state is not None:
                     mark_survey_status(state, account, sid, "closed", state_file)
@@ -1146,7 +1281,8 @@ def run_account(
             if output["status"] == "success" and verified:
                 output["verified_by"] = verified
             output["message"] = (
-                f"성공 {statuses.count('success')}건, 미등록 {statuses.count('incomplete_bank')}건, "
+                f"성공 {statuses.count('success')}건, 이미완료 {statuses.count('already_done')}건, "
+                f"미등록 {statuses.count('incomplete_bank')}건, "
                 f"마감 {statuses.count('closed')}건, 미오픈 {statuses.count('not_ready')}건, "
                 f"실패 {statuses.count('failed')}건."
             )

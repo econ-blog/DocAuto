@@ -151,6 +151,66 @@ def test_update_seminar_fills_one_cell_per_phase(tmp_path):
     assert rows == [["당뇨 세미나", "12:00", "13:00", "✅", "✅", "⏳"]]
 
 
+def test_already_done_does_not_overwrite_a_recorded_result(tmp_path):
+    """한 번 초록(✅)이면 계속 초록. 30분 뒤 런의 '이미 완료'가 덮으면 안 된다.
+
+    세미나 블록은 같은 세미나를 30분마다 다시 훑는다. 첫 런에서 실제로 신청·입장에
+    성공(✅)한 뒤 다음 런은 이력을 보고 already_done(☑️)을 적어, 표가 성공을
+    잃어버리는 문제가 있었다(2026-08-28 사용자 지적).
+    """
+    kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
+    runlog.update_seminar("1", phase="live", status="success", account="bjh7790",
+                          title="T", **kw)
+    runlog.update_seminar("1", phase="live", status="already_done", account="bjh7790", **kw)
+
+    rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path, accounts=["bjh7790"])[1]
+    assert rows[0][4] == "✅"
+
+
+def test_already_done_does_not_overwrite_a_failure_either(tmp_path):
+    """'이미 완료'는 새 결과가 아니라 옛 결과의 재확인이라 아무것도 바꾸지 않는다."""
+    kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
+    runlog.update_seminar("1", phase="apply", status="failed", account="bjh7790",
+                          title="T", **kw)
+    runlog.update_seminar("1", phase="apply", status="already_done", account="bjh7790", **kw)
+
+    rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path, accounts=["bjh7790"])[1]
+    assert rows[0][3] == "❌"
+
+
+def test_already_done_still_fills_an_empty_cell(tmp_path):
+    """어제 신청해둔 세미나는 오늘 첫 기록이 already_done이다 — 빈 칸은 채워야 한다."""
+    kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
+    runlog.update_seminar("1", phase="apply", status="already_done", account="bjh7790",
+                          title="T", **kw)
+
+    rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path, accounts=["bjh7790"])[1]
+    assert rows[0][3] == "☑️"
+
+
+def test_already_done_is_per_account(tmp_path):
+    """한 계정의 재확인이 다른 계정 칸을 막으면 안 된다."""
+    kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
+    runlog.update_seminar("1", phase="live", status="success", account="bjh7790",
+                          title="T", **kw)
+    runlog.update_seminar("1", phase="live", status="already_done", account="wonju", **kw)
+
+    rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path,
+                                accounts=["bjh7790", "wonju"])[1]
+    assert rows[0][5:7] == ["✅", "☑️"]
+
+
+def test_other_statuses_still_overwrite(tmp_path):
+    """정답을 채워 넣어 ❓가 ✅로 바뀌는 정상 갱신은 그대로 동작해야 한다."""
+    kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
+    runlog.update_seminar("1", phase="survey", status="incomplete_bank", account="bjh7790",
+                          title="T", **kw)
+    runlog.update_seminar("1", phase="survey", status="success", account="bjh7790", **kw)
+
+    rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path, accounts=["bjh7790"])[1]
+    assert rows[0][5] == "✅"
+
+
 def test_update_seminar_does_not_erase_metadata(tmp_path):
     """뒤 단계가 title/start를 모른 채 호출해도 앞 단계가 채운 값이 남아야 한다."""
     kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
