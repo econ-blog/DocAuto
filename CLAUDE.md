@@ -173,7 +173,8 @@ venv/bin/python3 scripts/seminar_report.py --no-telegram   # 세미나 표를 �
 | 표 PNG가 도착하나 | 텔레그램 | 기존 텍스트 알림 + 표 사진 1장 | 텍스트 `<pre>` 표만 오면 PNG 렌더 실패 — Actions 로그의 `[tablepng]` 줄 확인 |
 | 한글·이모지 렌더 | 표 PNG | 글자 깨짐(두부) 없음 | apt 폰트 설치 스텝 확인(`fonts-nanum`, `fonts-noto-color-emoji`) |
 | run 행 누적 | daily 표 | 2번째 런부터 `run2` 행이 붙음 | 매번 `run1`만 나오면 `logs/` 커밋이 안 된 것 |
-| 세미나 행 구성 | 세미나 표 | 그날 신청한 세미나가 전부 행으로 | 비면 `seminar_applied.json`의 `start_date`가 오늘과 안 맞는 것 |
+| 세미나 행 구성 | 세미나 표 | 그날 예정 세미나가 전부 행으로 (마감분 🔒 포함) | 비면 `seminar_applied.json`의 `start_date`가 오늘과 안 맞는 것 |
+| 세미나 제목 | 세미나 표 | 실제 세미나 이름 (번호 아님) | `세미나 5583`처럼 번호로 나오면 목록 제목 추출 실패 — MEMORY.md "세미나 제목" 참고 |
 | 로그 파일 7개 유지 | `logs/` | 종류별 7개 이하 | 넘치면 `runlog.prune` 미호출 |
 
 표가 안정되면 기존 텍스트 알림을 걷어낸다(사용자 지시, 2026-08-27).

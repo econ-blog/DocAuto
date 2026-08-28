@@ -45,7 +45,9 @@ DocAuto의 상세 지식 저장소. 셀렉터·파일 포맷·설계 근거·버
   - 원본 덤프: `scripts/recon.py --item R2` → `scripts/logs/recon_R2_*.json`(커밋 금지).
 - 퀴즈 진입: `/product/main` → `.quiz_calender`에서 오늘 날짜 다음 줄 제품명 + `td.today` 내 hidden input `.pIdCls`의 pId → `/product/productView?pId=XXX`.
 - 퀴즈 레이어: `#quizLayerPop`(오버레이 `.layer_quiz`) / 문항 `.question_area` 반복(`.txt_question`, `ul.question_choice li input[name="an_N"][value="V"]` + `label`) / 문항수 `#questionCnt` / 제출 `.btn_answer` / 정답 `:text('정답입니다')` / 오답 `:text('오답입니다')` / 이미 완료 `:text('축하드립니다')` / 닫기 `.btn_cancel`.
-- 세미나 목록: `span.ico_apply` → `closest('a.list_detail')`의 `seminarId`.
+- 세미나 목록: `span.ico_apply` → `closest('a.list_detail')`의 `seminarId`. **제목도 여기서 긁는다**(`aEl.querySelector('.tit, dt, .title, strong')`, 없으면 innerText 줄 필터).
+- **세미나 제목은 상세가 아니라 목록에서 얻는다 (2026-08-28).** `_seminar_detail_meta`는 `document` 전역을 뒤져서 사이트 공통 요소를 집어왔다 — `seminar_applied.json` 108건의 제목이 전부 `엠서클 통합회원`(100) / `라이브세미나`(8)로, **단 한 번도 진짜 제목을 얻은 적이 없다.** 목록 추출은 `a.list_detail` 안으로 스코프가 한정돼 그 오염이 구조적으로 불가능하다. 상세 제목은 폴백으로만 남겼고, 오염된 값은 `runlog.clean_title`(`JUNK_TITLES`)이 걸러 표에서 세미나 번호로 대체한다.
+  - 이미 신청한 세미나는 상세를 열지 않아 제목을 새로 알 길이 없다. 그래서 **오늘 방송분에 한해** 목록 제목을 표 로그에 채워 넣는다(페이지 로드 없음). 이력 파일의 오염된 제목은 그대로 남지만 표에는 쓰이지 않는다.
 - 세미나 신청: `/seminar/seminarDetail?seminarId=X` → `a.btn_bn`("신청하기") → `button.btn_confirm`(동의) → 텍스트가 "신청취소"로 바뀌면 완료.
 - 라이브 입장: 목록 마커 `span.ico_enter` → 상세 `a.btn_bn.btn_enter`("입장하기", `onclick="playOnPopup(...)"` → `window.open`) → Playwright `expect_popup()`.
 - 설문: `/seminar/broadcastSeminarPopup?viewType=2&seminarId=X` → `a#surveyEnter` → `button.btn_answer:has-text("설문하기")` → `survey.villeway.com` 새 창.
@@ -124,6 +126,7 @@ DocAuto의 상세 지식 저장소. 셀렉터·파일 포맷·설계 근거·버
 - `filter_new_seminars`가 이력에 없는 seminarId만 상세로 보낸다. 결과 JSON에 `skipped_known` 건수가 실린다.
 - **기록 시점은 두 곳**: ① 신청 클릭 후 상세 재확인에서 `신청취소` 확인 ② 상세 진입 시 이미 `신청취소`(=이미 신청됨). ②가 지금 낭비의 대부분이다.
 - **마감·정원초과는 기록하지 않는다.** 신청한 게 아니기 때문. 이 부류는 여전히 매 런 상세를 연다 — 남은 낭비다.
+  단 2026-08-28부터 **결과 표에는 `closed`로 올린다**(`logs/seminar-*.json`). 이력에 없어서 표에서 통째로 빠지던 문제(세미나 5498)를 막기 위한 것이고, 이력 자체는 그대로 비워 둬 재시도를 유지한다.
 - **캐시가 아니라 커밋되는 파일인 이유:** Actions 캐시 restore-key가 `seminar-state-${KST_DATE}-`로 날짜 단위라 하루가 지나면 사라진다. 신청 이력은 방송일까지 며칠~몇 주 살아야 한다. `daily.yml`에는 상태 캐시 자체가 없다.
 - **정리(prune)는 daily가 하루 1회.** `daily_runner`가 `prune_applied_file()`을 부른다(브라우저 불필요). `start`가 파싱되면 방송 종료 시각 지난 건을 버리고, `start`가 없거나 파싱 실패면 `applied_at` + 60일을 백스톱으로 쓴다. 30분마다 도는 block에서 정리하면 파일이 계속 바뀌어 커밋만 늘고, 지난 세미나가 남아 있어도 "상세를 안 연다"는 동작은 옳다.
 - 잘못 지워도 자기 치유된다 — 다음 런에서 상세를 한 번 열고 `신청취소`를 확인하면 다시 기록된다.

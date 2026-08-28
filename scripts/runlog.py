@@ -50,6 +50,34 @@ STATUS_EMOJIS = {
 
 EMPTY_CELL = "·"
 
+# 표에 넣을 세미나 제목의 최대 표시폭(한글은 2칸). 넘으면 …로 자른다.
+TITLE_MAX_COLS = 28
+
+# 닥터빌 상세 페이지에서 제목을 긁을 때 사이트 공통 요소가 잡혀 온 값들.
+# seminar_applied.json 108건이 전부 이 둘이다(2026-08-28 확인) — 제목이 아니라
+# 헤더·푸터 텍스트다. 제목 없음으로 취급해 세미나 번호로 대체한다.
+JUNK_TITLES = {"엠서클 통합회원", "라이브세미나", "세미나", "닥터빌", "상세"}
+
+
+def clean_title(title: str) -> str:
+    """제목다운 제목만 남긴다. 사이트 공통 요소가 잡혀 온 값은 빈 문자열."""
+    text = " ".join(str(title or "").split())
+    return "" if text.replace(" ", "") in {j.replace(" ", "") for j in JUNK_TITLES} else text
+
+
+def truncate(text: str, max_cols: int = TITLE_MAX_COLS) -> str:
+    """표시폭 기준으로 자르고 …를 붙인다(한글 2칸 계산)."""
+    if display_width(text) <= max_cols:
+        return text
+    out, used = "", 0
+    for ch in text:
+        w = display_width(ch)
+        if used + w > max_cols - 1:
+            break
+        out += ch
+        used += w
+    return out.rstrip() + "…"
+
 # 여러 계정/항목을 한 칸에 합칠 때, 나쁜 쪽이 이긴다.
 _STATUS_RANK = {
     "failed": 6, "blocked": 6, "unverified": 5,
@@ -350,10 +378,10 @@ def seminar_table(date_str: str = None, log_dir: Path | str = None,
     rows = []
     for entry in seminar_rows(date_str, log_dir, applied, accounts):
         sid = entry.get("id", "")
-        title = entry.get("title") or f"세미나 {sid}"
-        # 닥터빌은 제목이 통째로 '라이브세미나'인 경우가 흔해 그대로면 행 구분이 안 된다.
-        if title.replace(" ", "") == "라이브세미나":
-            title = f"라이브세미나 #{sid}"
+        # 제목이 있으면 번호 없이 이름만(사용자 요청). 제목을 못 구한 경우에만
+        # 번호를 쓴다 — 안 그러면 행끼리 구분이 안 된다.
+        title = clean_title(entry.get("title"))
+        title = truncate(title) if title else f"세미나 {sid}"
         start, end_from_raw = split_times(entry.get("start", ""))
         end, _ = split_times(entry.get("end", ""))
         row = [title, start, end or end_from_raw]

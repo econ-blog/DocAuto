@@ -203,11 +203,43 @@ def test_seminar_rows_sorted_by_start_time(tmp_path):
     assert titles == ["점심", "저녁"]
 
 
-def test_generic_seminar_title_gets_id_suffix(tmp_path):
-    """닥터빌은 제목이 통째로 '라이브세미나'인 경우가 흔해 행 구분이 안 된다."""
-    applied = {"a": {"5579": {"title": "라이브세미나", "start_date": "2026-08-27", "start_time": "17:00"}}}
-    rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path, applied=applied)[1]
-    assert rows[0][0] == "라이브세미나 #5579"
+def test_junk_title_falls_back_to_seminar_number(tmp_path):
+    """'라이브세미나'·'엠서클 통합회원'은 사이트 공통 요소지 세미나 이름이 아니다."""
+    applied = {"a": {
+        "5579": {"title": "라이브세미나", "start_date": "2026-08-27", "start_time": "17:00"},
+        "5596": {"title": "엠서클 통합회원", "start_date": "2026-08-27", "start_time": "18:00"},
+    }}
+    titles = [r[0] for r in runlog.seminar_table("2026-08-27", log_dir=tmp_path, applied=applied)[1]]
+    assert titles == ["세미나 5579", "세미나 5596"]
+
+
+def test_real_title_shown_without_seminar_number(tmp_path):
+    """제목이 있으면 번호는 뺀다(사용자 요청 2026-08-28)."""
+    applied = {"a": {"5498": {
+        "title": "[TH] O.M.T Web Symposium", "start_date": "2026-08-27", "start_time": "17:00",
+    }}}
+    assert runlog.seminar_table("2026-08-27", log_dir=tmp_path, applied=applied)[1][0][0] == "[TH] O.M.T Web Symposium"
+
+
+def test_long_title_truncated_to_display_width(tmp_path):
+    applied = {"a": {"1": {
+        "title": "56세, 66세 국가건강검진 폐기능검사로 COPD 진단하고 치료하기",
+        "start_date": "2026-08-27", "start_time": "13:00",
+    }}}
+    shown = runlog.seminar_table("2026-08-27", log_dir=tmp_path, applied=applied)[1][0][0]
+    assert shown.endswith("…")
+    assert runlog.display_width(shown) <= runlog.TITLE_MAX_COLS
+
+
+def test_clean_title_strips_junk_and_keeps_real_names():
+    assert runlog.clean_title("엠서클 통합회원") == ""
+    assert runlog.clean_title(" 라이브세미나 ") == ""
+    assert runlog.clean_title("") == ""
+    assert runlog.clean_title("ARB Strategies in Atrial Fibrillation") == "ARB Strategies in Atrial Fibrillation"
+
+
+def test_truncate_is_a_noop_below_the_limit():
+    assert runlog.truncate("짧은 제목") == "짧은 제목"
 
 
 # ---------------------------------------------------------------------------

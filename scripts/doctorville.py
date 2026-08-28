@@ -1112,14 +1112,50 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
     common.goto_with_retry(page, SEMINAR_MAIN_URL, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS)
     page.wait_for_timeout(1000)
 
-    # 신청 가능 세미나 추출 (CLAUDE.md DOM 패턴)
-    seminar_ids = page.evaluate("""
+    # 신청 가능 세미나 추출 (CLAUDE.md DOM 패턴).
+    # 제목도 여기서 같이 긁는다. 상세 페이지의 _seminar_detail_meta는 document
+    # 전역을 뒤져서 헤더·푸터("엠서클 통합회원")를 집어왔다 — 이력 108건이 전부
+    # 그 값이었다(2026-08-28 확인). 목록은 a.list_detail 안으로 스코프가 한정돼
+    # 그런 오염이 구조적으로 불가능하다. seminar_live.get_live_seminar_info와
+    # 같은 패턴이다.
+    listed = page.evaluate("""
         () => Array.from(document.querySelectorAll('span.ico_apply')).map(span => {
             const aEl = span.closest('a.list_detail');
             if (!aEl) return null;
-            try { return new URL(aEl.href).searchParams.get('seminarId'); } catch(e) { return null; }
+            let sid = null;
+            try { sid = new URL(aEl.href).searchParams.get('seminarId'); } catch(e) { return null; }
+            if (!sid) return null;
+
+            const titEl = aEl.querySelector('.tit, dt, .title, strong');
+            let title = titEl ? titEl.innerText.trim() : '';
+            if (!title) {
+                const lines = (aEl.innerText || '').split('\n').map(l => l.trim()).filter(Boolean);
+                const filtered = lines.filter(l =>
+                    !/^(입장|신청|방송중|마감|신청완료|사전신청)/.test(l) &&
+                    !/\d{2}:\d{2}/.test(l) &&
+                    !/^(연자|정원):/.test(l)
+                );
+                title = filtered.length > 0 ? filtered[0] : '';
+            }
+            return { id: sid, title: title };
         }).filter(Boolean)
     """)
+
+    seminar_ids = []
+    list_titles = {}
+    for item in listed or []:
+        # 정상 경로는 {"id","title"}. DOM이 바뀌어 문자열만 오더라도 id는 건지고
+        # 제목만 포기한다 — 제목 때문에 신청 자체가 멈추면 안 된다.
+        if isinstance(item, dict):
+            sid, title = item.get("id"), item.get("title") or ""
+        else:
+            sid, title = item, ""
+        if not sid:
+            continue
+        sid = str(sid)
+        if sid not in list_titles:
+            seminar_ids.append(sid)
+        list_titles[sid] = title
 
     if not seminar_ids:
         result["status"] = "no_target"
@@ -1137,6 +1173,17 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
     result["skipped_known"] = len(seminar_ids) - len(targets)
     dirty = False
 
+    # 이미 신청한 세미나는 상세를 열지 않으므로 제목을 새로 알 길이 없다(이력에
+    # 남은 제목은 대부분 오염돼 있다). 목록에서 긁은 제목은 페이지 로드 없이
+    # 공짜로 얻은 것이니, 오늘 방송분에 한해 표에 채워 넣는다.
+    if account:
+        today_str = datetime.now(common.KST).strftime("%Y-%m-%d")
+        for sid, listed_title in list_titles.items():
+            record = applied_data.get(account, {}).get(str(sid))
+            clean = runlog.clean_title(listed_title)
+            if record and clean and record.get("start_date") == today_str:
+                _log_seminar(sid, "already_done", account, clean, record.get("start", ""))
+
     for sid in targets:
         detail_url = f"{SEMINAR_DETAIL_URL}?seminarId={sid}"
         common.goto_with_retry(page, detail_url, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS)
@@ -1150,6 +1197,8 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
 
         btn_text = btn.inner_text() or ""
         title, start = _seminar_detail_meta(page)
+        # 상세 제목은 사이트 공통 요소가 잡히는 일이 잦다. 목록 제목이 있으면 그쪽을 쓴다.
+        title = runlog.clean_title(title) or runlog.clean_title(list_titles.get(sid, "")) or title
 
         if "신청취소" in btn_text:
             # 이미 신청되어 있다. 기록해 두면 다음 런부터 상세를 열지 않는다 —
@@ -1161,7 +1210,11 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
             continue
 
         if "신청하기" not in btn_text:
-            # 마감·정원초과 등 신청 불가. 신청한 게 아니므로 기록하지 않는다.
+            # 마감·정원초과 등 신청 불가. 신청한 게 아니므로 이력에는 기록하지 않는다
+            # (기록하면 재시도를 영영 안 하게 된다). 다만 "그날 예정된 세미나"이긴
+            # 하므로 표에는 마감으로 올린다 — 이게 없으면 신청 못 한 세미나가
+            # 표에서 통째로 사라진다(2026-08-28 세미나 5498 누락 사례).
+            _log_seminar(sid, "closed", account, title, start)
             continue
 
         btn.click()

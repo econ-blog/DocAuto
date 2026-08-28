@@ -189,3 +189,108 @@ def test_task_seminar_account_none_does_not_persist(tmp_path, monkeypatch):
 
     assert res["status"] == "success"
     assert res["applied"] == [6004]
+
+
+def test_task_seminar_prefers_list_title_over_polluted_detail_title(tmp_path, monkeypatch):
+    """상세 전역 조회는 헤더('엠서클 통합회원')를 집어온다 — 목록 제목이 이겨야 한다.
+
+    2026-08-28: seminar_applied.json 108건의 제목이 전부 '엠서클 통합회원'/'라이브세미나'였다.
+    """
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text("{}", encoding="utf-8")
+
+    mock_page = MagicMock()
+    mock_page.evaluate.side_effect = [
+        [{"id": "5596", "title": "ARB Strategies in Atrial Fibrillation"}],
+        ("엠서클 통합회원", "2026-08-28(금) 13:00 ~ 14:00"),  # 오염된 상세 제목
+    ]
+    mock_btn = MagicMock()
+    mock_btn.inner_text.return_value = "신청취소"
+    mock_page.locator.return_value = mock_btn
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+
+    doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+
+    saved = json.loads(applied_file.read_text(encoding="utf-8"))
+    assert saved["bjh7790"]["5596"]["title"] == "ARB Strategies in Atrial Fibrillation"
+
+
+def test_task_seminar_logs_closed_seminar_to_table(tmp_path, monkeypatch):
+    """마감·정원초과는 이력에 기록하지 않되, 표에는 '그날 예정된 세미나'로 올라와야 한다.
+
+    2026-08-28: 세미나 5498이 이 경로라 표에서 통째로 빠졌다(5개 중 4개만 표시).
+    """
+    import runlog
+
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text("{}", encoding="utf-8")
+
+    mock_page = MagicMock()
+    mock_page.evaluate.side_effect = [
+        [{"id": "5498", "title": "COPD 진단하고 치료하기"}],
+        ("", "2026-08-28(금) 13:00 ~ 14:00"),
+    ]
+    mock_btn = MagicMock()
+    mock_btn.inner_text.return_value = "마감"
+    mock_page.locator.return_value = mock_btn
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+
+    doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+
+    # 이력에는 없어야 한다 — 신청한 게 아니므로 다음 런에서 재시도해야 한다.
+    assert json.loads(applied_file.read_text(encoding="utf-8")) == {}
+
+    # 표에는 마감으로 올라온다.
+    rows = runlog.seminar_table("2026-08-28")[1]
+    assert rows == [["COPD 진단하고 치료하기", "13:00", "14:00", "🔒", "·", "·"]]
+
+
+def test_task_seminar_survives_list_without_titles(tmp_path, monkeypatch):
+    """DOM이 바뀌어 목록이 문자열 id만 돌려줘도 신청 자체는 계속돼야 한다."""
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text("{}", encoding="utf-8")
+
+    mock_page = MagicMock()
+    mock_page.evaluate.side_effect = [
+        ["5533"],
+        ("호흡기 심포지엄", "2026-08-20(목) 13:00 ~ 14:00"),
+    ]
+    mock_btn = MagicMock()
+    mock_btn.inner_text.return_value = "신청취소"
+    mock_page.locator.return_value = mock_btn
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+
+    res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+    assert res["status"] == "already_done"
+    saved = json.loads(applied_file.read_text(encoding="utf-8"))
+    assert saved["bjh7790"]["5533"]["title"] == "호흡기 심포지엄"
+
+
+def test_task_seminar_fills_todays_titles_without_opening_details(tmp_path, monkeypatch):
+    """이미 신청한 세미나도 목록 제목만으로 표에 이름이 채워져야 한다(상세 로드 없이)."""
+    import runlog
+    from datetime import datetime
+    import common
+
+    today = datetime.now(common.KST).strftime("%Y-%m-%d")
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text(json.dumps({"bjh7790": {"5585": {
+        "applied_at": "2026-08-18T18:33:37+09:00",
+        "title": "라이브세미나",                      # 오염된 이력 제목
+        "start": f"{today}(금) 17:00 ~ 18:30",
+        "start_date": today, "start_time": "17:00", "end_time": "18:30",
+    }}}), encoding="utf-8")
+
+    mock_page = MagicMock()
+    mock_page.evaluate.side_effect = [
+        [{"id": "5585", "title": "[TH] Love Life Love Liver web Symposium"}],
+    ]
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+
+    res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+
+    # 상세를 한 번도 열지 않았다(목록 evaluate 1회만 소비).
+    assert res["skipped_known"] == 1
+    rows = runlog.seminar_table(today)[1]
+    assert rows[0][0] == "[TH] Love Life Love Liver w…"
+    assert rows[0][1:4] == ["17:00", "18:30", "☑️"]
