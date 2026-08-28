@@ -879,6 +879,38 @@
       "start_time": "18:00",
       "title": "Easyef MD Spray for Cutaneous and Mucosal Regeneration: From EGF Biology to Clinical Evidence",
       "year": 2026
+    },
+    "5660": {
+      "applied_at": "2026-08-28T18:02:55.656142+09:00",
+      "date": "2026-10-19",
+      "day": 19,
+      "end_hour": 20,
+      "end_minute": 0,
+      "end_time": "20:00",
+      "month": 10,
+      "start": "2026-10-19(월) 18:30 ~ 20:00",
+      "start_date": "2026-10-19",
+      "start_hour": 18,
+      "start_minute": 30,
+      "start_time": "18:30",
+      "title": "[LIVE 3인 좌담회] 노안치료제 딥다이브 : 안전하고 효과적인 첫 처방을 위하여",
+      "year": 2026
+    },
+    "5661": {
+      "applied_at": "2026-08-28T18:02:47.157055+09:00",
+      "date": "2026-09-10",
+      "day": 10,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-10(목) 13:00 ~ 14:00",
+      "start_date": "2026-09-10",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "Clinical Efficacy and Safety of Lipothason in Pain Treatment)",
+      "year": 2026
     }
   },
   "wonju": {
@@ -1760,6 +1792,38 @@
       "start_minute": 0,
       "start_time": "18:00",
       "title": "Easyef MD Spray for Cutaneous and Mucosal Regeneration: From EGF Biology to Clinical Evidence",
+      "year": 2026
+    },
+    "5660": {
+      "applied_at": "2026-08-28T18:04:02.044188+09:00",
+      "date": "2026-10-19",
+      "day": 19,
+      "end_hour": 20,
+      "end_minute": 0,
+      "end_time": "20:00",
+      "month": 10,
+      "start": "2026-10-19(월) 18:30 ~ 20:00",
+      "start_date": "2026-10-19",
+      "start_hour": 18,
+      "start_minute": 30,
+      "start_time": "18:30",
+      "title": "[LIVE 3인 좌담회] 노안치료제 딥다이브 : 안전하고 효과적인 첫 처방을 위하여",
+      "year": 2026
+    },
+    "5661": {
+      "applied_at": "2026-08-28T18:03:53.352966+09:00",
+      "date": "2026-09-10",
+      "day": 10,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-10(목) 13:00 ~ 14:00",
+      "start_date": "2026-09-10",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "Clinical Efficacy and Safety of Lipothason in Pain Treatment)",
       "year": 2026
     }
   }
