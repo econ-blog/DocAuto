@@ -31,8 +31,12 @@ KINDS = (KIND_DAILY, KIND_SEMINAR)
 
 KEEP_FILES = 7
 
-# 세미나 표의 단계 컬럼 (로그 키 → 표시명)
+# 세미나 표의 단계 컬럼 (로그 키 → 표시명). 단계마다 계정 수만큼 칸이 생긴다.
 SEMINAR_PHASES = (("apply", "신청"), ("live", "입장"), ("survey", "설문"))
+
+# update_seminar가 account 없이 불렸을 때 쓰는 슬롯 키. 계정 컬럼을 만들지 않고
+# 모든 계정 칸에 비쳐 보인다 — 어느 계정 것인지 모르는 기록이라 감출 수 없다.
+ACCOUNTLESS = "_"
 
 STATUS_EMOJIS = {
     "success": "✅",
@@ -292,7 +296,7 @@ def update_seminar(seminar_id, phase: str = None, status: str = "", account: str
         if not isinstance(slot, dict):
             slot = {}
             entry[phase] = slot
-        slot[account or "_"] = status
+        slot[account or ACCOUNTLESS] = status
         entry["updated_at"] = datetime.now(common.KST).strftime("%H:%M")
 
     save(data, log_dir)
@@ -370,13 +374,48 @@ def seminar_rows(date_str: str = None, log_dir: Path | str = None,
     return [merged[sid] for sid in sorted(merged, key=sort_key)]
 
 
+def seminar_accounts(entries: list[dict], accounts: list[str] = None) -> list[str]:
+    """세미나 표의 계정 컬럼 순서를 정한다.
+
+    credentials 순서(accounts)를 앞에 놓고, 로그에만 있는 계정을 뒤에 붙인다.
+    한쪽만 쓰면 계정이 표에서 통째로 사라지거나(credentials에 없는 옛 계정)
+    새 계정이 로그에 먼저 나타났을 때 칸이 어긋난다.
+    """
+    ordered = [a for a in (accounts or []) if a]
+    found = []
+    for entry in entries:
+        for phase, _ in SEMINAR_PHASES:
+            slot = entry.get(phase)
+            if not isinstance(slot, dict):
+                continue
+            for acc in slot:
+                if acc and acc != ACCOUNTLESS and acc not in ordered and acc not in found:
+                    found.append(acc)
+    return ordered + sorted(found)
+
+
 def seminar_table(date_str: str = None, log_dir: Path | str = None,
-                  applied: dict = None, accounts: list[str] = None
-                  ) -> tuple[list[str], list[list[str]]]:
-    """세미나 로그를 (헤더, 행들)로 변환한다. 행 = 세미나."""
-    headers = ["세미나", "시작", "종료"] + [name for _, name in SEMINAR_PHASES]
+                  applied: dict = None, accounts: list[str] = None,
+                  labels: dict = None) -> tuple[list[str], list[list[str]]]:
+    """세미나 로그를 (헤더, 행들)로 변환한다. 행 = 세미나, 열 = 단계 × 계정.
+
+    계정별로 칸을 나눈다(2026-08-28). 예전엔 두 계정을 한 칸에 합치고 나쁜 쪽이
+    이겼는데, 그러면 ❌가 떠도 어느 계정 것인지 알 수 없었다 — daily 표는 이미
+    계정별 컬럼이라 세미나 표만 예외였다. labels는 {계정키: 표시명}.
+
+    계정을 하나도 못 찾으면(계정 없이 적힌 옛 로그뿐) 단계당 한 칸으로 되돌아가
+    merge_status로 합친다. 옛 로그 파일을 그대로 읽을 수 있어야 하기 때문이다.
+    """
+    labels = labels or {}
+    entries = seminar_rows(date_str, log_dir, applied, accounts)
+    accts = seminar_accounts(entries, accounts)
+
+    headers = ["세미나", "시작", "종료"]
+    for _, name in SEMINAR_PHASES:
+        headers += [f"{name}\n{labels.get(a, a)}" for a in accts] if accts else [name]
+
     rows = []
-    for entry in seminar_rows(date_str, log_dir, applied, accounts):
+    for entry in entries:
         sid = entry.get("id", "")
         # 제목이 있으면 번호 없이 이름만(사용자 요청). 제목을 못 구한 경우에만
         # 번호를 쓴다 — 안 그러면 행끼리 구분이 안 된다.
@@ -387,7 +426,12 @@ def seminar_table(date_str: str = None, log_dir: Path | str = None,
         row = [title, start, end or end_from_raw]
         for phase, _ in SEMINAR_PHASES:
             slot = entry.get(phase)
-            row.append(emoji(merge_status(slot.values()) if isinstance(slot, dict) else ""))
+            slot = slot if isinstance(slot, dict) else {}
+            if accts:
+                # 계정 기록이 없으면 계정 없이 적힌 값(ACCOUNTLESS)으로 폴백한다.
+                row += [emoji(slot.get(a) or slot.get(ACCOUNTLESS, "")) for a in accts]
+            else:
+                row.append(emoji(merge_status(slot.values())))
         rows.append(row)
     return headers, rows
 

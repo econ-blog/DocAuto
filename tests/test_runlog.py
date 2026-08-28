@@ -145,8 +145,9 @@ def test_update_seminar_fills_one_cell_per_phase(tmp_path):
     runlog.update_seminar("5587", phase="live", status="success", account="bjh7790", **kw)
     runlog.update_seminar("5587", phase="survey", status="not_ready", account="bjh7790", **kw)
 
-    headers, rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path)
-    assert headers == ["세미나", "시작", "종료", "신청", "입장", "설문"]
+    headers, rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path,
+                                         labels={"bjh7790": "승진"})
+    assert headers == ["세미나", "시작", "종료", "신청\n승진", "입장\n승진", "설문\n승진"]
     assert rows == [["당뇨 세미나", "12:00", "13:00", "✅", "✅", "⏳"]]
 
 
@@ -162,12 +163,55 @@ def test_update_seminar_does_not_erase_metadata(tmp_path):
     assert rows[0][1] == "12:00"
 
 
-def test_seminar_cell_merges_two_accounts_worst_wins(tmp_path):
+def test_seminar_columns_split_by_account(tmp_path):
+    """계정을 한 칸에 합치면 ❌가 떠도 어느 계정인지 알 수 없다 (2026-08-28)."""
     kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
     runlog.update_seminar("1", phase="live", status="success", account="bjh7790", title="T", **kw)
     runlog.update_seminar("1", phase="live", status="failed", account="wonju", **kw)
 
-    assert runlog.seminar_table("2026-08-27", log_dir=tmp_path)[1][0][4] == "❌"
+    headers, rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path,
+                                         accounts=["bjh7790", "wonju"],
+                                         labels={"bjh7790": "승진", "wonju": "원주"})
+
+    assert headers == ["세미나", "시작", "종료",
+                       "신청\n승진", "신청\n원주",
+                       "입장\n승진", "입장\n원주",
+                       "설문\n승진", "설문\n원주"]
+    # 입장: 승진 성공 / 원주 실패가 각자 자기 칸에 보인다.
+    assert rows[0][5:7] == ["✅", "❌"]
+    assert rows[0][3:5] == [runlog.EMPTY_CELL, runlog.EMPTY_CELL]
+
+
+def test_seminar_account_columns_follow_credentials_order(tmp_path):
+    """컬럼 순서는 credentials 순서를 따르고, 로그에만 있는 계정은 뒤에 붙는다."""
+    kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
+    runlog.update_seminar("1", phase="apply", status="success", account="zzz", title="T", **kw)
+    runlog.update_seminar("1", phase="apply", status="success", account="wonju", **kw)
+
+    headers = runlog.seminar_table("2026-08-27", log_dir=tmp_path,
+                                   accounts=["bjh7790", "wonju"])[0]
+    assert headers[3:6] == ["신청\nbjh7790", "신청\nwonju", "신청\nzzz"]
+
+
+def test_seminar_table_falls_back_to_merged_column_without_accounts(tmp_path):
+    """계정 없이 적힌 옛 로그도 그대로 읽혀야 한다 — 단계당 한 칸으로 합친다."""
+    kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
+    runlog.update_seminar("1", phase="live", status="failed", title="T", **kw)
+
+    headers, rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path)
+    assert headers == ["세미나", "시작", "종료", "신청", "입장", "설문"]
+    assert rows[0][4] == "❌"
+
+
+def test_accountless_log_shows_in_every_account_column(tmp_path):
+    """어느 계정 것인지 모르는 기록은 감추지 않고 모든 계정 칸에 비친다."""
+    kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
+    runlog.update_seminar("1", phase="live", status="failed", title="T", **kw)
+    runlog.update_seminar("1", phase="apply", status="success", account="bjh7790", **kw)
+
+    rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path,
+                                accounts=["bjh7790", "wonju"])[1]
+    assert rows[0][5:7] == ["❌", "❌"]
 
 
 def test_seminar_rows_include_applied_but_not_yet_entered(tmp_path):
@@ -176,8 +220,9 @@ def test_seminar_rows_include_applied_but_not_yet_entered(tmp_path):
         "title": "저녁 세미나", "start": "2026-08-27(목) 19:00 ~ 20:00",
         "start_date": "2026-08-27", "start_time": "19:00", "end_time": "20:00",
     }}}
-    rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path, applied=applied)[1]
+    headers, rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path, applied=applied)
 
+    assert headers[3] == "신청\nbjh7790"
     assert rows == [["저녁 세미나", "19:00", "20:00", "☑️", runlog.EMPTY_CELL, runlog.EMPTY_CELL]]
 
 
