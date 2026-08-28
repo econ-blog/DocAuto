@@ -48,10 +48,10 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "18:06",
+      "updated_at": "18:37",
       "survey": {
         "bjh7790": "incomplete_bank",
-        "wonju": "not_ready"
+        "wonju": "incomplete_bank"
       }
     },
     "5583": {
@@ -62,10 +62,10 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "18:06",
+      "updated_at": "18:36",
       "survey": {
         "bjh7790": "not_ready",
-        "wonju": "not_ready"
+        "wonju": "unverified"
       }
     },
     "5584": {
@@ -76,7 +76,7 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "18:07",
+      "updated_at": "18:37",
       "survey": {
         "bjh7790": "not_ready",
         "wonju": "not_ready"
