@@ -863,6 +863,22 @@
       "start_time": "18:30",
       "title": "엠서클 통합회원",
       "year": 2026
+    },
+    "5659": {
+      "applied_at": "2026-08-28T17:02:49.460970+09:00",
+      "date": "2026-09-04",
+      "day": 4,
+      "end_hour": 19,
+      "end_minute": 0,
+      "end_time": "19:00",
+      "month": 9,
+      "start": "2026-09-04(금) 18:00 ~ 19:00",
+      "start_date": "2026-09-04",
+      "start_hour": 18,
+      "start_minute": 0,
+      "start_time": "18:00",
+      "title": "Easyef MD Spray for Cutaneous and Mucosal Regeneration: From EGF Biology to Clinical Evidence",
+      "year": 2026
     }
   },
   "wonju": {
@@ -1728,6 +1744,22 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "엠서클 통합회원",
+      "year": 2026
+    },
+    "5659": {
+      "applied_at": "2026-08-28T17:03:50.387642+09:00",
+      "date": "2026-09-04",
+      "day": 4,
+      "end_hour": 19,
+      "end_minute": 0,
+      "end_time": "19:00",
+      "month": 9,
+      "start": "2026-09-04(금) 18:00 ~ 19:00",
+      "start_date": "2026-09-04",
+      "start_hour": 18,
+      "start_minute": 0,
+      "start_time": "18:00",
+      "title": "Easyef MD Spray for Cutaneous and Mucosal Regeneration: From EGF Biology to Clinical Evidence",
       "year": 2026
     }
   }

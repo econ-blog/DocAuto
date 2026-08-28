@@ -29,6 +29,58 @@
         "bjh7790": "success",
         "wonju": "success"
       }
+    },
+    "5659": {
+      "id": "5659",
+      "title": "Easyef MD Spray for Cutaneous and Mucosal Regeneration: From EGF Biology to Clinical Evidence",
+      "start": "2026-09-04(금) 18:00 ~ 19:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:03"
+    },
+    "5585": {
+      "id": "5585",
+      "title": "[재] Love Life Love Liver web Symposium",
+      "start": "2026-08-28(금) 17:00 ~ 18:30",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:09",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
+    },
+    "5583": {
+      "id": "5583",
+      "title": "[재] 엔블로 X 바로에젯 웹 심포지엄",
+      "start": "2026-08-28(금) 17:00 ~ 18:30",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:09",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
+    },
+    "5584": {
+      "id": "5584",
+      "title": "[재] O.M.T Web Symposium",
+      "start": "2026-08-28(금) 17:00 ~ 18:30",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:09",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     }
   }
 }
