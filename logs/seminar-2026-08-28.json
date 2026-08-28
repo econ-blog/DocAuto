@@ -48,10 +48,10 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "19:12",
+      "updated_at": "19:36",
       "survey": {
-        "bjh7790": "not_ready",
-        "wonju": "not_ready"
+        "bjh7790": "closed",
+        "wonju": "closed"
       }
     },
     "5583": {
@@ -62,10 +62,10 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "19:12",
+      "updated_at": "19:36",
       "survey": {
         "bjh7790": "success",
-        "wonju": "not_ready"
+        "wonju": "closed"
       }
     },
     "5584": {
