@@ -1070,6 +1070,38 @@ def task_quiz(page, creds: dict) -> dict:
 # 태스크 ③ 세미나 신청
 # ---------------------------------------------------------------------------
 
+# 목록에서 seminarId와 제목을 함께 긁는 JS.
+#
+# **r""" 을 유지할 것.** 일반 문자열이면 \n이 파이썬 단계에서 진짜 줄바꿈이 되어
+# JS 문자열 리터럴이 끊긴다 — 2026-08-28에 이걸로 두 계정 신청이 전부
+# `SyntaxError: Invalid or unexpected token`으로 죽었다.
+#
+# 조회를 a.list_detail 안으로 한정하는 게 핵심이다. document 전역으로 뒤지면
+# 사이트 헤더("엠서클 통합회원")가 제목으로 잡힌다.
+SEMINAR_LIST_JS = r"""
+    () => Array.from(document.querySelectorAll('span.ico_apply')).map(span => {
+        const aEl = span.closest('a.list_detail');
+        if (!aEl) return null;
+        let sid = null;
+        try { sid = new URL(aEl.href).searchParams.get('seminarId'); } catch(e) { return null; }
+        if (!sid) return null;
+
+        const titEl = aEl.querySelector('.tit, dt, .title, strong');
+        let title = titEl ? titEl.innerText.trim() : '';
+        if (!title) {
+            const lines = (aEl.innerText || '').split('\n').map(l => l.trim()).filter(Boolean);
+            const filtered = lines.filter(l =>
+                !/^(입장|신청|방송중|마감|신청완료|사전신청)/.test(l) &&
+                !/\d{2}:\d{2}/.test(l) &&
+                !/^(연자|정원):/.test(l)
+            );
+            title = filtered.length > 0 ? filtered[0] : '';
+        }
+        return { id: sid, title: title };
+    }).filter(Boolean)
+"""
+
+
 def _seminar_detail_meta(page) -> tuple[str, str]:
     """상세 페이지의 (제목, 일시). 이력 파일에 남길 메타데이터일 뿐 판정에는 안 쓴다."""
     try:
@@ -1118,28 +1150,7 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
     # 그 값이었다(2026-08-28 확인). 목록은 a.list_detail 안으로 스코프가 한정돼
     # 그런 오염이 구조적으로 불가능하다. seminar_live.get_live_seminar_info와
     # 같은 패턴이다.
-    listed = page.evaluate("""
-        () => Array.from(document.querySelectorAll('span.ico_apply')).map(span => {
-            const aEl = span.closest('a.list_detail');
-            if (!aEl) return null;
-            let sid = null;
-            try { sid = new URL(aEl.href).searchParams.get('seminarId'); } catch(e) { return null; }
-            if (!sid) return null;
-
-            const titEl = aEl.querySelector('.tit, dt, .title, strong');
-            let title = titEl ? titEl.innerText.trim() : '';
-            if (!title) {
-                const lines = (aEl.innerText || '').split('\n').map(l => l.trim()).filter(Boolean);
-                const filtered = lines.filter(l =>
-                    !/^(입장|신청|방송중|마감|신청완료|사전신청)/.test(l) &&
-                    !/\d{2}:\d{2}/.test(l) &&
-                    !/^(연자|정원):/.test(l)
-                );
-                title = filtered.length > 0 ? filtered[0] : '';
-            }
-            return { id: sid, title: title };
-        }).filter(Boolean)
-    """)
+    listed = page.evaluate(SEMINAR_LIST_JS)
 
     seminar_ids = []
     list_titles = {}
