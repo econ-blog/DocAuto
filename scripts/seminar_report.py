@@ -23,11 +23,26 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_APPLIED = SCRIPT_DIR.parent / "seminar_applied.json"
 
 
-def build_report(date_str: str, applied_path: Path, accounts: list[str] = None):
+def build_report(date_str: str, applied_path: Path, credentials_path: Path = None,
+                 accounts: list[str] = None):
+    """표의 (헤더, 행들)을 만든다.
+
+    컬럼은 단계 × 계정이라 계정 순서·표시명이 필요하다. credentials의 닥터빌
+    계정 순서를 그대로 쓰고, 라벨(승진/원주)을 헤더에 붙인다. credentials가
+    없으면(로컬 --no-telegram 등) 계정 목록은 로그에서 발견한 순서로 떨어진다.
+    """
     applied = common.read_json(applied_path, default={}) if Path(applied_path).exists() else {}
     if not isinstance(applied, dict):
         applied = {}
-    return runlog.seminar_table(date_str, applied=applied, accounts=accounts)
+
+    creds = {}
+    if credentials_path and Path(credentials_path).exists():
+        creds = common.read_credentials(credentials_path) or {}
+    accts = list(accounts or common.list_accounts(creds, "doctorville"))
+    labels = {a: common.account_label(creds, a) for a in accts}
+
+    return runlog.seminar_table(date_str, applied=applied,
+                                accounts=accts or None, labels=labels)
 
 
 def main():
@@ -43,7 +58,7 @@ def main():
     args = parser.parse_args()
 
     date_str = args.date or runlog.today_str()
-    headers, rows = build_report(date_str, Path(args.applied_file))
+    headers, rows = build_report(date_str, Path(args.applied_file), Path(args.credentials))
 
     print(runlog.render_text_table(headers, rows) if rows else "(표에 넣을 세미나 없음)")
 
