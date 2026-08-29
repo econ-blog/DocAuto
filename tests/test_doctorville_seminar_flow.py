@@ -226,9 +226,12 @@ def test_task_seminar_logs_closed_seminar_to_table(tmp_path, monkeypatch):
     applied_file.write_text("{}", encoding="utf-8")
 
     mock_page = MagicMock()
+    # 로그는 항상 "오늘"(KST) 파일에 쌓인다. 상세 문자열의 날짜는 표의 시작·종료
+    # 시각을 만드는 데만 쓰이므로 오늘 날짜로 맞춰 준다.
+    today = runlog.today_str()
     mock_page.evaluate.side_effect = [
         [{"id": "5498", "title": "COPD 진단하고 치료하기"}],
-        ("", "2026-08-28(금) 13:00 ~ 14:00"),
+        ("", f"{today}(금) 13:00 ~ 14:00"),
     ]
     mock_btn = MagicMock()
     mock_btn.inner_text.return_value = "마감"
@@ -241,7 +244,7 @@ def test_task_seminar_logs_closed_seminar_to_table(tmp_path, monkeypatch):
     assert json.loads(applied_file.read_text(encoding="utf-8")) == {}
 
     # 표에는 마감으로 올라온다.
-    rows = runlog.seminar_table("2026-08-28")[1]
+    rows = runlog.seminar_table(today)[1]
     assert rows == [["COPD 진단하고 치료하기", "13:00", "14:00", "🔒", "·", "·"]]
 
 
