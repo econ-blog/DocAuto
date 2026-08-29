@@ -216,6 +216,11 @@ def append_daily_run(cells: dict, date_str: str = None, at: str = None,
     return data
 
 
+# daily 표에서 감출 컬럼(첫 줄 기준). 세미나는 세미나 표에서 계정·단계별로 따로
+# 보므로 daily 표에는 넣지 않는다 (사용자 지시 2026-08-29).
+DAILY_HIDDEN_COLUMNS = {"세미나"}
+
+
 def daily_cells(results: dict, creds: dict = None) -> dict:
     """daily_runner의 결과 dict를 {컬럼명: status}로 평탄화한다."""
     creds = creds or {}
@@ -229,7 +234,7 @@ def daily_cells(results: dict, creds: dict = None) -> dict:
             acc = key[len("doctorville_"):]
             label = common.account_label(creds, acc)
             found = False
-            for task, name in (("attend", "출석"), ("quiz", "퀴즈"), ("seminar", "세미나")):
+            for task, name in (("attend", "출석"), ("quiz", "퀴즈")):
                 st = status_of(node.get(task))
                 if st and st != "skipped":
                     cells[f"{name}\n{label}"] = st
@@ -264,11 +269,15 @@ def daily_cells(results: dict, creds: dict = None) -> dict:
 def daily_table(date_str: str = None, log_dir: Path | str = None) -> tuple[list[str], list[list[str]]]:
     """daily 로그를 (헤더, 행들)로 변환한다. 행 = run1, run2 …"""
     data = load(KIND_DAILY, date_str, log_dir)
-    headers = [""] + list(data["columns"])
+    # 세미나는 세미나 표에서 따로 본다(사용자 지시 2026-08-29). daily_cells가 더는
+    # 만들지 않지만, 하루치 로그 파일은 컬럼을 누적하므로 이미 적힌 날의 파일에도
+    # 남아 있다 — 렌더링에서도 걸러 준다.
+    columns = [c for c in data["columns"] if c.split("\n")[0] not in DAILY_HIDDEN_COLUMNS]
+    headers = [""] + columns
     rows = []
     for entry in data["runs"]:
         label = f"run{entry['run']}\n{entry.get('at', '')}".strip()
-        rows.append([label] + [emoji(entry["cells"].get(c, "")) for c in data["columns"]])
+        rows.append([label] + [emoji(entry["cells"].get(c, "")) for c in columns])
     return headers, rows
 
 

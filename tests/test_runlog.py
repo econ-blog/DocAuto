@@ -421,3 +421,30 @@ def test_seminar_hook_writes_to_isolated_dir_not_repo():
     doctorville._log_seminar("9999", "success", "acct", "격리 확인", "2026-01-01(금) 09:00 ~ 10:00")
     assert not (runlog.REPO_ROOT / "logs" / "seminar-2026-01-01.json").exists()
     assert runlog.resolve_log_dir() != runlog.REPO_ROOT / "logs"
+
+
+def test_daily_cells_omits_seminar():
+    """daily 표에 세미나 칸을 만들지 않는다 (사용자 지시 2026-08-29).
+
+    세미나는 세미나 표에서 계정 × 단계로 따로 본다.
+    """
+    cells = runlog.daily_cells({
+        "doctorville_bjh7790": {
+            "attend": {"status": "success"},
+            "quiz": {"status": "success"},
+            "seminar": {"status": "success"},
+        },
+    })
+    assert not [c for c in cells if c.startswith("세미나")]
+    assert [c for c in cells if c.startswith("출석")]
+
+
+def test_daily_table_hides_seminar_columns_from_old_logs(tmp_path):
+    """컬럼은 날짜 파일 안에 누적된다 — 이미 적힌 세미나 컬럼도 렌더링에서 뺀다."""
+    runlog.append_daily_run(
+        {"출석\nbjh7790": "success", "세미나\nbjh7790": "success"},
+        date_str="2026-08-29", at="09:12", log_dir=tmp_path,
+    )
+    headers, rows = runlog.daily_table("2026-08-29", log_dir=tmp_path)
+    assert headers == ["", "출석\nbjh7790"]
+    assert rows == [["run1\n09:12", "✅"]]
