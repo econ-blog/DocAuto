@@ -1,0 +1,34 @@
+{
+  "kind": "daily",
+  "date": "2026-08-31",
+  "columns": [
+    "출석\nbjh7790",
+    "퀴즈\nbjh7790",
+    "출석\nwonju",
+    "퀴즈\nwonju",
+    "키메디\n출석",
+    "HMP\n캡슐",
+    "HMP\n룰렛",
+    "HMP\n댓글",
+    "HMP\n글쓰기",
+    "익일\n퀴즈"
+  ],
+  "runs": [
+    {
+      "run": 1,
+      "at": "00:22",
+      "cells": {
+        "출석\nbjh7790": "success",
+        "퀴즈\nbjh7790": "success",
+        "출석\nwonju": "success",
+        "퀴즈\nwonju": "success",
+        "키메디\n출석": "success",
+        "HMP\n캡슐": "success",
+        "HMP\n룰렛": "no_target",
+        "HMP\n댓글": "success",
+        "HMP\n글쓰기": "success",
+        "익일\n퀴즈": "not_ready"
+      }
+    }
+  ]
+}
