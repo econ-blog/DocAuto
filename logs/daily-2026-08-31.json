@@ -29,6 +29,22 @@
         "HMP\n글쓰기": "success",
         "익일\n퀴즈": "not_ready"
       }
+    },
+    {
+      "run": 2,
+      "at": "23:55",
+      "cells": {
+        "출석\nbjh7790": "already_done",
+        "퀴즈\nbjh7790": "already_done",
+        "출석\nwonju": "already_done",
+        "퀴즈\nwonju": "already_done",
+        "키메디\n출석": "already_done",
+        "HMP\n캡슐": "already_done",
+        "HMP\n룰렛": "no_target",
+        "HMP\n댓글": "success",
+        "HMP\n글쓰기": "already_done",
+        "익일\n퀴즈": "not_ready"
+      }
     }
   ]
 }

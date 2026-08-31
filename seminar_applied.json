@@ -1,21 +1,5 @@
 {
   "bjh7790": {
-    "5591": {
-      "applied_at": "2026-08-19T13:32:46.316050+09:00",
-      "date": "2026-08-31",
-      "day": 31,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 8,
-      "start": "2026-08-31(월) 18:30 ~ 20:00",
-      "start_date": "2026-08-31",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "라이브세미나",
-      "year": 2026
-    },
     "5597": {
       "applied_at": "2026-08-20T16:42:12.628561+09:00",
       "date": "2026-09-09",
@@ -29,22 +13,6 @@
       "start_hour": 18,
       "start_minute": 0,
       "start_time": "18:00",
-      "title": "엠서클 통합회원",
-      "year": 2026
-    },
-    "5602": {
-      "applied_at": "2026-08-21T17:32:46.990867+09:00",
-      "date": "2026-08-31",
-      "day": 31,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-31(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-31",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
       "title": "엠서클 통합회원",
       "year": 2026
     },
@@ -77,22 +45,6 @@
       "start_hour": 18,
       "start_minute": 30,
       "start_time": "18:30",
-      "title": "엠서클 통합회원",
-      "year": 2026
-    },
-    "5609": {
-      "applied_at": "2026-08-25T11:33:09.753512+09:00",
-      "date": "2026-08-31",
-      "day": 31,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-31(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-31",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
       "title": "엠서클 통합회원",
       "year": 2026
     },
@@ -461,22 +413,6 @@
       "start_hour": 18,
       "start_minute": 30,
       "start_time": "18:30",
-      "title": "엠서클 통합회원",
-      "year": 2026
-    },
-    "5633": {
-      "applied_at": "2026-08-25T18:02:44.799011+09:00",
-      "date": "2026-08-31",
-      "day": 31,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-31(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-31",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
       "title": "엠서클 통합회원",
       "year": 2026
     },
@@ -882,22 +818,6 @@
     }
   },
   "wonju": {
-    "5591": {
-      "applied_at": "2026-08-19T13:33:50.932245+09:00",
-      "date": "2026-08-31",
-      "day": 31,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 8,
-      "start": "2026-08-31(월) 18:30 ~ 20:00",
-      "start_date": "2026-08-31",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "라이브세미나",
-      "year": 2026
-    },
     "5597": {
       "applied_at": "2026-08-20T16:44:06.828384+09:00",
       "date": "2026-09-09",
@@ -911,22 +831,6 @@
       "start_hour": 18,
       "start_minute": 0,
       "start_time": "18:00",
-      "title": "엠서클 통합회원",
-      "year": 2026
-    },
-    "5602": {
-      "applied_at": "2026-08-21T17:33:43.876200+09:00",
-      "date": "2026-08-31",
-      "day": 31,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-31(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-31",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
       "title": "엠서클 통합회원",
       "year": 2026
     },
@@ -959,22 +863,6 @@
       "start_hour": 18,
       "start_minute": 30,
       "start_time": "18:30",
-      "title": "엠서클 통합회원",
-      "year": 2026
-    },
-    "5609": {
-      "applied_at": "2026-08-25T11:34:27.954279+09:00",
-      "date": "2026-08-31",
-      "day": 31,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-31(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-31",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
       "title": "엠서클 통합회원",
       "year": 2026
     },
@@ -1343,22 +1231,6 @@
       "start_hour": 18,
       "start_minute": 30,
       "start_time": "18:30",
-      "title": "엠서클 통합회원",
-      "year": 2026
-    },
-    "5633": {
-      "applied_at": "2026-08-25T18:03:59.147325+09:00",
-      "date": "2026-08-31",
-      "day": 31,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 8,
-      "start": "2026-08-31(월) 13:00 ~ 14:00",
-      "start_date": "2026-08-31",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
       "title": "엠서클 통합회원",
       "year": 2026
     },
