@@ -147,7 +147,12 @@ SURVEY_PENDING_MARKERS = (
 # 눈으로 확인하기도 어렵다. m(모바일)은 '설문 참여 완료'/'세미나 종료'가 그대로
 # 뜨는 화면이라 판정도 검증도 쉽다. 모바일에서 못 읽으면 www로 폴백한다.
 MOBILE_BASE = "https://m.doctorville.co.kr"
-MOBILE_DETAIL_URL = f"{MOBILE_BASE}/seminar/seminarDetail"
+# m에는 www와 같은 /seminar/seminarDetail 경로가 없다. 2026-08-31 실측(세미나
+# 5602)에서 그 주소는 '뒤로 가기 / 닥터빌로 이동하기'만 있는 안내 페이지로 떨어졌다.
+# 사용자가 실제로 보는 모바일 상세는 /cme/vod/{seminarId}다.
+MOBILE_DETAIL_URL = f"{MOBILE_BASE}/cme/vod"
+# m 상세를 못 열었을 때 뜨는 안내 페이지의 표식. 이게 보이면 판정 불가다.
+MOBILE_FALLBACK_MARKERS = ("닥터빌로 이동하기",)
 # m은 UA로 데스크톱을 가려내 www로 돌려보낸다. 헤더만 바꿔도 서버 판정에는 걸린다.
 MOBILE_UA = (
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 "
@@ -1051,8 +1056,11 @@ def copy_probe() -> dict:
 
 def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str], str]:
     """상세 1회 조회. (판정, 판정에 쓴 버튼들, 실패 사유) — 실패해도 예외는 안 낸다."""
-    base = MOBILE_DETAIL_URL if mobile else doctorville.SEMINAR_DETAIL_URL
-    detail_url = f"{base}?seminarId={seminar_id}"
+    detail_url = (
+        f"{MOBILE_DETAIL_URL}/{seminar_id}"
+        if mobile
+        else f"{doctorville.SEMINAR_DETAIL_URL}?seminarId={seminar_id}"
+    )
     try:
         if mobile:
             page.set_extra_http_headers({"User-Agent": MOBILE_UA})
@@ -1083,20 +1091,28 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
         "hidden": hidden,
     }
 
-    if mobile:
-        # 로그아웃 상태이거나 www로 튕겼으면 모바일 판정은 쓰지 않는다.
-        if not is_mobile_session(page, buttons + [body]):
-            return "unknown", [], "m 상세: 로그인 상태가 아니거나 www로 리다이렉트됨"
-
     verdict = detect_survey_marker(buttons)
     if verdict == "unknown":
         # 버튼 셀렉터가 안 맞을 수도 있으니 본문 전체로 한 번 더 본다.
         verdict = detect_survey_marker([body])
+
+    if mobile:
+        if not is_mobile_session(page, buttons + [body]):
+            return "unknown", [], "m 상세: www로 리다이렉트됐거나 안내 페이지"
+        # 완료 표시는 그대로 믿는다. 반대로 '미참여'는 로그아웃 화면에서도 똑같이
+        # 보이므로(로그인 증거가 없으면 '설문하기'만 뜬다) 채택하지 않는다.
+        if verdict == "not_done" and not has_login_evidence(buttons + [body]):
+            return "unknown", buttons, "m 상세: 로그인 증거 없이 미참여로 보임 — 판정 보류"
     return verdict, buttons, ""
 
 
+def has_login_evidence(texts) -> bool:
+    joined = " ".join(strip_spaces(t) for t in texts if t)
+    return any(strip_spaces(m) in joined for m in MOBILE_LOGIN_MARKERS)
+
+
 def is_mobile_session(page, texts) -> bool:
-    """모바일 상세가 로그인된 상태로 열렸는지. 아니면 그 판정을 믿으면 안 된다."""
+    """모바일 상세가 실제로 열렸는지. www로 튕겼거나 안내 페이지면 판정 불가다."""
     try:
         url = page.url or ""
     except Exception:
@@ -1104,7 +1120,7 @@ def is_mobile_session(page, texts) -> bool:
     if url and not url.startswith(MOBILE_BASE):
         return False
     joined = " ".join(strip_spaces(t) for t in texts if t)
-    return any(strip_spaces(m) in joined for m in MOBILE_LOGIN_MARKERS)
+    return not any(strip_spaces(m) in joined for m in MOBILE_FALLBACK_MARKERS)
 
 
 def finalize_after_submit(page, seminar_id, pages_done: int, title: str = "") -> dict:

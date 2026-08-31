@@ -386,15 +386,15 @@ def test_confirm_survey_done_reads_the_mobile_detail_first(monkeypatch):
 
     assert verdict == "done"
     assert "설문 참여 완료" in buttons
-    assert page.visited == [f"{seminar_survey.MOBILE_DETAIL_URL}?seminarId=5633"]
+    assert page.visited == [f"{seminar_survey.MOBILE_DETAIL_URL}/5633"]
     # 모바일 UA를 씌웠다가 원상복구해야 www 조회가 데스크톱으로 돈다.
     assert page.headers == [{"User-Agent": seminar_survey.MOBILE_UA}, {}]
 
 
 def test_confirm_survey_done_falls_back_to_www(monkeypatch):
-    """m이 로그아웃 상태로 열리면 그 판정은 버리고 www로 간다."""
+    """m이 안내 페이지로 떨어지면 그 판정은 버리고 www로 간다(2026-08-31 실측)."""
     page = _FakeDetailPage({
-        "m": ["설문하기", "로그인"],        # 로그인 증거 없음 → 판정 폐기
+        "m": ["뒤로 가기", "닥터빌로 이동하기"],   # m 상세가 아님 → 판정 폐기
         "www": ["응답완료", "목록"],
     })
     _patch_detail_transport(monkeypatch)
@@ -443,3 +443,19 @@ def test_confirm_survey_done_reports_both_navigation_failures(monkeypatch):
     assert len(buttons) == 2
     assert any(b.startswith("m 상세 재접속 실패") for b in buttons)
     assert any(b.startswith("www 상세 재접속 실패") for b in buttons)
+
+
+def test_mobile_not_done_needs_login_evidence(monkeypatch):
+    """로그아웃 화면에도 '설문하기'는 뜬다 — 로그인 증거 없는 미참여는 채택하지 않는다."""
+    page = _FakeDetailPage({"m": ["설문하기"], "www": ["목록"]})
+    _patch_detail_transport(monkeypatch)
+
+    assert seminar_survey.confirm_survey_done(page, 5633)[0] == "unknown"
+
+
+def test_mobile_done_is_taken_without_login_evidence(monkeypatch):
+    """완료 표시는 로그아웃 화면에 뜰 수 없으므로 그대로 믿는다."""
+    page = _FakeDetailPage({"m": ["설문 참여 완료", "세미나 종료"]})
+    _patch_detail_transport(monkeypatch)
+
+    assert seminar_survey.confirm_survey_done(page, 5633)[0] == "done"
