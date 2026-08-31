@@ -234,3 +234,100 @@ def test_run_survey_still_not_ready_when_detail_has_no_done_marker(monkeypatch):
     result = seminar_survey.run_survey(MagicMock(), 5600, bank_paths={})
 
     assert result["status"] == "not_ready"
+
+
+# ---------------------------------------------------------------------------
+# www(데스크톱) 상세의 완료 문구 — 2026-08-31 세미나 5633
+# 사용자는 설문을 마쳤는데 두 계정 모두 unverified로 떨어졌다. 상세에 m의
+# '설문 참여 완료'도 '세미나 종료'도 없고 '응답완료'/'설문하기'만 있었다.
+# ---------------------------------------------------------------------------
+
+def test_detect_survey_marker_accepts_the_desktop_wording():
+    """www 상세의 '응답완료'도 완료 표시다(2026-08-31 실측)."""
+    assert seminar_survey.detect_survey_marker(["응답완료", "목록"]) == "done"
+    assert seminar_survey.matched_done_marker(["응답완료", "목록"]) == "응답완료"
+
+
+def test_detect_survey_marker_treats_survey_button_as_not_done():
+    """아직 누를 수 있는 '설문하기'가 보이면 미참여다."""
+    assert seminar_survey.detect_survey_marker(["설문하기", "목록"]) == "not_done"
+    # 완료 표시와 같이 잡히면 완료가 이긴다.
+    assert seminar_survey.detect_survey_marker(["설문하기", "응답완료"]) == "done"
+
+
+def test_matched_done_marker_is_empty_without_evidence():
+    assert seminar_survey.matched_done_marker(["설문하기", "목록"]) == ""
+
+
+def _detail_page(entries):
+    page = MagicMock()
+    page.evaluate.return_value = entries
+    return page
+
+
+def test_read_detail_buttons_splits_visible_and_hidden():
+    """상세에는 안 보이는 팝업·템플릿 버튼이 섞여 있어 갈라 읽어야 한다."""
+    page = _detail_page([
+        {"t": "응답완료", "v": True},
+        {"t": "목록", "v": True},
+        {"t": "설문하기", "v": False},
+        {"t": "동의합니다.", "v": False},
+    ])
+    visible, hidden = seminar_survey.read_detail_buttons(page)
+    assert visible == ["응답완료", "목록"]
+    assert hidden == ["설문하기", "동의합니다."]
+
+
+def test_read_detail_buttons_accepts_plain_strings():
+    """JS가 예전 형식(문자열 목록)을 돌려줘도 판정을 포기하지 않는다."""
+    assert seminar_survey.read_detail_buttons(_detail_page(["응답완료"])) == (["응답완료"], [])
+
+
+def test_read_detail_buttons_survives_evaluate_failure():
+    page = MagicMock()
+    page.evaluate.side_effect = RuntimeError("boom")
+    assert seminar_survey.read_detail_buttons(page) == ([], [])
+
+
+def _patch_detail_read(monkeypatch, visible, hidden):
+    monkeypatch.setattr(seminar_survey.common, "goto_with_retry", lambda *a, **k: None)
+    monkeypatch.setattr(seminar_survey, "read_detail_buttons", lambda page: (visible, hidden))
+    monkeypatch.setattr(seminar_survey, "body_text", lambda page: "")
+
+
+def test_confirm_survey_done_judges_by_visible_buttons_only(monkeypatch):
+    """숨은 '응답완료'로 완료를 선언하면 미참여를 성공으로 올린다 — 보이는 것만 본다."""
+    _patch_detail_read(monkeypatch, ["설문하기", "목록"], ["응답완료"])
+    verdict, buttons = seminar_survey.confirm_survey_done(MagicMock(), 5633)
+    assert verdict == "not_done"
+    assert buttons == ["설문하기", "목록"]
+
+
+def test_confirm_survey_done_falls_back_to_hidden_when_nothing_is_visible(monkeypatch):
+    """보이는 버튼이 하나도 없으면 읽기가 실패한 것이므로 그때는 전체를 본다."""
+    _patch_detail_read(monkeypatch, [], ["응답완료", "목록"])
+    assert seminar_survey.confirm_survey_done(MagicMock(), 5633)[0] == "done"
+
+
+def test_finalize_after_submit_names_the_marker_it_actually_saw(monkeypatch):
+    """verified_by는 실제로 걸린 문구를 실어야 한다 — 도메인마다 문구가 다르다."""
+    monkeypatch.setattr(
+        seminar_survey, "confirm_survey_done",
+        lambda page, sid, retries=0: ("done", ["응답완료", "목록"]),
+    )
+    out = seminar_survey.finalize_after_submit(MagicMock(), 5633, 1, "세미나")
+    assert out["status"] == "success"
+    assert out["verified_by"] == "detail_button: 응답완료"
+
+
+def test_finalize_after_submit_keeps_hidden_buttons_for_diagnosis(monkeypatch):
+    """판정 실패 시 다음 런에서 문구를 확정할 수 있도록 숨은 버튼까지 남긴다."""
+    monkeypatch.setattr(
+        seminar_survey, "confirm_survey_done",
+        lambda page, sid, retries=0: ("unknown", ["목록"]),
+    )
+    monkeypatch.setattr(seminar_survey, "read_detail_buttons", lambda page: (["목록"], ["숨은버튼"]))
+    monkeypatch.setattr(seminar_survey.common, "save_screenshot", lambda page, name: "shot.png")
+    out = seminar_survey.finalize_after_submit(MagicMock(), 5633, 1)
+    assert out["status"] == "unverified"
+    assert out["detail_buttons_hidden"] == ["숨은버튼"]

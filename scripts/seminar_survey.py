@@ -46,11 +46,13 @@ seminar_live.py로 입장에 성공한 세미나는 방송 팝업에서 설문�
 (status=incomplete_bank). 설문은 페이지 순차 제출형이라 뒷 페이지는 앞 페이지를
 제출해야 볼 수 있으므로, 페이지 단위 검증이 도달 가능한 최대 안전선이다.
 
-완료 판정 (2026-08-28 변경):
+완료 판정 (2026-08-28 도입, 2026-08-31 문구 보강):
     제출 직후 완료 화면 문구가 아니라, **세미나 상세에 재접속했을 때** 사이트가
-    보여주는 버튼으로 판정한다(`confirm_survey_done`).
-      - '설문 참여 완료'가 보이면 설문을 마친 것 → success (`detail_button: …`)
-      - '세미나 종료'만 보이면 입장을 못 했거나 제한 시간 내에 답하지 못한 것
+    보여주는 **보이는** 버튼으로 판정한다(`confirm_survey_done`).
+      - 완료 표시가 보이면 설문을 마친 것 → success (`detail_button: …`).
+        문구는 도메인마다 다르다 — m은 '설문 참여 완료', www는 '응답완료'
+        (`SURVEY_DONE_MARKERS`).
+      - '세미나 종료'·'설문하기'만 보이면 아직 참여하지 않은 것
       - 둘 다 없으면 판정 불가 → unverified
     완료 화면 대조는 '제출'·'참여' 같은 흔한 단어에 걸려 오탐이 났고, 제출 후
     창이 닫혀 버리면 아예 읽을 수도 없었다. 재접속 판정에는 두 약점이 다 없어
@@ -114,10 +116,30 @@ BLANK_RETRY_WAIT_MS = 5000
 # 때** 사이트가 보여주는 버튼으로 판정한다(2026-08-28 사용자 실측 화면):
 #   - 설문까지 마친 세미나  → '설문 참여 완료' + '세미나 종료' 두 버튼
 #   - 입장 못 했거나 제한 시간 내 미응답 → '세미나 종료' 한 버튼
+# 이 두 문구는 m(모바일) 기준이다. 자동화가 도는 www(데스크톱)는 문구가 달라
+# 아래 SURVEY_DONE_MARKERS / SURVEY_PENDING_MARKERS로 넓혔다(2026-08-31).
 # 완료 화면 문구 대조는 '제출'·'참여' 같은 흔한 단어에 걸려 오탐이 났고, 창이
 # 닫혀 버리면 아예 읽을 수도 없었다. 재접속 판정에는 두 약점이 다 없다.
 SURVEY_DONE_MARKER = "설문 참여 완료"
 SEMINAR_END_MARKER = "세미나 종료"
+
+# 같은 상세 페이지라도 도메인마다 버튼 문구가 다르다. m(모바일)은 '설문 참여 완료',
+# www(데스크톱)는 '응답완료'다 — 자동화가 도는 www에는 '설문 참여 완료'도
+# '세미나 종료'도 없어서, 실제로 제출을 마친 설문이 계속 unverified로 떨어졌다
+# (2026-08-31 세미나 5633, 두 계정 모두. 결과 JSON의 detail_buttons에
+# '응답완료'·'설문하기'가 찍혀 있었다).
+SURVEY_DONE_MARKERS = (
+    SURVEY_DONE_MARKER,   # m(모바일)
+    "응답완료",            # www(데스크톱) — 실측
+    "설문 응답 완료",
+    "설문 완료",
+)
+# 설문에 아직 참여하지 않았다는 표시. '설문하기'는 아직 누를 수 있는 버튼이므로
+# 미참여다. 완료 표시와 같이 잡히면 완료가 이긴다(아래 detect_survey_marker).
+SURVEY_PENDING_MARKERS = (
+    SEMINAR_END_MARKER,
+    "설문하기",
+)
 
 # 상세 페이지 로드 후 버튼 영역이 그려질 때까지의 여유.
 DETAIL_SETTLE_MS = 2000
@@ -149,12 +171,25 @@ def detect_survey_marker(texts) -> str:
     두 문구는 상호 배타가 아니다 — 참여 완료 화면에는 '설문 참여 완료'와
     '세미나 종료'가 나란히 뜬다. 그래서 완료 표시를 먼저 본다.
     """
-    joined = " ".join(strip_spaces(t) for t in texts if t)
-    if strip_spaces(SURVEY_DONE_MARKER) in joined:
+    if matched_done_marker(texts):
         return "done"
-    if strip_spaces(SEMINAR_END_MARKER) in joined:
+    joined = " ".join(strip_spaces(t) for t in texts if t)
+    if any(strip_spaces(m) in joined for m in SURVEY_PENDING_MARKERS):
         return "not_done"
     return "unknown"
+
+
+def matched_done_marker(texts) -> str:
+    """완료 표시 중 실제로 걸린 문구. 없으면 빈 문자열.
+
+    `verified_by`에 무엇을 보고 성공으로 판정했는지 그대로 싣기 위해 따로 둔다 —
+    도메인마다 문구가 달라서 '설문 참여 완료'로 뭉뚱그리면 증거가 사실과 어긋난다.
+    """
+    joined = " ".join(strip_spaces(t) for t in texts if t)
+    for marker in SURVEY_DONE_MARKERS:
+        if strip_spaces(marker) in joined:
+            return marker
+    return ""
 
 
 _QUIZ_BADGE_RE = re.compile(r"^\[\s*퀴즈\s*\]\s*")
@@ -892,27 +927,45 @@ DETAIL_BUTTON_JS = r"""
               + 'a[class*="btn"], button[class*="btn"], button, input[type=button], input[type=submit]';
     const out = [];
     document.querySelectorAll(sel).forEach(el => {
-        const t = ((el.innerText || el.value || '') + '').replace(/\s+/g, ' ').trim();
-        if (t && t.length <= 40) out.push(t);
+        const t = ((el.innerText || el.textContent || el.value || '') + '').replace(/\s+/g, ' ').trim();
+        if (!t || t.length > 40) return;
+        const cs = window.getComputedStyle(el);
+        const visible = el.getClientRects().length > 0
+                     && cs.visibility !== 'hidden'
+                     && cs.display !== 'none'
+                     && cs.opacity !== '0';
+        out.push({t: t, v: visible});
     });
     return out;
 }
 """
 
 
-def read_detail_buttons(page) -> list[str]:
-    """세미나 상세의 버튼 텍스트 목록(중복 제거). 읽기에 실패하면 빈 목록."""
-    seen, out = set(), []
+def read_detail_buttons(page) -> tuple[list[str], list[str]]:
+    """세미나 상세의 버튼 텍스트를 (보이는 것, 숨은 것)으로 갈라 돌려준다.
+
+    상세 페이지에는 안 보이는 팝업·템플릿 버튼이 잔뜩 들어 있다(실측: 로그아웃,
+    '동의합니다.', '세미나 제안 제출' …). 그 안에 '설문하기'와 '응답완료'가 같이
+    있어서 전부 뭉쳐 보면 상태를 가릴 수 없다. 그래서 판정은 보이는 것만 쓴다.
+
+    읽기에 실패하면 두 목록 모두 빈 목록이다 — 여기서 죽으면 설문 전체가 죽는다.
+    """
+    seen, visible, hidden = set(), [], []
     try:
-        for t in page.evaluate(DETAIL_BUTTON_JS) or []:
-            t = normalize(t)
-            if t and t not in seen:
-                seen.add(t)
-                out.append(t)
+        for entry in page.evaluate(DETAIL_BUTTON_JS) or []:
+            # 예전 형식(문자열 목록)도 받아 준다 — 판정 불가로 버리는 것보다 낫다.
+            if isinstance(entry, dict):
+                t, is_visible = normalize(entry.get("t")), bool(entry.get("v"))
+            else:
+                t, is_visible = normalize(entry), True
+            key = (t, is_visible)
+            if not t or key in seen:
+                continue
+            seen.add(key)
+            (visible if is_visible else hidden).append(t)
     except Exception:
-        # 버튼을 못 읽는 것은 판정 불가일 뿐이다. 여기서 죽으면 설문 전체가 죽는다.
-        return []
-    return out
+        return [], []
+    return visible, hidden
 
 
 def confirm_survey_done(page, seminar_id, retries: int = 0) -> tuple[str, list[str]]:
@@ -939,7 +992,10 @@ def confirm_survey_done(page, seminar_id, retries: int = 0) -> tuple[str, list[s
         except Exception as e:
             return "unknown", [f"상세 재접속 실패: {e}"]
 
-        buttons = read_detail_buttons(page)
+        visible, hidden = read_detail_buttons(page)
+        # 보이는 버튼이 하나도 없으면 읽기 자체가 실패한 것이다. 그때만 숨은 것까지
+        # 본다 — 평소에 숨은 템플릿을 섞으면 '응답완료'가 늘 걸려 오판이 된다.
+        buttons = visible or hidden
         verdict = detect_survey_marker(buttons)
         if verdict == "unknown":
             # 버튼 셀렉터가 안 맞을 수도 있으니 본문 전체로 한 번 더 본다.
@@ -955,17 +1011,22 @@ def finalize_after_submit(page, seminar_id, pages_done: int, title: str = "") ->
     prefix = f"[{title}] " if title else ""
     out = {"pages": pages_done}
     if verdict == "done":
+        marker = matched_done_marker(buttons) or SURVEY_DONE_MARKER
         out["status"] = "success"
-        out["verified_by"] = f"detail_button: {SURVEY_DONE_MARKER}"
-        out["message"] = f"{prefix}설문 제출 완료({pages_done}페이지) — 상세에서 '{SURVEY_DONE_MARKER}' 확인."
+        out["verified_by"] = f"detail_button: {marker}"
+        out["message"] = f"{prefix}설문 제출 완료({pages_done}페이지) — 상세에서 '{marker}' 확인."
         return out
 
     out["status"] = "unverified"
     out["detail_buttons"] = buttons
+    # 사이트가 또 다른 문구를 쓰는지 다음 런에서 바로 보이도록 숨은 버튼까지 남긴다.
+    hidden = read_detail_buttons(page)[1]
+    if hidden:
+        out["detail_buttons_hidden"] = hidden
     reason = (
         f"'{SEMINAR_END_MARKER}'만 표시됨(설문 미참여)"
         if verdict == "not_done"
-        else f"'{SURVEY_DONE_MARKER}' 표시를 찾지 못함"
+        else f"완료 표시({', '.join(SURVEY_DONE_MARKERS)})를 찾지 못함"
     )
     out["message"] = (
         f"{prefix}설문 제출({pages_done}페이지) 후 상세 재확인 — {reason}. "
@@ -1065,11 +1126,12 @@ def run_survey(
         # 설문 창이 안 열리는 이유는 "아직 안 열림"과 "이미 참여함" 두 가지인데
         # 팝업만 봐서는 구분이 안 됐다. 상세의 '설문 참여 완료'가 그걸 가른다 —
         # 이력 파일이 날아갔거나 사용자가 손으로 응답한 경우가 여기로 온다.
-        verdict, _ = confirm_survey_done(page, seminar_id)
+        verdict, detail_buttons = confirm_survey_done(page, seminar_id)
         if verdict == "done":
+            marker = matched_done_marker(detail_buttons) or SURVEY_DONE_MARKER
             result["status"] = "already_done"
-            result["verified_by"] = f"detail_button: {SURVEY_DONE_MARKER}"
-            result["message"] = f"{prefix}이미 설문 참여 완료 — 상세에서 '{SURVEY_DONE_MARKER}' 확인."
+            result["verified_by"] = f"detail_button: {marker}"
+            result["message"] = f"{prefix}이미 설문 참여 완료 — 상세에서 '{marker}' 확인."
             if state is not None and account:
                 mark_survey_status(state, account, sid_val, "done", state_file)
             return result
@@ -1119,11 +1181,15 @@ def run_survey(
             # (필수 미응답 등). 같은 페이지를 반복 제출하지 않고 끊는다.
             fp = page_fingerprint(questions)
             if fp in seen_pages:
-                if pages_done and confirm_survey_done(page, seminar_id)[0] == "done":
+                stuck_verdict, stuck_buttons = (
+                    confirm_survey_done(page, seminar_id) if pages_done else ("unknown", [])
+                )
+                if stuck_verdict == "done":
+                    marker = matched_done_marker(stuck_buttons) or SURVEY_DONE_MARKER
                     result["status"] = "success"
-                    result["verified_by"] = f"detail_button: {SURVEY_DONE_MARKER}"
+                    result["verified_by"] = f"detail_button: {marker}"
                     result["pages"] = pages_done
-                    result["message"] = f"설문 제출 완료({pages_done}페이지) — 상세에서 '{SURVEY_DONE_MARKER}' 확인."
+                    result["message"] = f"설문 제출 완료({pages_done}페이지) — 상세에서 '{marker}' 확인."
                     return result
                 result["status"] = "failed"
                 result["pages"] = pages_done
