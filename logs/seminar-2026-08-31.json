@@ -9,7 +9,31 @@
       "live": {
         "bjh7790": "success"
       },
-      "updated_at": "11:35",
+      "updated_at": "12:06",
+      "survey": {
+        "bjh7790": "not_ready"
+      }
+    },
+    "5609": {
+      "id": "5609",
+      "title": "병의원 채용·근로계약 실무 A to Z",
+      "start": "2026-08-31(월) 13:00 ~ 14:00",
+      "live": {
+        "bjh7790": "success"
+      },
+      "updated_at": "12:06",
+      "survey": {
+        "bjh7790": "not_ready"
+      }
+    },
+    "5602": {
+      "id": "5602",
+      "title": "골관절 질환 영역에서 바이오시밀러의 현재와 미래",
+      "start": "2026-08-31(월) 13:00 ~ 14:00",
+      "live": {
+        "bjh7790": "success"
+      },
+      "updated_at": "12:06",
       "survey": {
         "bjh7790": "not_ready"
       }
