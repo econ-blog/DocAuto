@@ -1,0 +1,18 @@
+{
+  "kind": "seminar",
+  "date": "2026-08-31",
+  "seminars": {
+    "5633": {
+      "id": "5633",
+      "title": "[EZcare WEEK] True Cardiovascular Event Prevention from the HEART, CRESTOR",
+      "start": "2026-08-31(월) 12:00 ~ 13:00",
+      "live": {
+        "bjh7790": "success"
+      },
+      "updated_at": "11:05",
+      "survey": {
+        "bjh7790": "not_ready"
+      }
+    }
+  }
+}
