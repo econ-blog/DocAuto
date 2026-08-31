@@ -199,11 +199,17 @@ venv/bin/python3 scripts/seminar_report.py --no-telegram   # 세미나 표를 �
 
 **실제 런에서 아직 검증되지 않았다.** 다음 `seminar_block` 결과에서 아래를 본다.
 
+**2026-08-31 실측으로 모바일 판정 자체는 확인됐다** — 세미나 5602/wonju가
+`already_done` + `verified_by: "detail_button: 설문 참여 완료"`로 나왔다
+(run 33361117021). 같은 런에서 bjh7790는 m 화면이 `뒤로 가기` 하나만 그려진
+상태로 읽혀 판정을 못 냈고, 그 때문에 렌더 대기(최대 8초 폴링)를 넣었다.
+**그 대기는 아직 실제 런에서 검증되지 않았다.**
+
 | 확인 대상 | 어디서 | 기대값 | 아니면 |
 |---|---|---|---|
-| 모바일 상세로 판정되나 | 설문 결과 JSON | `verified_by: "detail_button: 설문 참여 완료"` (m 문구) | `응답완료`로 나오면 m이 로그아웃/리다이렉트되어 www로 폴백한 것 — 동작은 정상 |
-| 제출한 설문이 success로 | 설문 결과 JSON | 08-31 5633처럼 `unverified`로 떨어지던 케이스가 `success` | `unverified`면 `detail_buttons`·`detail_buttons_hidden`을 본다 |
-| m 세션 유지 | 결과 JSON의 버튼 목록 | m 화면 버튼(`설문 참여 완료`/`세미나 종료`)이 보임 | `m 상세: 로그인 상태가 아니거나…`가 남으면 쿠키가 서브도메인으로 안 넘어가는 것 → m 전용 컨텍스트에 쿠키 복사 필요 |
+| 렌더 대기가 듣나 | 설문 결과 JSON | 두 계정 다 `verified_by: "detail_button: 설문 참여 완료"` | 한쪽만 되면 `detail_probe.m.visible`을 본다 — 8초로도 모자란 것 |
+| www 폴백이 헛돌지 않나 | `detail_probe` | m에서 판정이 서면 www는 아예 안 열림 | 매번 www까지 가면 m 주소·세션을 다시 본다 |
+| 5609 팝업 닫기 실패 | 설문 결과 JSON | `failed`가 사라짐 | 남아 있으면 `dismiss_alerts`가 `button.dialog__close.hidden`을 30초 기다리는 버그(미수정) |
 
 ---
 

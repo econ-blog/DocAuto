@@ -459,3 +459,22 @@ def test_mobile_done_is_taken_without_login_evidence(monkeypatch):
     _patch_detail_transport(monkeypatch)
 
     assert seminar_survey.confirm_survey_done(page, 5633)[0] == "done"
+
+
+def test_mobile_detail_waits_for_the_marker_to_render(monkeypatch):
+    """m 상세는 뼈대를 먼저 그린다 — 표식이 늦게 붙어도 놓치지 않아야 한다."""
+    page = _FakeDetailPage({"m": ["뒤로 가기"]})
+    _patch_detail_transport(monkeypatch)
+
+    reads = {"n": 0}
+
+    def late_buttons(_page):
+        reads["n"] += 1
+        # 세 번째 읽기부터 완료 표식이 붙는다.
+        if reads["n"] >= 3:
+            return ["설문 참여 완료", "세미나 종료"], []
+        return ["뒤로 가기"], []
+
+    monkeypatch.setattr(seminar_survey, "read_detail_buttons", late_buttons)
+
+    assert seminar_survey.confirm_survey_done(page, 5602)[0] == "done"

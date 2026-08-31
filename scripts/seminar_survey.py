@@ -165,6 +165,11 @@ MOBILE_LOGIN_MARKERS = ("로그아웃", "마이페이지")
 
 # 상세 페이지 로드 후 버튼 영역이 그려질 때까지의 여유.
 DETAIL_SETTLE_MS = 2000
+# m 상세는 뼈대만 먼저 그리고 버튼을 나중에 채운다. 2026-08-31 실측에서 같은
+# 세미나(5602)를 같은 시각에 열었는데 한 계정은 '설문 참여 완료'를 읽었고 다른
+# 계정은 '뒤로 가기' 하나만 잡혔다. 표식이 나올 때까지 짧게 더 기다린다.
+MOBILE_RENDER_TIMEOUT_MS = 8000
+MOBILE_POLL_MS = 500
 # 제출 직후에는 표시가 아직 안 바뀌었을 수 있어 한 번 더 열어 본다.
 DETAIL_RECHECK_WAIT_MS = 3000
 
@@ -1076,10 +1081,21 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
         return "unknown", [], f"{'m' if mobile else 'www'} 상세 재접속 실패: {e}"
 
     visible, hidden = read_detail_buttons(page)
+    body = body_text(page)
+    if mobile:
+        # 버튼이 아직 안 그려졌을 수 있다. 표식이 잡히거나 시간이 다 될 때까지만.
+        waited = 0
+        while (
+            waited < MOBILE_RENDER_TIMEOUT_MS
+            and detect_survey_marker((visible or hidden) + [body]) == "unknown"
+        ):
+            page.wait_for_timeout(MOBILE_POLL_MS)
+            waited += MOBILE_POLL_MS
+            visible, hidden = read_detail_buttons(page)
+            body = body_text(page)
     # 보이는 버튼이 하나도 없으면 읽기 자체가 실패한 것이다. 그때만 숨은 것까지
     # 본다 — 평소에 숨은 템플릿을 섞으면 '응답완료'가 늘 걸려 오판이 된다.
     buttons = visible or hidden
-    body = body_text(page)
 
     try:
         final_url = str(page.url or "")
