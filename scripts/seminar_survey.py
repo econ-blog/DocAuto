@@ -1215,6 +1215,10 @@ def run_survey(
         if result["status"] == "closed" and state is not None and account:
             mark_survey_status(state, account, sid_val, "closed", state_file)
         result["message"] = f"{prefix}{result['status']}: {err}"
+        # 창이 안 열렸는데 완료 판정도 안 서면, 사이트 문구를 모르는 것이다.
+        # 이 갈림길에 증거를 안 남기면 다음 런에서도 똑같이 깜깜하다.
+        result["detail_verdict"] = verdict
+        result["detail_buttons"] = detail_buttons
         return result
 
     try:
