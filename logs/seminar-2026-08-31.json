@@ -63,6 +63,20 @@
         "wonju": "success"
       },
       "updated_at": "12:34"
+    },
+    "5591": {
+      "id": "5591",
+      "title": "Breathe Well Symposium",
+      "start": "2026-08-31(월) 18:30 ~ 20:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:37",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     }
   }
 }
