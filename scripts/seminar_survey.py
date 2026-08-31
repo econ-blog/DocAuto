@@ -1004,6 +1004,7 @@ def confirm_survey_done(page, seminar_id, retries: int = 0) -> tuple[str, list[s
     errors: list[str] = []
     buttons: list[str] = []
     verdict = "unknown"
+    LAST_DETAIL_PROBE.clear()
     for attempt in range(retries + 1):
         if attempt:
             page.wait_for_timeout(DETAIL_RECHECK_WAIT_MS)
@@ -1031,6 +1032,23 @@ def confirm_survey_done(page, seminar_id, retries: int = 0) -> tuple[str, list[s
     return verdict, buttons
 
 
+# 마지막 상세 조회의 원본 기록(도메인별 URL·보이는 버튼·숨은 버튼). 진단 전용이며
+# 판정에는 쓰지 않는다 — 판정이 안 설 때 무엇을 봤는지 결과 JSON에 실어 보낸다.
+LAST_DETAIL_PROBE: dict = {}
+
+
+def copy_probe() -> dict:
+    """진단 기록의 스냅샷. 결과 JSON에 실리므로 문자열만 담는다."""
+    return {
+        host: {
+            "url": str(rec.get("url") or ""),
+            "visible": [str(t) for t in rec.get("visible") or []],
+            "hidden": [str(t) for t in rec.get("hidden") or []],
+        }
+        for host, rec in LAST_DETAIL_PROBE.items()
+    }
+
+
 def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str], str]:
     """상세 1회 조회. (판정, 판정에 쓴 버튼들, 실패 사유) — 실패해도 예외는 안 낸다."""
     base = MOBILE_DETAIL_URL if mobile else doctorville.SEMINAR_DETAIL_URL
@@ -1054,6 +1072,16 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
     # 본다 — 평소에 숨은 템플릿을 섞으면 '응답완료'가 늘 걸려 오판이 된다.
     buttons = visible or hidden
     body = body_text(page)
+
+    try:
+        final_url = str(page.url or "")
+    except Exception:
+        final_url = ""
+    LAST_DETAIL_PROBE["m" if mobile else "www"] = {
+        "url": final_url,
+        "visible": visible,
+        "hidden": hidden,
+    }
 
     if mobile:
         # 로그아웃 상태이거나 www로 튕겼으면 모바일 판정은 쓰지 않는다.
@@ -1093,7 +1121,9 @@ def finalize_after_submit(page, seminar_id, pages_done: int, title: str = "") ->
 
     out["status"] = "unverified"
     out["detail_buttons"] = buttons
-    # 사이트가 또 다른 문구를 쓰는지 다음 런에서 바로 보이도록 숨은 버튼까지 남긴다.
+    # 사이트가 또 다른 문구를 쓰는지 다음 런에서 바로 보이도록 도메인별 원본을 남긴다.
+    if LAST_DETAIL_PROBE:
+        out["detail_probe"] = copy_probe()
     hidden = read_detail_buttons(page)[1]
     if hidden:
         out["detail_buttons_hidden"] = hidden
@@ -1219,6 +1249,8 @@ def run_survey(
         # 이 갈림길에 증거를 안 남기면 다음 런에서도 똑같이 깜깜하다.
         result["detail_verdict"] = verdict
         result["detail_buttons"] = detail_buttons
+        if LAST_DETAIL_PROBE:
+            result["detail_probe"] = copy_probe()
         return result
 
     try:
