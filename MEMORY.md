@@ -60,6 +60,10 @@ DocAuto의 상세 지식 저장소. 셀렉터·파일 포맷·설계 근거·버
     - 완료 표식은 `SURVEY_DONE_MARKERS`(`설문 참여 완료`/`응답완료`/`설문 응답 완료`/`설문 완료`), 미참여 표식은 `SURVEY_PENDING_MARKERS`(`세미나 종료`/`설문하기`)로 넓혔다. 완료가 미참여를 이긴다.
     - 상세에는 **안 보이는 팝업·템플릿 버튼**이 잔뜩 있고 그 안에 `설문하기`와 `응답완료`가 같이 들어 있다. 그래서 `DETAIL_BUTTON_JS`가 `getClientRects()`+`getComputedStyle`로 가시성을 같이 실어 오고, 판정은 **보이는 버튼만** 쓴다. 보이는 게 하나도 없을 때(읽기 실패)만 숨은 것까지 본다.
     - `verified_by`에는 실제로 걸린 문구를 싣는다(`detail_button: 응답완료`). 판정 실패 시 결과 JSON에 `detail_buttons`(보이는 것) + `detail_buttons_hidden`(숨은 것)이 남는다.
+  - **판정은 m(모바일) 상세를 먼저 본다 (2026-08-31 사용자 지시).** www의 `응답완료`는 숨은 템플릿 버튼과 섞여 있어 사람이 눈으로 대조하기 어렵다. m은 사용자가 보는 화면 그대로 `설문 참여 완료`/`세미나 종료`가 뜬다.
+    - 순서: `m.doctorville.co.kr/seminar/seminarDetail?seminarId=X` → 판정 불가면 `www…`. m 조회에만 `MOBILE_UA`를 `set_extra_http_headers`로 씌우고 곧바로 원상복구한다(같은 컨텍스트·같은 쿠키를 쓰므로 재로그인은 없다).
+    - **m 판정을 믿는 조건:** 최종 URL이 `m.` 이고 화면에 `로그아웃`/`마이페이지`가 있을 것(`is_mobile_session`). 세션 쿠키가 서브도메인으로 안 넘어가 로그아웃 화면이 뜨면 `설문하기`만 보여 **미참여로 오판**하기 때문이다. 조건이 깨지면 m 판정은 통째로 버리고 www로 간다.
+    - m이 `not_done`, www가 판정 불가면 m의 `not_done`을 살린다. 뒤집는 것은 www가 `done`일 때뿐이다.
 
 ### 키메디 (`keymedi.py`)
 - 로그인: `input[name="uid"]`, `input[name="password"]`, `button:has-text("로그인")`.

@@ -46,9 +46,10 @@ seminar_live.py로 입장에 성공한 세미나는 방송 팝업에서 설문�
 (status=incomplete_bank). 설문은 페이지 순차 제출형이라 뒷 페이지는 앞 페이지를
 제출해야 볼 수 있으므로, 페이지 단위 검증이 도달 가능한 최대 안전선이다.
 
-완료 판정 (2026-08-28 도입, 2026-08-31 문구 보강):
+완료 판정 (2026-08-28 도입, 2026-08-31 모바일 우선으로 변경):
     제출 직후 완료 화면 문구가 아니라, **세미나 상세에 재접속했을 때** 사이트가
-    보여주는 **보이는** 버튼으로 판정한다(`confirm_survey_done`).
+    보여주는 **보이는** 버튼으로 판정한다(`confirm_survey_done`). 상세는
+    **m(모바일)을 먼저** 열고, 로그인 상태로 못 열리면 www로 폴백한다.
       - 완료 표시가 보이면 설문을 마친 것 → success (`detail_button: …`).
         문구는 도메인마다 다르다 — m은 '설문 참여 완료', www는 '응답완료'
         (`SURVEY_DONE_MARKERS`).
@@ -140,6 +141,22 @@ SURVEY_PENDING_MARKERS = (
     SEMINAR_END_MARKER,
     "설문하기",
 )
+
+# 판정은 **모바일 상세를 먼저** 본다(2026-08-31 사용자 지시). www(데스크톱)는
+# 완료 표시가 '응답완료' 한 단어뿐이고 숨은 템플릿 버튼과 섞여 있어 사람이
+# 눈으로 확인하기도 어렵다. m(모바일)은 '설문 참여 완료'/'세미나 종료'가 그대로
+# 뜨는 화면이라 판정도 검증도 쉽다. 모바일에서 못 읽으면 www로 폴백한다.
+MOBILE_BASE = "https://m.doctorville.co.kr"
+MOBILE_DETAIL_URL = f"{MOBILE_BASE}/seminar/seminarDetail"
+# m은 UA로 데스크톱을 가려내 www로 돌려보낸다. 헤더만 바꿔도 서버 판정에는 걸린다.
+MOBILE_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
+)
+# 모바일 판정을 믿어도 되는지 가르는 표식. 세션 쿠키가 서브도메인으로 안 넘어가
+# 로그아웃 상태로 열리면 '설문하기'만 보여 **미참여로 오판**한다. 그래서
+# 로그인 증거가 없으면 모바일 판정은 통째로 버리고 www로 간다.
+MOBILE_LOGIN_MARKERS = ("로그아웃", "마이페이지")
 
 # 상세 페이지 로드 후 버튼 영역이 그려질 때까지의 여유.
 DETAIL_SETTLE_MS = 2000
@@ -969,7 +986,13 @@ def read_detail_buttons(page) -> tuple[list[str], list[str]]:
 
 
 def confirm_survey_done(page, seminar_id, retries: int = 0) -> tuple[str, list[str]]:
-    """세미나 상세에 재접속해 '설문 참여 완료' 표시로 설문 완료 여부를 판정한다.
+    """세미나 상세에 재접속해 완료 표시로 설문 완료 여부를 판정한다.
+
+    **모바일(m) 상세를 먼저 보고, 판정이 안 서면 www로 폴백한다**(2026-08-31).
+    m은 사용자가 눈으로 확인하는 화면 그대로 '설문 참여 완료'/'세미나 종료'가
+    떠서 판정도 검증도 쉽다. m이 로그아웃 상태로 열리거나 www로 튕기면 그
+    판정은 통째로 버린다 — 로그아웃 화면의 '설문하기'를 미참여로 읽으면
+    실제로 마친 설문을 놓친다.
 
     반환: (판정, 상세에서 읽은 버튼 텍스트들). 판정은 done / not_done / unknown.
     버튼 텍스트를 함께 돌려주는 이유는, 사이트가 문구를 바꿨을 때 결과 JSON만
@@ -978,31 +1001,82 @@ def confirm_survey_done(page, seminar_id, retries: int = 0) -> tuple[str, list[s
     retries는 판정이 done이 아닐 때 다시 열어 보는 횟수다. 제출 직후에는 표시가
     아직 안 바뀌었을 수 있어 1회를 준다.
     """
-    detail_url = f"{doctorville.SEMINAR_DETAIL_URL}?seminarId={seminar_id}"
+    errors: list[str] = []
     buttons: list[str] = []
     verdict = "unknown"
     for attempt in range(retries + 1):
         if attempt:
             page.wait_for_timeout(DETAIL_RECHECK_WAIT_MS)
+
+        # ① 모바일 상세 — 문구가 사람이 보는 화면과 같아 우선한다.
+        verdict, buttons, err = read_detail_verdict(page, seminar_id, mobile=True)
+        if err:
+            errors.append(err)
+        if verdict == "done":
+            return verdict, buttons
+
+        # ② www 상세 — 모바일이 판정 불가일 때만. 여기서 not_done을 덮어쓰지
+        #    않도록, 모바일이 낸 not_done은 www가 done일 때만 뒤집힌다.
+        m_verdict, m_buttons = verdict, buttons
+        verdict, buttons, err = read_detail_verdict(page, seminar_id, mobile=False)
+        if err:
+            errors.append(err)
+        if verdict == "unknown" and m_verdict != "unknown":
+            verdict, buttons = m_verdict, m_buttons
+        if verdict == "done":
+            return verdict, buttons
+
+    if verdict == "unknown" and not buttons and errors:
+        return "unknown", errors
+    return verdict, buttons
+
+
+def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str], str]:
+    """상세 1회 조회. (판정, 판정에 쓴 버튼들, 실패 사유) — 실패해도 예외는 안 낸다."""
+    base = MOBILE_DETAIL_URL if mobile else doctorville.SEMINAR_DETAIL_URL
+    detail_url = f"{base}?seminarId={seminar_id}"
+    try:
+        if mobile:
+            page.set_extra_http_headers({"User-Agent": MOBILE_UA})
         try:
             common.goto_with_retry(
                 page, detail_url, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS
             )
             page.wait_for_timeout(DETAIL_SETTLE_MS)
-        except Exception as e:
-            return "unknown", [f"상세 재접속 실패: {e}"]
+        finally:
+            if mobile:
+                page.set_extra_http_headers({})
+    except Exception as e:
+        return "unknown", [], f"{'m' if mobile else 'www'} 상세 재접속 실패: {e}"
 
-        visible, hidden = read_detail_buttons(page)
-        # 보이는 버튼이 하나도 없으면 읽기 자체가 실패한 것이다. 그때만 숨은 것까지
-        # 본다 — 평소에 숨은 템플릿을 섞으면 '응답완료'가 늘 걸려 오판이 된다.
-        buttons = visible or hidden
-        verdict = detect_survey_marker(buttons)
-        if verdict == "unknown":
-            # 버튼 셀렉터가 안 맞을 수도 있으니 본문 전체로 한 번 더 본다.
-            verdict = detect_survey_marker([body_text(page)])
-        if verdict == "done":
-            return verdict, buttons
-    return verdict, buttons
+    visible, hidden = read_detail_buttons(page)
+    # 보이는 버튼이 하나도 없으면 읽기 자체가 실패한 것이다. 그때만 숨은 것까지
+    # 본다 — 평소에 숨은 템플릿을 섞으면 '응답완료'가 늘 걸려 오판이 된다.
+    buttons = visible or hidden
+    body = body_text(page)
+
+    if mobile:
+        # 로그아웃 상태이거나 www로 튕겼으면 모바일 판정은 쓰지 않는다.
+        if not is_mobile_session(page, buttons + [body]):
+            return "unknown", [], "m 상세: 로그인 상태가 아니거나 www로 리다이렉트됨"
+
+    verdict = detect_survey_marker(buttons)
+    if verdict == "unknown":
+        # 버튼 셀렉터가 안 맞을 수도 있으니 본문 전체로 한 번 더 본다.
+        verdict = detect_survey_marker([body])
+    return verdict, buttons, ""
+
+
+def is_mobile_session(page, texts) -> bool:
+    """모바일 상세가 로그인된 상태로 열렸는지. 아니면 그 판정을 믿으면 안 된다."""
+    try:
+        url = page.url or ""
+    except Exception:
+        url = ""
+    if url and not url.startswith(MOBILE_BASE):
+        return False
+    joined = " ".join(strip_spaces(t) for t in texts if t)
+    return any(strip_spaces(m) in joined for m in MOBILE_LOGIN_MARKERS)
 
 
 def finalize_after_submit(page, seminar_id, pages_done: int, title: str = "") -> dict:

@@ -331,3 +331,115 @@ def test_finalize_after_submit_keeps_hidden_buttons_for_diagnosis(monkeypatch):
     out = seminar_survey.finalize_after_submit(MagicMock(), 5633, 1)
     assert out["status"] == "unverified"
     assert out["detail_buttons_hidden"] == ["숨은버튼"]
+
+
+# ---------------------------------------------------------------------------
+# 상세 판정은 모바일 우선 (2026-08-31 사용자 지시)
+# www는 완료 표시가 '응답완료' 한 단어라 사람이 눈으로 확인하기 어렵다.
+# m은 '설문 참여 완료'가 그대로 뜬다.
+# ---------------------------------------------------------------------------
+
+class _FakeDetailPage:
+    """도메인별로 다른 버튼을 돌려주는 상세 페이지 mock."""
+
+    def __init__(self, by_host, url_after_goto=None):
+        self.by_host = by_host          # {"m": [...], "www": [...]}
+        self.visited = []
+        self.headers = []
+        self.url = ""
+        self._url_after_goto = url_after_goto
+
+    def goto(self, url, **kwargs):
+        self.visited.append(url)
+        self.url = self._url_after_goto or url
+
+    def set_extra_http_headers(self, headers):
+        self.headers.append(headers)
+
+    def wait_for_timeout(self, ms):
+        pass
+
+    def _host(self):
+        return "m" if self.url.startswith(seminar_survey.MOBILE_BASE) else "www"
+
+    def buttons(self):
+        return self.by_host.get(self._host(), [])
+
+
+def _patch_detail_transport(monkeypatch):
+    monkeypatch.setattr(
+        seminar_survey.common, "goto_with_retry",
+        lambda page, url, **kw: page.goto(url),
+    )
+    monkeypatch.setattr(
+        seminar_survey, "read_detail_buttons", lambda page: (page.buttons(), []),
+    )
+    monkeypatch.setattr(seminar_survey, "body_text", lambda page: "")
+
+
+def test_confirm_survey_done_reads_the_mobile_detail_first(monkeypatch):
+    """m에서 완료가 확인되면 www는 열지 않는다."""
+    page = _FakeDetailPage({"m": ["설문 참여 완료", "세미나 종료", "로그아웃"]})
+    _patch_detail_transport(monkeypatch)
+
+    verdict, buttons = seminar_survey.confirm_survey_done(page, 5633)
+
+    assert verdict == "done"
+    assert "설문 참여 완료" in buttons
+    assert page.visited == [f"{seminar_survey.MOBILE_DETAIL_URL}?seminarId=5633"]
+    # 모바일 UA를 씌웠다가 원상복구해야 www 조회가 데스크톱으로 돈다.
+    assert page.headers == [{"User-Agent": seminar_survey.MOBILE_UA}, {}]
+
+
+def test_confirm_survey_done_falls_back_to_www(monkeypatch):
+    """m이 로그아웃 상태로 열리면 그 판정은 버리고 www로 간다."""
+    page = _FakeDetailPage({
+        "m": ["설문하기", "로그인"],        # 로그인 증거 없음 → 판정 폐기
+        "www": ["응답완료", "목록"],
+    })
+    _patch_detail_transport(monkeypatch)
+
+    verdict, buttons = seminar_survey.confirm_survey_done(page, 5633)
+
+    assert verdict == "done"
+    assert buttons == ["응답완료", "목록"]
+    assert len(page.visited) == 2
+
+
+def test_confirm_survey_done_ignores_mobile_when_redirected_to_www(monkeypatch):
+    """m 주소가 www로 튕기면 모바일 판정으로 치지 않는다."""
+    page = _FakeDetailPage(
+        {"www": ["설문하기", "로그아웃"]},
+        url_after_goto="https://www.doctorville.co.kr/seminar/seminarDetail?seminarId=5633",
+    )
+    _patch_detail_transport(monkeypatch)
+
+    assert seminar_survey.confirm_survey_done(page, 5633)[0] == "not_done"
+
+
+def test_confirm_survey_done_keeps_mobile_verdict_when_www_says_nothing(monkeypatch):
+    """www가 판정 불가여도 로그인된 m의 미참여 판정은 살린다."""
+    page = _FakeDetailPage({
+        "m": ["세미나 종료", "로그아웃"],
+        "www": ["목록"],
+    })
+    _patch_detail_transport(monkeypatch)
+
+    verdict, buttons = seminar_survey.confirm_survey_done(page, 5633)
+    assert verdict == "not_done"
+    assert buttons == ["세미나 종료", "로그아웃"]
+
+
+def test_confirm_survey_done_reports_both_navigation_failures(monkeypatch):
+    """두 도메인 다 못 열면 무엇이 실패했는지 결과에 남는다."""
+    page = _FakeDetailPage({})
+    monkeypatch.setattr(
+        seminar_survey.common, "goto_with_retry",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("ERR_CONNECTION_CLOSED")),
+    )
+    verdict, buttons = seminar_survey.confirm_survey_done(page, 5633)
+
+    assert verdict == "unknown"
+    assert len(buttons) == 2
+    assert any(b.startswith("m 상세 재접속 실패") for b in buttons)
+    assert any(b.startswith("www 상세 재접속 실패") for b in buttons)
