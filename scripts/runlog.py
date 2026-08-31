@@ -40,9 +40,13 @@ ACCOUNTLESS = "_"
 
 # "이미 완료"는 새 결과가 아니라 지난 결과의 재확인이다. 세미나 블록은 30분마다
 # 같은 세미나를 다시 훑으므로, 이 상태가 칸을 덮으면 앞 런에서 실제로 성공한(✅)
-# 세미나가 다음 런부터 ☑️로 되돌아간다(2026-08-28 사용자 지적). 빈 칸일 때만
-# 채우고, 이미 무언가 적혀 있으면 손대지 않는다 — 한 번 초록이면 계속 초록.
+# 세미나가 다음 런부터 ☑️로 되돌아간다(2026-08-28 사용자 지적).
+# 그래서 already_done은 **이미 완료로 적힌 칸만** 건드리지 않는다. ⏳·⚠️ 같은
+# 미완료 표시는 덮어써야 한다 — 2026-08-31 세미나 5602에서 앞 런의 not_ready가
+# 남는 바람에, 뒤 런이 상세에서 완료를 확인하고도 표는 계속 ⏳였다.
 NON_OVERWRITING_STATUSES = {"already_done"}
+# already_done이 덮지 않는 값(이미 완료를 뜻하는 칸).
+SETTLED_STATUSES = {"success", "already_done"}
 
 STATUS_EMOJIS = {
     "success": "✅",
@@ -312,7 +316,7 @@ def update_seminar(seminar_id, phase: str = None, status: str = "", account: str
             slot = {}
             entry[phase] = slot
         key = account or ACCOUNTLESS
-        if not (status in NON_OVERWRITING_STATUSES and slot.get(key)):
+        if not (status in NON_OVERWRITING_STATUSES and slot.get(key) in SETTLED_STATUSES):
             slot[key] = status
             entry["updated_at"] = datetime.now(common.KST).strftime("%H:%M")
 

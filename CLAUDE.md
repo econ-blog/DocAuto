@@ -199,17 +199,18 @@ venv/bin/python3 scripts/seminar_report.py --no-telegram   # 세미나 표를 �
 
 **실제 런에서 아직 검증되지 않았다.** 다음 `seminar_block` 결과에서 아래를 본다.
 
-**2026-08-31 실측으로 모바일 판정 자체는 확인됐다** — 세미나 5602/wonju가
-`already_done` + `verified_by: "detail_button: 설문 참여 완료"`로 나왔다
-(run 33361117021). 같은 런에서 bjh7790는 m 화면이 `뒤로 가기` 하나만 그려진
-상태로 읽혀 판정을 못 냈고, 그 때문에 렌더 대기(최대 8초 폴링)를 넣었다.
-**그 대기는 아직 실제 런에서 검증되지 않았다.**
+**2026-08-31 실측으로 확인됨(두 계정).** 세미나 5602가 양쪽 다
+`already_done` + `verified_by: "detail_button: 설문 참여 완료"`로 나왔다 —
+wonju는 run 33361117021, bjh7790는 렌더 대기를 넣은 뒤 run 33361813029.
+m VOD 상세의 버튼 구성도 확인됐다: 미참여 세미나(5609)는
+`뒤로 가기 / 관심 추가 / 공유 / 세미나 종료`, 참여한 세미나는 거기에
+`설문 참여 완료`가 붙는다.
 
 | 확인 대상 | 어디서 | 기대값 | 아니면 |
 |---|---|---|---|
-| 렌더 대기가 듣나 | 설문 결과 JSON | 두 계정 다 `verified_by: "detail_button: 설문 참여 완료"` | 한쪽만 되면 `detail_probe.m.visible`을 본다 — 8초로도 모자란 것 |
+| m 미참여(not_done) 판정 | 설문 결과 JSON | 현재는 **채택되지 않는다** — m VOD 화면에 `로그아웃`/`마이페이지`가 없어 로그인 증거 조건을 못 넘는다. 완료 판정만 쓰이고 미참여는 `unknown`으로 보류된다(안전 쪽) | 미참여도 확정하고 싶으면 m VOD의 로그인 표식을 찾아 `MOBILE_LOGIN_MARKERS`에 넣는다 |
 | www 폴백이 헛돌지 않나 | `detail_probe` | m에서 판정이 서면 www는 아예 안 열림 | 매번 www까지 가면 m 주소·세션을 다시 본다 |
-| 5609 팝업 닫기 실패 | 설문 결과 JSON | `failed`가 사라짐 | 남아 있으면 `dismiss_alerts`가 `button.dialog__close.hidden`을 30초 기다리는 버그(미수정) |
+| 5609 팝업 닫기 실패 | 설문 결과 JSON | **미해결.** 08-31에 네 런 연속 두 계정 모두 `dismiss_alerts`가 안 보이는 `button.dialog__close.hidden`을 30초 기다리다 `failed` | 다음 세션에서 고칠 것 — 보이는 버튼만 클릭하도록 |
 
 ---
 

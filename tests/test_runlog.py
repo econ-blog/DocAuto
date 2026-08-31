@@ -167,15 +167,23 @@ def test_already_done_does_not_overwrite_a_recorded_result(tmp_path):
     assert rows[0][4] == "✅"
 
 
-def test_already_done_does_not_overwrite_a_failure_either(tmp_path):
-    """'이미 완료'는 새 결과가 아니라 옛 결과의 재확인이라 아무것도 바꾸지 않는다."""
+def test_already_done_replaces_a_stale_unfinished_cell(tmp_path):
+    """미완료 표시(❌·⏳)는 '이미 완료'가 덮는다 — 뒤 런이 사이트에서 확인한 최신 사실이다.
+
+    2026-08-31 세미나 5602: 앞 런이 ⏳(not_ready)를 적어 둔 탓에, 뒤 런이 상세에서
+    '설문 참여 완료'를 확인하고도 표는 계속 ⏳였다. 덮지 않는 것은 이미 완료로
+    적힌 칸(✅·☑️)뿐이다 — 그건 위 테스트가 지킨다.
+    """
     kw = {"date_str": "2026-08-27", "log_dir": tmp_path}
     runlog.update_seminar("1", phase="apply", status="failed", account="bjh7790",
                           title="T", **kw)
+    runlog.update_seminar("1", phase="survey", status="not_ready", account="bjh7790", **kw)
     runlog.update_seminar("1", phase="apply", status="already_done", account="bjh7790", **kw)
+    runlog.update_seminar("1", phase="survey", status="already_done", account="bjh7790", **kw)
 
     rows = runlog.seminar_table("2026-08-27", log_dir=tmp_path, accounts=["bjh7790"])[1]
-    assert rows[0][3] == "❌"
+    assert rows[0][3] == "\u2611\ufe0f"   # 신청
+    assert rows[0][5] == "\u2611\ufe0f"   # 설문
 
 
 def test_already_done_still_fills_an_empty_cell(tmp_path):
