@@ -1,0 +1,20 @@
+{
+  "kind": "seminar",
+  "date": "2026-09-01",
+  "seminars": {
+    "5634": {
+      "id": "5634",
+      "title": "[EZcare WEEK] 이상지질혈증 치료의 최신 근거와 바로에젯의 임상적 역할",
+      "start": "2026-09-01(화) 12:20 ~ 13:20",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "11:37",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
+    }
+  }
+}
