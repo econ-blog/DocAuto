@@ -52,10 +52,10 @@
         "bjh7790": "success",
         "wonju": "success"
       },
-      "updated_at": "19:36",
+      "updated_at": "20:07",
       "survey": {
-        "bjh7790": "not_ready",
-        "wonju": "not_ready"
+        "bjh7790": "success",
+        "wonju": "success"
       }
     }
   }
