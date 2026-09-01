@@ -24,7 +24,7 @@
         "bjh7790": "success",
         "wonju": "success"
       },
-      "updated_at": "17:08",
+      "updated_at": "17:36",
       "survey": {
         "bjh7790": "not_ready",
         "wonju": "not_ready"
@@ -38,10 +38,23 @@
         "bjh7790": "success",
         "wonju": "success"
       },
-      "updated_at": "17:08",
+      "updated_at": "17:36",
       "survey": {
         "bjh7790": "not_ready",
         "wonju": "not_ready"
+      }
+    },
+    "5635": {
+      "id": "5635",
+      "title": "[EZcare WEEK]심장대사증후군 의료진 관점에서 바라보는 이상지질혈증의 모든 것",
+      "start": "2026-09-01(화) 18:30 ~ 20:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:36",
+      "survey": {
+        "bjh7790": "not_ready"
       }
     }
   }
