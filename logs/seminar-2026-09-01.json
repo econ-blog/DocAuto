@@ -15,6 +15,34 @@
         "bjh7790": "success",
         "wonju": "success"
       }
+    },
+    "5662": {
+      "id": "5662",
+      "title": "크레스토 웹심포지엄",
+      "start": "2026-09-01(화) 17:00 ~ 18:30",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:08",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
+    },
+    "5663": {
+      "id": "5663",
+      "title": "Exploring the therapeutic potential of SGLT-2 Inhibitors",
+      "start": "2026-09-01(화) 17:00 ~ 18:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:08",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     }
   }
 }
