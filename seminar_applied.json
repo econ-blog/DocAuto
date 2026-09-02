@@ -1633,6 +1633,22 @@
       "start_time": "12:00",
       "title": "True Cardiovascular Event Prevention from the HEART, CRESTOR",
       "year": 2026
+    },
+    "5670": {
+      "applied_at": "2026-09-02T13:03:11.913326+09:00",
+      "date": "2026-09-09",
+      "day": 9,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-09(수) 13:00 ~ 14:00",
+      "start_date": "2026-09-09",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "DEEP INSIGHT WEDNESDAY WEBINAR_Dual Regeneration Strategy: ECM Restoration & Collagen Biostimulation",
+      "year": 2026
     }
   }
 }
