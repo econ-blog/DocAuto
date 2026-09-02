@@ -1,0 +1,66 @@
+{
+  "kind": "seminar",
+  "date": "2026-09-03",
+  "seminars": {
+    "5614": {
+      "id": "5614",
+      "title": "류마티스내과에서 바라보는 펙수클루",
+      "start": "2026-09-03(목) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5615": {
+      "id": "5615",
+      "title": "소화기 내시경의 새로운 패러다임: WAYMED ENDO AI를 활용한 병변 검출 실전",
+      "start": "2026-09-03(목) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5617": {
+      "id": "5617",
+      "title": "펙수클루X실리스칸 웹심포지엄",
+      "start": "2026-09-03(목) 18:00 ~ 19:30",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5618": {
+      "id": "5618",
+      "title": "GI Collaboration Symposium(펙수클루x실리스칸)",
+      "start": "2026-09-03(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5640": {
+      "id": "5640",
+      "title": "[EZcare WEEK] The Lower is The Better : Optimal Strategy in PCI Patients",
+      "start": "2026-09-03(목) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5649": {
+      "id": "5649",
+      "title": "[EZcare WEEK] 중재시술의 관점에서 바라보는 고위험군 이상지질혈증 치료의 모든 것",
+      "start": "2026-09-03(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    }
+  }
+}
