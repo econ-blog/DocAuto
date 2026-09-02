@@ -199,10 +199,10 @@
         "bjh7790": "success",
         "wonju": "success"
       },
-      "updated_at": "21:05",
+      "updated_at": "21:26",
       "survey": {
-        "bjh7790": "incomplete_bank",
-        "wonju": "incomplete_bank"
+        "bjh7790": "already_done",
+        "wonju": "success"
       }
     }
   }
