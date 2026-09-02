@@ -140,6 +140,63 @@ def parse_dd_date(date_str: str | None) -> tuple[datetime | None, datetime | Non
         return None, None
 
 
+ERROR_LOG_DIR = Path(os.environ.get("DOCAUTO_LOG_DIR") or (SCRIPT_DIR.parent / "logs"))
+
+
+def log_error(
+    script: str,
+    exc: BaseException | str,
+    *,
+    account: str = "",
+    task: str = "",
+    status: str = "failed",
+    screenshot: str = "",
+    extra: dict | None = None,
+) -> str:
+    """영구 오류 로그(logs/errors-YYYY-MM.jsonl)에 한 줄 append하고 경로를 반환한다.
+
+    왜 필요한가: 예외의 클래스·트레이스백은 지금까지 어디에도 남지 않았다.
+    결과 JSON에는 str(e) 200자만, 스크린샷은 artifact 7일, logs/daily-*.json은
+    상태 키워드 한 개뿐이라 사후에 "무엇이 왜 깨졌는지"를 복원할 수 없었다.
+    이 파일은 runlog.prune 대상이 아니며 레포에 커밋되어 계속 남는다.
+
+    실패해도 예외를 밖으로 던지지 않는다 — 오류 기록이 본 흐름을 죽이면 안 된다.
+    """
+    try:
+        import traceback
+
+        if isinstance(exc, BaseException):
+            exc_type = type(exc).__name__
+            message = str(exc)[:1000]
+            tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))[-4000:]
+        else:
+            exc_type = ""
+            message = str(exc)[:1000]
+            tb = ""
+
+        entry = {
+            "ts": datetime.now(KST).isoformat(timespec="seconds"),
+            "script": script,
+            "account": account,
+            "task": task,
+            "status": status,
+            "exc_type": exc_type,
+            "message": message,
+            "traceback": tb,
+            "screenshot": Path(screenshot).name if screenshot else "",
+            "gh_run": os.environ.get("GITHUB_RUN_ID", ""),
+            "gh_workflow": os.environ.get("GITHUB_WORKFLOW", ""),
+            "extra": extra or {},
+        }
+        path = ERROR_LOG_DIR / f"errors-{datetime.now(KST):%Y-%m}.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        return str(path)
+    except Exception:
+        return ""
+
+
 def save_screenshot(page, name_stem: str) -> str:
     """logs/<name_stem>_<타임스탬프>.png 저장 후 경로 반환(실패 시 빈 문자열)."""
     LOG_DIR.mkdir(exist_ok=True)
@@ -148,8 +205,27 @@ def save_screenshot(page, name_stem: str) -> str:
     try:
         page.screenshot(path=str(path), full_page=True)
         return str(path)
-    except Exception:
+    except Exception as e:
+        # 스크린샷 실패는 조용히 삼키면 "증거가 왜 없는지"를 알 수 없다.
+        log_error("common.save_screenshot", e, task=name_stem, status="screenshot_failed")
         return ""
+
+
+RETRYABLE_ERROR_MARKERS = ("net::", "ERR_", "Timeout", "timeout")
+
+
+def _is_retryable(exc: Exception) -> bool:
+    """재시도로 나아질 수 있는 오류인지 판정한다.
+
+    PlaywrightError는 네트워크 오류뿐 아니라 strict mode violation, 닫힌 page,
+    target crashed 같은 코드/DOM 문제에도 쓰인다. 그런 오류에 3+7+15초를 태우면
+    시간만 버리고 진짜 원인이 백오프 뒤에 묻힌다. 네트워크·타임아웃 신호가 있는
+    것만 재시도한다.
+    """
+    if isinstance(exc, PlaywrightTimeoutError):
+        return True
+    msg = str(exc)
+    return any(m in msg for m in RETRYABLE_ERROR_MARKERS)
 
 
 def goto_with_retry(
@@ -178,7 +254,7 @@ def goto_with_retry(
             return
         except (PlaywrightTimeoutError, PlaywrightError) as e:
             last_exc = e
-            if attempt < retries:
+            if attempt < retries and _is_retryable(e):
                 delay = backoff_delays[attempt] if attempt < len(backoff_delays) else backoff_delays[-1]
                 try:
                     page.wait_for_timeout(int(delay * 1000))
@@ -204,7 +280,7 @@ def reload_with_retry(
             return
         except (PlaywrightTimeoutError, PlaywrightError) as e:
             last_exc = e
-            if attempt < retries:
+            if attempt < retries and _is_retryable(e):
                 delay = backoff_delays[attempt] if attempt < len(backoff_delays) else backoff_delays[-1]
                 try:
                     page.wait_for_timeout(int(delay * 1000))

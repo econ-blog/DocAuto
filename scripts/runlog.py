@@ -154,6 +154,8 @@ def prune(kind: str, keep: int = KEEP_FILES, log_dir: Path | str = None) -> list
     if not d.exists():
         return []
     # 파일명이 kind-YYYY-MM-DD.json 이라 사전순 = 날짜순이다.
+    # errors-YYYY-MM.jsonl은 kind가 daily/seminar가 아니고 확장자도 달라 여기 걸리지
+    # 않는다 — 오류 이력은 의도적으로 영구 보존한다(common.log_error).
     files = sorted(d.glob(f"{kind}-*.json"))
     removed = []
     for path in files[:max(0, len(files) - keep)]:

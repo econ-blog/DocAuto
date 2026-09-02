@@ -33,14 +33,8 @@ keymedi.py와 동일한 구조 — 로그인 방식과 완료 판정 로직만 H
       반드시 가시성(is_visible)으로 판단해야 한다.
     - 완료 팝업: <div id="10rewardPopup"> 내부에 "확인" 텍스트 버튼(별도 class/id 없음).
 
-주의 — 룰렛 자동 클릭은 이번 버전에 넣지 않았다:
-    연속 10·20·30일 달성 시 "룰렛 참여하기" 버튼 3개(class="st")가 페이지에 항상 존재하는데,
-    2026-07-06 확인 시점엔 연속 6일 상태라 셋 다 비활성 상태였고, 그 상태에서도 버튼의
-    class/disabled 속성이 활성 상태와 어떻게 달라지는지 구분할 신호를 찾지 못했다(모두
-    class="st", disabled=false로 동일). 잘못된 신호로 무의미한 클릭을 하는 것보다, 연속
-    10일째에 실제로 활성화된 상태의 DOM을 한 번 더 확인한 뒤 이 스크립트에 추가하는 게
-    안전하다고 판단해 이번 버전은 캡슐 출석까지만 처리한다. 연속 출석일수가 10의 배수에
-    가까워지면 사용자에게 수동 확인을 안내할 것.
+룰렛(연속 10·20·30일)·지식커뮤니티 댓글·글쓰기도 이 스크립트에 포함되어 운영 중이다
+(`_run_roulette` / `_run_comment` / `_run_post`).
 
 주의: 이 스크립트도 keymedi.py와 마찬가지로 에이전트 샌드박스에서 실제 로그인까지
 end-to-end 테스트하지 못했다 (샌드박스가 hmp.co.kr에 접근 불가). 첫 실행은 반드시
@@ -91,6 +85,24 @@ def load_credentials(path: Path, account: str) -> dict:
     # (keymedi와 동일 패턴 — 로그인 id가 이메일이 아니라 "bjh7790" 같은 plain id).
     login_id = hmp.get("id", account)
     return {"id": login_id, "password": hmp["password"]}
+
+
+def _wait_for_dialogs(page, dialogs_seen: list, expected: int = 2, timeout_ms: int = 8000,
+                      step_ms: int = 250) -> None:
+    """confirm+alert 두 다이얼로그가 모두 잡힐 때까지 짧게 폴링한다.
+
+    예전엔 무조건 8초를 잤다. 다이얼로그는 on_dialog 핸들러가 즉시 기록하므로
+    보통 1~3초면 끝난다 — 나머지는 순수 낭비였다. 못 채우면 예전과 같이
+    timeout_ms까지 기다린 뒤 빠진다(판정 로직은 그대로).
+    """
+    waited = 0
+    while waited < timeout_ms:
+        if len(dialogs_seen) >= expected:
+            # 마지막 다이얼로그 직후 DOM 갱신 여유
+            page.wait_for_timeout(300)
+            return
+        page.wait_for_timeout(step_ms)
+        waited += step_ms
 
 
 def _run_roulette(page, account: str) -> list[dict]:
@@ -402,8 +414,8 @@ def _comment_on_board(page, account: str, board_seq: str) -> dict:
             # form.cmtForm 전체에서 다시 찾으면 다른 폼(기존 댓글 폼)의 버튼을 누를 위험이 있다.
             main_form.locator('button[onclick*="saveCmt"]').first.click()
 
-            # 8. confirm(즉시) + AJAX + alert(수초 내) 대기
-            page.wait_for_timeout(8000)
+            # 8. confirm(즉시) + AJAX + alert(수초 내) 대기 — 둘 다 잡히면 즉시 진행
+            _wait_for_dialogs(page, dialogs_seen)
         finally:
             try:
                 page.remove_listener("dialog", on_dialog)
@@ -632,8 +644,8 @@ def _run_post(page, account: str) -> dict:
             # 8. 등록하기 클릭 → saveBoard() → confirm → AJAX → alert
             page.locator('#writePopupDiv .botSubmit button[onclick*="saveBoard"]').click()
 
-            # 9. confirm(즉시) + AJAX + alert 대기
-            page.wait_for_timeout(8000)
+            # 9. confirm(즉시) + AJAX + alert 대기 — 둘 다 잡히면 즉시 진행
+            _wait_for_dialogs(page, dialogs_seen)
         finally:
             try:
                 page.remove_listener("dialog", on_dialog)
@@ -699,64 +711,73 @@ def run(account: str, credentials_path: Path, headless: bool) -> dict:
                 if "attendanceRouletteMain" not in page.url:
                     common.goto_with_retry(page, ATTENDANCE_URL, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS)
 
-            # 2026-07-07 확인: 페이지 리뉴얼로 #capsuleBtn / #capsuleBtnComplete ID 사라짐.
-            # 새 버튼 텍스트: "오늘의 캡슐 받기". element 타입이 button인지 a인지 불명이므로
-            # get_by_text()로 타입 무관하게 찾는다. 구버전 ID도 fallback으로 유지.
-            # CSS 셀렉터에 text= 을 섞으면 파싱 오류 발생 — 반드시 locator를 분리해야 한다.
+            # 캡슐 구간만 따로 감싼다. 이 블록에서 예외가 나면 예전에는 바깥
+            # except로 빠져 룰렛·댓글·글쓰기가 통째로 건너뛰어졌다 — 셋 다 캡슐
+            # 성공 여부와 무관한 작업이라 같이 죽을 이유가 없다.
+            try:
+                # 2026-07-07 확인: 페이지 리뉴얼로 #capsuleBtn / #capsuleBtnComplete ID 사라짐.
+                # 새 버튼 텍스트: "오늘의 캡슐 받기". element 타입이 button인지 a인지 불명이므로
+                # get_by_text()로 타입 무관하게 찾는다. 구버전 ID도 fallback으로 유지.
+                # CSS 셀렉터에 text= 을 섞으면 파싱 오류 발생 — 반드시 locator를 분리해야 한다.
 
-            # JS 렌더링 대기 — load 이후에도 SPA 요소가 늦게 붙는 경우 대비
-            page.wait_for_timeout(2000)
+                # JS 렌더링 대기 — load 이후에도 SPA 요소가 늦게 붙는 경우 대비
+                page.wait_for_timeout(2000)
 
-            complete_btn = page.locator('#capsuleBtnComplete')
-            active_by_id = page.locator('#capsuleBtn')
-            active_by_text = page.get_by_text("오늘의 캡슐 받기", exact=True)
+                complete_btn = page.locator('#capsuleBtnComplete')
+                active_by_id = page.locator('#capsuleBtn')
+                active_by_text = page.get_by_text("오늘의 캡슐 받기", exact=True)
 
-            # 셋 중 하나라도 DOM에 붙을 때까지 대기
-            found = False
-            for loc in [active_by_id, active_by_text, complete_btn]:
-                try:
-                    loc.first.wait_for(state="attached", timeout=5000)
-                    found = True
-                    break
-                except PlaywrightTimeoutError:
-                    continue
-
-            if not found:
-                result["message"] = "캡슐 버튼을 찾을 수 없음 — 페이지 구조 변경 가능성."
-                result["screenshot"] = common.save_screenshot(page, f"hmp_{account}")
-                # 캡슐 버튼 이상이어도 로그인 세션은 살아있으므로 댓글 시도는 계속한다
-            elif complete_btn.count() > 0 and complete_btn.first.is_visible():
-                result["status"] = "already_done"
-                result["message"] = "오늘 이미 캡슐 출석 완료된 상태."
-            else:
-                # ID 버튼이 보이면 우선 사용, 아니면 텍스트 버튼 사용
-                if active_by_id.count() > 0 and active_by_id.first.is_visible():
-                    active_btn = active_by_id
-                elif active_by_text.count() > 0 and active_by_text.first.is_visible():
-                    active_btn = active_by_text
-                else:
-                    result["message"] = "오늘의 캡슐 받기 버튼이 보이지 않음 — 페이지 구조 변경 가능성."
-                    result["screenshot"] = common.save_screenshot(page, f"hmp_{account}")
-                    active_btn = None
-
-                if active_btn is not None:
-                    active_btn.first.click()
-
-                    # 완료 팝업 확인 — id="10rewardPopup" 은 숫자로 시작해 CSS 셀렉터로 쓸 수 없다.
-                    # [id="..."] 속성 셀렉터로 우회한다.
+                # 셋 중 하나라도 DOM에 붙을 때까지 대기
+                found = False
+                for loc in [active_by_id, active_by_text, complete_btn]:
                     try:
-                        popup = page.locator('[id="10rewardPopup"]')
-                        popup.wait_for(state="visible", timeout=DEFAULT_TIMEOUT_MS)
-                        confirm_btn = popup.locator('button:has-text("확인")')
-                        if confirm_btn.count() > 0:
-                            confirm_btn.first.click()
-                        result["status"] = "success"
-                        result["verified_by"] = "popup: 10rewardPopup"
-                        result["points"] = 10
-                        result["message"] = "캡슐 출석 완료, 10캡슐 적립."
+                        loc.first.wait_for(state="attached", timeout=5000)
+                        found = True
+                        break
                     except PlaywrightTimeoutError:
-                        result["message"] = "캡슐 버튼은 눌렀으나 완료 팝업을 확인하지 못함."
+                        continue
+
+                if not found:
+                    result["message"] = "캡슐 버튼을 찾을 수 없음 — 페이지 구조 변경 가능성."
+                    result["screenshot"] = common.save_screenshot(page, f"hmp_{account}")
+                    # 캡슐 버튼 이상이어도 로그인 세션은 살아있으므로 댓글 시도는 계속한다
+                elif complete_btn.count() > 0 and complete_btn.first.is_visible():
+                    result["status"] = "already_done"
+                    result["message"] = "오늘 이미 캡슐 출석 완료된 상태."
+                else:
+                    # ID 버튼이 보이면 우선 사용, 아니면 텍스트 버튼 사용
+                    if active_by_id.count() > 0 and active_by_id.first.is_visible():
+                        active_btn = active_by_id
+                    elif active_by_text.count() > 0 and active_by_text.first.is_visible():
+                        active_btn = active_by_text
+                    else:
+                        result["message"] = "오늘의 캡슐 받기 버튼이 보이지 않음 — 페이지 구조 변경 가능성."
                         result["screenshot"] = common.save_screenshot(page, f"hmp_{account}")
+                        active_btn = None
+
+                    if active_btn is not None:
+                        active_btn.first.click()
+
+                        # 완료 팝업 확인 — id="10rewardPopup" 은 숫자로 시작해 CSS 셀렉터로 쓸 수 없다.
+                        # [id="..."] 속성 셀렉터로 우회한다.
+                        try:
+                            popup = page.locator('[id="10rewardPopup"]')
+                            popup.wait_for(state="visible", timeout=DEFAULT_TIMEOUT_MS)
+                            confirm_btn = popup.locator('button:has-text("확인")')
+                            if confirm_btn.count() > 0:
+                                confirm_btn.first.click()
+                            result["status"] = "success"
+                            result["verified_by"] = "popup: 10rewardPopup"
+                            result["points"] = 10
+                            result["message"] = "캡슐 출석 완료, 10캡슐 적립."
+                        except PlaywrightTimeoutError:
+                            result["message"] = "캡슐 버튼은 눌렀으나 완료 팝업을 확인하지 못함."
+                            result["screenshot"] = common.save_screenshot(page, f"hmp_{account}")
+            except Exception as e:
+                result["message"] = f"캡슐 구간 예외: {e}"
+                result["screenshot"] = common.save_screenshot(page, f"hmp_{account}")
+                common.log_error("hmp", e, account=account, task="capsule",
+                                 screenshot=result["screenshot"])
 
             # 룰렛 처리 (연속 10·20·30일 달성 시 버튼 활성화)
             if result["status"] in ("success", "already_done"):
@@ -793,6 +814,7 @@ def run(account: str, credentials_path: Path, headless: bool) -> dict:
         except Exception as e:
             result["message"] = f"예외 발생: {e}"
             result["screenshot"] = common.save_screenshot(page, f"hmp_{account}")
+            common.log_error("hmp", e, account=account, screenshot=result["screenshot"])
         finally:
             browser.close()
 

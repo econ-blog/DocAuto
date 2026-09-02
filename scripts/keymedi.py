@@ -190,6 +190,7 @@ def run(account: str, credentials_path: Path, headless: bool) -> dict:
         except Exception as e:
             result["message"] = f"예외 발생: {e}"
             result["screenshot"] = common.save_screenshot(page, f"keymedi_{account}")
+            common.log_error("keymedi", e, account=account, screenshot=result["screenshot"])
         finally:
             browser.close()
 

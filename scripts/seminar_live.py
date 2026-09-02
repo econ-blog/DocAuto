@@ -514,7 +514,8 @@ def run_account(
 
         except Exception as e:
             output["error"] = f"예외 발생: {e}"
-            save_screenshot(page, "error")
+            shot = save_screenshot(page, "error")
+            common.log_error("seminar_live", e, account=account, screenshot=shot)
         finally:
             browser.close()
 

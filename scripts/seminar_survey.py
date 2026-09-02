@@ -1476,6 +1476,7 @@ def run_account(
                     r = run_survey(page, item, bank_paths, state=state, state_file=state_file, account=account)
                 except Exception as e:
                     r = {"seminarId": int(sid) if str(sid).isdigit() else sid, "status": "failed", "message": f"예외 발생: {e}"}
+                    common.log_error("seminar_survey", e, account=account, task=f"survey:{sid}")
                 output["surveys"].append(r)
                 _log_seminar(sid, r["status"], account, item if isinstance(item, dict) else {})
                 if r["status"] in ("success", "already_done") and state is not None:
@@ -1498,6 +1499,7 @@ def run_account(
             output["status"] = "failed"
             output["message"] = f"예외 발생: {e}"
             output["screenshot"] = common.save_screenshot(page, f"survey_{account}")
+            common.log_error("seminar_survey", e, account=account, screenshot=output["screenshot"])
         finally:
             browser.close()
 

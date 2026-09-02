@@ -3,7 +3,7 @@ name: 일일 의료 포털 자동화
 on:
   schedule:
     - cron: '0 7 * * *'  # 매일 16:00 KST (UTC 07:00) 백스톱
-  workflow_dispatch:        # 수동 실행 및 외부 cron (cron-job.org 15:00 KST)
+  workflow_dispatch:        # 수동 실행 및 외부 cron (cron-job.org 00:15 KST)
 
 permissions:
   contents: write

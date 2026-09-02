@@ -1392,7 +1392,8 @@ def run(account: str, credentials_path: Path, headless: bool, tasks: list[str]) 
                         output[t] = task_dispatch[t]()
                     except Exception as e:
                         output[t] = {"status": "failed", "message": f"{t} 중 예외 발생: {e}"}
-                        save_screenshot(page, f"{t}_error")
+                        shot = save_screenshot(page, f"{t}_error")
+                        common.log_error("doctorville", e, account=account, task=t, screenshot=shot)
 
         except Exception as e:
             output["error"] = f"예외 발생: {e}"
@@ -1401,7 +1402,8 @@ def run(account: str, credentials_path: Path, headless: bool, tasks: list[str]) 
             for t in tasks:
                 if output.get(t, {}).get("status") == "skipped":
                     output[t] = {"status": "failed", "message": f"예외 발생: {e}"}
-            save_screenshot(page, "error")
+            shot = save_screenshot(page, "error")
+            common.log_error("doctorville", e, account=account, task=",".join(tasks), screenshot=shot)
         finally:
             browser.close()
 

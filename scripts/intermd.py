@@ -285,6 +285,7 @@ def run(account: str, credentials_path: Path, answer_path: Path, headless: bool 
         except Exception as e:
             result["message"] = f"예외 발생: {e}"
             result["screenshot"] = common.save_screenshot(page, f"intermd_{account}")
+            common.log_error("intermd", e, account=account, screenshot=result["screenshot"])
         finally:
             browser.close()
 

@@ -87,6 +87,11 @@ def run_script(script_name: str, extra_args: list[str] = None, timeout: int = 12
         parsed = _extract_json(stdout)
         if parsed is not None:
             return parsed
+        common.log_error(
+            script_name, f"JSON 파싱 실패. stdout: {stdout[:1000]}",
+            task=" ".join(extra_args or []),
+            extra={"stderr": proc.stderr[-2000:], "returncode": proc.returncode},
+        )
         return {
             "status": "failed",
             "message": f"JSON 파싱 실패. stdout: {stdout[:300]}",
@@ -98,8 +103,11 @@ def run_script(script_name: str, extra_args: list[str] = None, timeout: int = 12
                 os.killpg(e.pid, signal.SIGKILL)
             except Exception:
                 pass
+        common.log_error(script_name, e, task=" ".join(extra_args or []), status="timeout",
+                         extra={"timeout_sec": timeout})
         return {"status": "failed", "message": f"{script_name} 타임아웃 ({timeout}초)."}
     except Exception as e:
+        common.log_error(script_name, e, task=" ".join(extra_args or []))
         return {"status": "failed", "message": f"실행 예외: {e}"}
 
 
