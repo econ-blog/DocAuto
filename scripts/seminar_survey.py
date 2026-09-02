@@ -836,6 +836,35 @@ def probe_questions(survey_page) -> list[dict]:
         return []
 
 
+DIALOG_CLICK_TIMEOUT_MS = 3000
+
+
+def _clickable_dialog_buttons(dialog) -> list:
+    """모달 안에서 실제로 눌러도 되는 버튼만 우선순위대로 돌려준다.
+
+    ① "확인"/"닫기" 라벨 중 보이는 것 → ② 나머지 보이는 버튼.
+    hidden 버튼(button.dialog__close.hidden 등)은 아예 후보에서 뺀다 —
+    보이지 않는 버튼을 클릭하면 Playwright가 actionable 대기로 30초를 태운다.
+    """
+    def _visible(locator) -> list:
+        out = []
+        try:
+            items = locator.all()
+        except Exception:
+            return out
+        for item in items:
+            try:
+                if item.is_visible():
+                    out.append(item)
+            except Exception:
+                continue
+        return out
+
+    labeled = _visible(dialog.locator('button:has-text("확인"), button:has-text("닫기")'))
+    others = [b for b in _visible(dialog.locator("button")) if b not in labeled]
+    return labeled + others
+
+
 def dismiss_alerts(survey_page, max_rounds: int = 3) -> list[str]:
     """설문 창의 headlessui 모달(알림)을 닫는다. 닫은 메시지 목록을 반환.
 
@@ -848,13 +877,40 @@ def dismiss_alerts(survey_page, max_rounds: int = 3) -> list[str]:
         dialog = survey_page.locator('[role="dialog"][data-headlessui-state="open"]')
         if dialog.count() == 0:
             break
-        text = normalize(dialog.first.inner_text())
-        btn = dialog.first.locator('button:has-text("확인"), button:has-text("닫기")')
-        if btn.count() == 0:
-            btn = dialog.first.locator("button")
-        if btn.count() == 0:
+        try:
+            text = normalize(dialog.first.inner_text())
+        except Exception:
+            text = ""
+
+        # 2026-08-31: 세미나 5609에서 네 런 연속 두 계정 모두 여기서 죽었다.
+        # 모달 안에 숨은 닫기 버튼(button.dialog__close.hidden)이 있어 .first가
+        # 그걸 집었고, Playwright가 actionable 해지길 30초 기다리다 예외를 던져
+        # 설문 전체가 failed로 떨어졌다. 보이는 버튼만 후보로 삼고, 클릭은 짧은
+        # 타임아웃으로 묶어 실패해도 다음 후보로 넘어간다.
+        candidates = _clickable_dialog_buttons(dialog.first)
+        if not candidates:
+            # 닫을 수단이 없으면 Esc로 시도하고, 그래도 남으면 포기한다.
+            # 여기서 예외를 던지면 답을 다 채운 설문까지 통째로 실패가 된다.
+            try:
+                survey_page.keyboard.press("Escape")
+                survey_page.wait_for_timeout(500)
+            except Exception:
+                pass
+            if survey_page.locator('[role="dialog"][data-headlessui-state="open"]').count() == 0:
+                closed.append(text)
+                continue
             break
-        btn.first.click()
+
+        clicked = False
+        for btn in candidates:
+            try:
+                btn.click(timeout=DIALOG_CLICK_TIMEOUT_MS)
+                clicked = True
+                break
+            except Exception:
+                continue
+        if not clicked:
+            break
         survey_page.wait_for_timeout(1000)
         closed.append(text)
     return closed

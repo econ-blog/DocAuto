@@ -31,9 +31,13 @@ def test_dismiss_alerts_handles_headlessui_modals():
     mock_dialog.count.return_value = 1
     mock_dialog.first.inner_text.return_value = "작성 중인 정보를 불러왔습니다"
 
+    # 2026-08-31 이후 dismiss_alerts는 "보이는 버튼"만 클릭 후보로 삼는다.
+    # (숨은 button.dialog__close.hidden을 집어 30초 대기하다 죽던 회귀)
     mock_btn = MagicMock()
-    mock_btn.count.return_value = 1
-    mock_dialog.first.locator.return_value = mock_btn
+    mock_btn.is_visible.return_value = True
+    mock_btn_list = MagicMock()
+    mock_btn_list.all.return_value = [mock_btn]
+    mock_dialog.first.locator.return_value = mock_btn_list
 
     def mock_locator(sel):
         if '[role="dialog"][data-headlessui-state="open"]' in sel:
@@ -45,7 +49,7 @@ def test_dismiss_alerts_handles_headlessui_modals():
     dismissed = seminar_survey.dismiss_alerts(mock_page, max_rounds=1)
     assert len(dismissed) == 1
     assert "작성 중인 정보를 불러왔습니다" in dismissed[0]
-    mock_btn.first.click.assert_called_once()
+    mock_btn.click.assert_called_once()
 
 
 def test_run_survey_collects_new_text_question_into_survey_text_answers(tmp_path, monkeypatch):

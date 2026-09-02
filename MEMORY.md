@@ -675,7 +675,7 @@ m VOD 상세의 버튼 구성도 확인됐다: 미참여 세미나(5609)는
 |---|---|---|---|
 | m 미참여(not_done) 판정 | 설문 결과 JSON | 현재는 **채택되지 않는다** — m VOD 화면에 `로그아웃`/`마이페이지`가 없어 로그인 증거 조건을 못 넘는다. 완료 판정만 쓰이고 미참여는 `unknown`으로 보류된다(안전 쪽) | 미참여도 확정하고 싶으면 m VOD의 로그인 표식을 찾아 `MOBILE_LOGIN_MARKERS`에 넣는다 |
 | www 폴백이 헛돌지 않나 | `detail_probe` | m에서 판정이 서면 www는 아예 안 열림 | 매번 www까지 가면 m 주소·세션을 다시 본다 |
-| 5609 팝업 닫기 실패 | 설문 결과 JSON | **미해결.** 08-31에 네 런 연속 두 계정 모두 `dismiss_alerts`가 안 보이는 `button.dialog__close.hidden`을 30초 기다리다 `failed` | 다음 세션에서 고칠 것 — 보이는 버튼만 클릭하도록 |
+| 5609 팝업 닫기 실패 | 설문 결과 JSON | **2026-09-02 수정, 실제 런 미검증.** `dismiss_alerts`가 `is_visible()` 버튼만 후보로 삼고, 클릭은 3초(`DIALOG_CLICK_TIMEOUT_MS`)로 묶어 실패 시 다음 후보 → Esc → 포기 순으로 내려간다. 어느 경로에서도 예외를 던지지 않아 답을 다 채운 설문이 통째로 `failed`가 되지 않는다 | 그래도 `failed`면 모달이 `[role="dialog"][data-headlessui-state="open"]`가 아닌 것 — `logs/errors-*.jsonl`의 트레이스백부터 본다 |
 
 ---
 

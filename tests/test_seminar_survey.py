@@ -1,5 +1,6 @@
 import json
 
+import seminar_survey
 from seminar_survey import (
     add_missing_to_bank,
     load_bank,
@@ -495,3 +496,159 @@ def test_option_less_choice_question_is_still_missing():
     plan, missing = resolve_page([_choice_q("보기가 하나뿐", ["가"])], _banks())
     assert plan == []
     assert missing[0]["bank"] is None
+
+
+# ---------------------------------------------------------------------------
+# dismiss_alerts — 숨은 닫기 버튼 (세미나 5609, 2026-08-31)
+# ---------------------------------------------------------------------------
+
+class _FakeButton:
+    def __init__(self, visible, on_click=None, label=""):
+        self._visible = visible
+        self._on_click = on_click
+        self.label = label
+        self.clicks = 0
+
+    def is_visible(self):
+        return self._visible
+
+    def click(self, timeout=None):
+        self.clicks += 1
+        if self._on_click:
+            self._on_click()
+
+
+class _FakeLocator:
+    def __init__(self, buttons_by_selector, text="알림"):
+        self._by_selector = buttons_by_selector
+        self._text = text
+
+    def inner_text(self):
+        return self._text
+
+    def locator(self, selector):
+        return _FakeButtonList(self._by_selector.get(selector, []))
+
+
+class _FakeButtonList:
+    def __init__(self, buttons):
+        self._buttons = buttons
+
+    def all(self):
+        return list(self._buttons)
+
+
+class _FakeDialogRoot:
+    def __init__(self, page):
+        self._page = page
+
+    def count(self):
+        return 1 if self._page.dialog_open else 0
+
+    @property
+    def first(self):
+        return self._page.dialog
+
+
+class _FakeKeyboard:
+    def __init__(self, page):
+        self._page = page
+        self.pressed = []
+
+    def press(self, key):
+        self.pressed.append(key)
+
+
+class _FakeSurveyPage:
+    def __init__(self, dialog, dialog_open=True):
+        self.dialog = dialog
+        self.dialog_open = dialog_open
+        self.keyboard = _FakeKeyboard(self)
+        self.waits = []
+
+    def locator(self, selector):
+        return _FakeDialogRoot(self)
+
+    def wait_for_timeout(self, ms):
+        self.waits.append(ms)
+
+
+def test_dismiss_alerts_skips_hidden_close_button():
+    """숨은 button.dialog__close.hidden을 집어 30초 대기하다 죽던 회귀."""
+    hidden = _FakeButton(visible=False, label="hidden close")
+    page_holder = {}
+
+    def close():
+        page_holder["page"].dialog_open = False
+
+    visible = _FakeButton(visible=True, on_click=close, label="확인")
+    dialog = _FakeLocator({
+        'button:has-text("확인"), button:has-text("닫기")': [hidden, visible],
+        "button": [hidden, visible],
+    })
+    page = _FakeSurveyPage(dialog)
+    page_holder["page"] = page
+
+    closed = seminar_survey.dismiss_alerts(page)
+
+    assert hidden.clicks == 0, "숨은 버튼은 클릭 후보가 되면 안 된다"
+    assert visible.clicks == 1
+    assert closed == ["알림"]
+
+
+def test_dismiss_alerts_falls_back_to_escape():
+    """보이는 버튼이 하나도 없으면 Esc로 시도하고, 예외를 던지지 않는다."""
+    hidden = _FakeButton(visible=False)
+    dialog = _FakeLocator({
+        'button:has-text("확인"), button:has-text("닫기")': [],
+        "button": [hidden],
+    })
+    page = _FakeSurveyPage(dialog)
+
+    class _EscapeKeyboard(_FakeKeyboard):
+        def press(self, key):
+            super().press(key)
+            page.dialog_open = False
+
+    page.keyboard = _EscapeKeyboard(page)
+
+    closed = seminar_survey.dismiss_alerts(page)
+
+    assert page.keyboard.pressed == ["Escape"]
+    assert closed == ["알림"]
+
+
+def test_dismiss_alerts_gives_up_without_raising():
+    """닫을 수단이 전혀 없어도 설문 전체를 failed로 만들지 않는다."""
+    dialog = _FakeLocator({
+        'button:has-text("확인"), button:has-text("닫기")': [],
+        "button": [],
+    })
+    page = _FakeSurveyPage(dialog)
+
+    assert seminar_survey.dismiss_alerts(page) == []
+
+
+def test_dismiss_alerts_click_timeout_tries_next_candidate():
+    """첫 후보 클릭이 타임아웃해도 다음 후보로 넘어간다."""
+    page_holder = {}
+
+    def boom():
+        raise RuntimeError("Timeout 3000ms exceeded")
+
+    def close():
+        page_holder["page"].dialog_open = False
+
+    flaky = _FakeButton(visible=True, on_click=boom)
+    good = _FakeButton(visible=True, on_click=close)
+    dialog = _FakeLocator({
+        'button:has-text("확인"), button:has-text("닫기")': [flaky, good],
+        "button": [flaky, good],
+    })
+    page = _FakeSurveyPage(dialog)
+    page_holder["page"] = page
+
+    closed = seminar_survey.dismiss_alerts(page)
+
+    assert flaky.clicks == 1 and good.clicks == 1
+    assert closed == ["알림"]
