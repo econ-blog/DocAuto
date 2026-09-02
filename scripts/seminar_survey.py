@@ -553,7 +553,7 @@ def resolve_page(questions: list[dict], banks: dict) -> tuple[list[dict], list[d
 def get_survey_window(item: dict) -> tuple[datetime | None, datetime | None]:
     """세미나 설문 가능 시간 창 (open_dt, close_dt) 반환.
 
-    시작 시간 1시간 후 ~ 끝나는 시간 1시간 후.
+    시작 시간 30분 후 ~ 끝나는 시간 1시간 후.
     """
     if not isinstance(item, dict):
         return None, None
@@ -561,7 +561,7 @@ def get_survey_window(item: dict) -> tuple[datetime | None, datetime | None]:
     if start_str and isinstance(start_str, str):
         s_dt, e_dt = parse_dd_date(start_str)
         if s_dt:
-            open_dt = s_dt + timedelta(hours=1)
+            open_dt = s_dt + timedelta(minutes=30)
             end_dt = e_dt or (s_dt + timedelta(hours=1))
             close_dt = end_dt + timedelta(hours=1)
             return open_dt, close_dt
@@ -570,7 +570,7 @@ def get_survey_window(item: dict) -> tuple[datetime | None, datetime | None]:
             d_str, s_str = m.groups()
             try:
                 s_dt = datetime.strptime(f"{d_str} {s_str}", "%Y-%m-%d %H:%M").replace(tzinfo=common.KST)
-                return s_dt + timedelta(hours=1), s_dt + timedelta(hours=2)
+                return s_dt + timedelta(minutes=30), s_dt + timedelta(hours=2)
             except ValueError:
                 pass
 
@@ -580,7 +580,7 @@ def get_survey_window(item: dict) -> tuple[datetime | None, datetime | None]:
             ent_dt = datetime.fromisoformat(ent_str)
             if ent_dt.tzinfo is None:
                 ent_dt = ent_dt.replace(tzinfo=common.KST)
-            return ent_dt + timedelta(hours=1), ent_dt + timedelta(hours=2)
+            return ent_dt + timedelta(minutes=30), ent_dt + timedelta(hours=2)
         except (ValueError, TypeError):
             pass
     return None, None
@@ -594,8 +594,8 @@ def get_survey_cutoff(item: dict) -> datetime | None:
 
 def evaluate_survey_cutoff(item: dict, now_dt: datetime = None) -> str:
     """설문 시도 가능 여부 판정.
-    - 'ready': 설문 가능 시간대 (시작 1시간 후 ~ 종료 1시간 후, 또는 시간 정보 없음)
-    - 'not_ready': 설문 시작 전 (시작 1시간 후 이전)
+    - 'ready': 설문 가능 시간대 (시작 30분 후 ~ 종료 1시간 후, 또는 시간 정보 없음)
+    - 'not_ready': 설문 시작 전 (시작 30분 후 이전)
     - 'closed': 설문 마감 후 (종료 1시간 후 경과)
     """
     if now_dt is None:
@@ -1243,7 +1243,7 @@ def run_survey(
             mark_survey_status(state, account, sid_val, "closed", state_file)
         prefix = f"[{title}] " if title else ""
         if timing == "not_ready":
-            result["message"] = f"{prefix}설문 시작 전 (시작 1시간 후부터 가능)."
+            result["message"] = f"{prefix}설문 시작 전 (시작 30분 후부터 가능)."
         elif timing == "closed":
             result["message"] = f"{prefix}설문 마감 (종료 1시간 후 경과)."
         else:

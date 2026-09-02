@@ -23,10 +23,13 @@ def test_evaluate_survey_cutoff_before_deadline():
         "start": "2026-08-10(월) 13:00 ~ 14:00",
         "entered_at": "2026-08-10T13:05:00+09:00",
     }
-    # Window is 13:00+1h (14:00) ~ 14:00+1h (15:00) KST
-    # 13:30 KST is before open (14:00) -> not_ready
-    before_open = datetime(2026, 8, 10, 13, 30, tzinfo=KST)
+    # Window is 13:00+30m (13:30) ~ 14:00+1h (15:00) KST
+    # 13:15 KST is before open (13:30) -> not_ready
+    before_open = datetime(2026, 8, 10, 13, 15, tzinfo=KST)
     assert evaluate_survey_cutoff(item, before_open) == "not_ready"
+
+    # 13:30 정각부터 열린다 (경계 포함)
+    assert evaluate_survey_cutoff(item, datetime(2026, 8, 10, 13, 30, tzinfo=KST)) == "ready"
 
     # 14:30 KST is within window -> ready
     in_window = datetime(2026, 8, 10, 14, 30, tzinfo=KST)
@@ -62,8 +65,8 @@ def test_fallback_cutoff_start_only():
     cutoff = get_survey_cutoff(item)
     assert cutoff == datetime(2026, 8, 10, 15, 0, tzinfo=KST)
 
-    before_now = datetime(2026, 8, 10, 13, 30, tzinfo=KST)
-    in_now = datetime(2026, 8, 10, 14, 30, tzinfo=KST)
+    before_now = datetime(2026, 8, 10, 13, 15, tzinfo=KST)
+    in_now = datetime(2026, 8, 10, 13, 45, tzinfo=KST)
     after_now = datetime(2026, 8, 10, 15, 30, tzinfo=KST)
     assert evaluate_survey_cutoff(item, before_now) == "not_ready"
     assert evaluate_survey_cutoff(item, in_now) == "ready"
@@ -78,8 +81,8 @@ def test_fallback_cutoff_entered_at_only():
     cutoff = get_survey_cutoff(item)
     assert cutoff == datetime(2026, 8, 10, 15, 0, tzinfo=KST)
 
-    before_now = datetime(2026, 8, 10, 13, 30, tzinfo=KST)
-    in_now = datetime(2026, 8, 10, 14, 30, tzinfo=KST)
+    before_now = datetime(2026, 8, 10, 13, 15, tzinfo=KST)
+    in_now = datetime(2026, 8, 10, 13, 45, tzinfo=KST)
     after_now = datetime(2026, 8, 10, 15, 30, tzinfo=KST)
     assert evaluate_survey_cutoff(item, before_now) == "not_ready"
     assert evaluate_survey_cutoff(item, in_now) == "ready"
@@ -90,8 +93,8 @@ def test_naive_datetime_conversion():
     item = {
         "start": "2026-08-10(월) 13:00 ~ 14:00",
     }
-    # Window: 14:00 ~ 15:00 KST
-    naive_before = datetime(2026, 8, 10, 13, 30)
+    # Window: 13:30 ~ 15:00 KST
+    naive_before = datetime(2026, 8, 10, 13, 15)
     naive_in = datetime(2026, 8, 10, 14, 30)
     naive_after = datetime(2026, 8, 10, 15, 30)
 
