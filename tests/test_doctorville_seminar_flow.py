@@ -66,7 +66,9 @@ def test_task_seminar_new_application_success_sets_dirty_and_records(tmp_path, m
 
     mock_btn = MagicMock()
     # 첫 상세 진입: "신청하기", 신청 후 재진입: "신청취소"
-    mock_btn.inner_text.side_effect = ["신청하기", "신청취소"]
+    mock_btn.inner_text.side_effect = ["신청하기"]
+    # 재진입 확인은 a.btn_bn의 .first를 읽는다(strict 위반 방지).
+    mock_btn.first.inner_text.return_value = "신청취소"
 
     mock_confirm_btn = MagicMock()
     mock_confirm_btn.count.return_value = 1
@@ -108,7 +110,8 @@ def test_task_seminar_recheck_failure_does_not_record_and_returns_unverified(tmp
 
     mock_btn = MagicMock()
     # 첫 진입: "신청하기", 재진입 시에도 여전히 "신청하기" (신청 실패 상태)
-    mock_btn.inner_text.side_effect = ["신청하기", "신청하기"]
+    mock_btn.inner_text.side_effect = ["신청하기"]
+    mock_btn.first.inner_text.return_value = "신청하기"
 
     mock_confirm_btn = MagicMock()
     mock_confirm_btn.count.return_value = 0
@@ -168,7 +171,9 @@ def test_task_seminar_account_none_does_not_persist(tmp_path, monkeypatch):
     mock_page.evaluate.return_value = ["6004"]
 
     mock_btn = MagicMock()
-    mock_btn.inner_text.side_effect = ["신청하기", "신청취소"]
+    mock_btn.inner_text.side_effect = ["신청하기"]
+    # 재진입 확인은 a.btn_bn의 .first를 읽는다(strict 위반 방지).
+    mock_btn.first.inner_text.return_value = "신청취소"
 
     mock_confirm_btn = MagicMock()
     mock_confirm_btn.count.return_value = 1
@@ -399,7 +404,9 @@ def test_task_seminar_confirm_modal_uses_visible_selector(tmp_path, monkeypatch)
     mock_page.evaluate.return_value = ["6010"]
 
     mock_btn = MagicMock()
-    mock_btn.inner_text.side_effect = ["신청하기", "신청취소"]
+    mock_btn.inner_text.side_effect = ["신청하기"]
+    # 재진입 확인은 a.btn_bn의 .first를 읽는다(strict 위반 방지).
+    mock_btn.first.inner_text.return_value = "신청취소"
 
     seen = []
 
@@ -434,7 +441,8 @@ def test_task_seminar_unverified_saves_screenshot(tmp_path, monkeypatch):
     mock_page.evaluate.return_value = ["6011"]
 
     mock_btn = MagicMock()
-    mock_btn.inner_text.side_effect = ["신청하기", "신청하기"]
+    mock_btn.inner_text.side_effect = ["신청하기"]
+    mock_btn.first.inner_text.return_value = "신청하기"
 
     def locator_side_effect(sel):
         if "btn_bn" in sel:
@@ -452,3 +460,46 @@ def test_task_seminar_unverified_saves_screenshot(tmp_path, monkeypatch):
 
     assert res["status"] == "unverified"
     assert res["screenshots"] == {"6011": "/logs/seminar_6011_unverified.png"}
+
+
+def test_task_seminar_unverified_carries_text_diagnostics(tmp_path, monkeypatch):
+    """미검증 건은 스크린샷뿐 아니라 텍스트 근거(버튼 문구·모달 처리)를 남겨야 한다.
+
+    2026-09-02 세미나 5675가 두 계정 두 런 연속 unverified로 떨어졌는데, 이
+    경로는 예외를 안 던져 errors 로그가 없고 스크린샷은 artifact 7일 만료라
+    사후 진단이 불가능했다.
+    """
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text("{}", encoding="utf-8")
+
+    mock_page = MagicMock()
+    mock_page.evaluate.return_value = ["6001"]
+
+    mock_btn = MagicMock()
+    mock_btn.inner_text.side_effect = ["신청하기"]
+    mock_btn.first.inner_text.return_value = "신청하기"
+    mock_btn.count.return_value = 2
+
+    mock_confirm_btn = MagicMock()
+    mock_confirm_btn.count.return_value = 1
+
+    def locator_side_effect(sel):
+        if "btn_bn" in sel:
+            return mock_btn
+        if "btn_confirm" in sel:
+            return mock_confirm_btn
+        return MagicMock()
+
+    mock_page.locator.side_effect = locator_side_effect
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+    monkeypatch.setattr(doctorville, "_seminar_detail_meta", lambda p: ("미검증 세미나", ""))
+    monkeypatch.setattr(doctorville, "save_screenshot", lambda *a, **k: "shot.png")
+
+    res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+
+    assert res["status"] == "unverified"
+    diag = res["diagnostics"]["6001"]
+    assert diag["btn_before"] == "신청하기"
+    assert diag["btn_after"] == "신청하기"
+    assert diag["btn_count_after"] == 2
+    assert diag["modal"] == "동의합니다."

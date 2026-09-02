@@ -1186,6 +1186,9 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
     # 미검증 건의 화면. 이게 없어서 2026-09-02 세미나 5675 실패를 로그만으로
     # 진단할 수 없었다 — unverified 경로는 예외를 안 던져 log_error도 안 남는다.
     shots = {}
+    # 미검증 건의 텍스트 근거(클릭 전 버튼 문구, 동의 모달 처리 결과, 재확인 시
+    # 버튼 문구·개수). 스크린샷은 artifact 7일 만료라 로그에 남지 않는다.
+    diags = {}
 
     # 정리(prune)는 daily가 하루 1회 맡는다. 여기서 하면 30분마다 파일이 바뀌어
     # 커밋만 늘고, 지난 세미나가 남아 있어도 "상세를 안 연다"는 동작은 옳다.
@@ -1246,6 +1249,10 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
 
         btn.click()
 
+        # 미검증 진단. 스크린샷만으로는 원인을 좁히지 못한 이력이 있어(2026-09-02
+        # 세미나 5675, 두 계정 두 런 연속) 텍스트 근거를 함께 남긴다.
+        diag = {"btn_before": (btn_text or "").strip()[:80], "modal": "none"}
+
         # 개인정보 동의 모달 처리.
         #
         # button.btn_confirm은 페이지에 여러 개 있고 대부분 숨어 있다. **반드시
@@ -1257,15 +1264,23 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
             visible_confirm = page.locator("button.btn_confirm:visible")
             visible_confirm.first.wait_for(state="visible", timeout=5000)
             agree_btn = page.locator('button.btn_confirm:visible:has-text("동의합니다.")')
-            target = agree_btn.first if agree_btn.count() > 0 else visible_confirm.first
+            if agree_btn.count() > 0:
+                target, diag["modal"] = agree_btn.first, "동의합니다."
+            else:
+                target, diag["modal"] = visible_confirm.first, "btn_confirm"
             target.click()
         except PlaywrightTimeoutError:
-            pass  # 모달 없는 세미나
+            pass  # 모달 없는 세미나 (diag["modal"]는 "none" 유지)
 
         # 완료 확인 — 상세 페이지 재진입 후 a.btn_bn 텍스트 = "신청취소" 검증
         common.goto_with_retry(page, detail_url, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS)
         try:
-            btn_text = page.locator("a.btn_bn").inner_text()
+            # `.first`를 쓴다. a.btn_bn이 둘 이상이면 strict 위반으로 inner_text가
+            # 통째로 터져 "재확인 실패"로 둔갑한다 — 개수는 진단에 남긴다.
+            after_btns = page.locator("a.btn_bn")
+            diag["btn_count_after"] = after_btns.count()
+            btn_text = after_btns.first.inner_text()
+            diag["btn_after"] = (btn_text or "").strip()[:80]
             if "신청취소" in btn_text:
                 applied.append(int(sid))
                 # 기록은 "신청취소" 확인 후에만 한다. 클릭했다는 사실만으로
@@ -1276,10 +1291,13 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
                 _log_seminar(sid, "success", account, title, start)
             else:
                 failed.append(sid)
+                diags[sid] = diag
                 shots[sid] = save_screenshot(page, f"seminar_{sid}_unverified")
                 _log_seminar(sid, "unverified", account, title, start)
-        except Exception:
+        except Exception as exc:
             failed.append(sid)
+            diag["exception"] = f"{type(exc).__name__}: {exc}"[:200]
+            diags[sid] = diag
             shots[sid] = save_screenshot(page, f"seminar_{sid}_unverified")
             _log_seminar(sid, "unverified", account, title, start)
 
@@ -1295,6 +1313,7 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
     if failed:
         result["status"] = "unverified"
         result["screenshots"] = shots
+        result["diagnostics"] = diags
         result["message"] = f"신청 시도 후 상세 재확인 실패 — 완료 {len(applied)}건, 미검증 {len(failed)}건: {failed}{suffix}"
     elif applied:
         result["status"] = "success"
