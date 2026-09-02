@@ -815,6 +815,22 @@
       "start_time": "13:00",
       "title": "일반 개원의가 바라보는 팩수클루",
       "year": 2026
+    },
+    "5669": {
+      "applied_at": "2026-09-02T11:33:01.513079+09:00",
+      "date": "2026-09-14",
+      "day": 14,
+      "end_hour": 13,
+      "end_minute": 0,
+      "end_time": "13:00",
+      "month": 9,
+      "start": "2026-09-14(월) 12:00 ~ 13:00",
+      "start_date": "2026-09-14",
+      "start_hour": 12,
+      "start_minute": 0,
+      "start_time": "12:00",
+      "title": "True Cardiovascular Event Prevention from the HEART, CRESTOR",
+      "year": 2026
     }
   },
   "wonju": {
@@ -1632,6 +1648,22 @@
       "start_minute": 0,
       "start_time": "13:00",
       "title": "일반 개원의가 바라보는 팩수클루",
+      "year": 2026
+    },
+    "5669": {
+      "applied_at": "2026-09-02T11:33:58.034578+09:00",
+      "date": "2026-09-14",
+      "day": 14,
+      "end_hour": 13,
+      "end_minute": 0,
+      "end_time": "13:00",
+      "month": 9,
+      "start": "2026-09-14(월) 12:00 ~ 13:00",
+      "start_date": "2026-09-14",
+      "start_hour": 12,
+      "start_minute": 0,
+      "start_time": "12:00",
+      "title": "True Cardiovascular Event Prevention from the HEART, CRESTOR",
       "year": 2026
     }
   }
