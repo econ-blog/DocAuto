@@ -60,10 +60,10 @@
         "bjh7790": "success",
         "wonju": "success"
       },
-      "updated_at": "14:37",
+      "updated_at": "17:11",
       "survey": {
-        "bjh7790": "failed",
-        "wonju": "failed"
+        "bjh7790": "closed",
+        "wonju": "closed"
       },
       "apply": {
         "bjh7790": "already_done",
@@ -78,9 +78,9 @@
         "bjh7790": "success",
         "wonju": "success"
       },
-      "updated_at": "14:36",
+      "updated_at": "17:11",
       "survey": {
-        "bjh7790": "not_ready",
+        "bjh7790": "closed",
         "wonju": "success"
       },
       "apply": {
@@ -144,6 +144,16 @@
         "wonju": "success"
       },
       "updated_at": "13:33"
+    },
+    "5672": {
+      "id": "5672",
+      "title": "[대한내분비학회] 제4회 ENstagram Webinar",
+      "start": "2026-09-16(수) 19:00 ~ 20:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:08"
     }
   }
 }
