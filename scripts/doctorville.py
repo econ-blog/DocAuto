@@ -1342,6 +1342,21 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
                 ).count() > 0
             except Exception:
                 diag["logged_in"] = None
+            # 클릭·동의까지 정상인데 신청만 안 들어가는 상태(5675)에서는 화면에
+            # 남은 것이 유일한 단서다. 보이는 버튼 문구를 모아 둔다 — 신청이
+            # 2단계(별도 폼·추가 선택)라면 여기서 드러난다.
+            try:
+                diag["visible_buttons"] = page.evaluate(
+                    r"""() => Array.from(
+                            document.querySelectorAll('button, a.btn_bn, input[type=submit]')
+                        )
+                        .filter(el => el.offsetParent !== null)
+                        .map(el => (el.innerText || el.value || '').trim())
+                        .filter(t => t)
+                        .slice(0, 25)"""
+                )
+            except Exception:
+                pass
             btn_text = after_btns.first.inner_text()
             diag["btn_after"] = (btn_text or "").strip()[:80]
             if "신청취소" in btn_text:
