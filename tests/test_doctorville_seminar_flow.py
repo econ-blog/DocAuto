@@ -299,11 +299,11 @@ def test_task_seminar_fills_todays_titles_without_opening_details(tmp_path, monk
     assert rows[0][1:4] == ["17:00", "18:30", "☑️"]
 
 
-def test_task_seminar_repairs_polluted_title_in_applied_file(tmp_path, monkeypatch):
-    """오염된 이력 제목은 목록 제목으로 영구히 덮어써진다 — 오늘 방송분이 아니어도.
+def test_task_seminar_leaves_applied_titles_untouched(tmp_path, monkeypatch):
+    """이미 신청한 세미나의 이력 제목은 목록 제목으로 덮어쓰지 않는다.
 
-    예전 코드는 표에만 채워 넣고 이력은 그대로 뒀다. 그래서 이미 신청한
-    세미나(상세를 안 여는)의 제목은 "엠서클 통합회원"으로 영원히 남았다.
+    제목 복구는 오염된 이력 108건을 한 번 되돌리려고 넣었던 일회성 장치다.
+    이력이 정리된 지금은 매 런마다 파일만 더럽히므로 제거했다.
     """
     applied_file = tmp_path / "seminar_applied.json"
     applied_file.write_text(json.dumps({"bjh7790": {
@@ -334,17 +334,12 @@ def test_task_seminar_repairs_polluted_title_in_applied_file(tmp_path, monkeypat
 
     assert res["skipped_known"] == 2
     saved = json.loads(applied_file.read_text(encoding="utf-8"))["bjh7790"]
-    assert saved["5597"]["title"] == "ALL 4 ONE WEB Symposium"
+    assert saved["5597"]["title"] == "엠서클 통합회원"
     assert saved["5607"]["title"] == "진짜 세미나 이름"
 
 
-def test_task_seminar_repairs_titles_even_when_nothing_applicable(tmp_path, monkeypatch):
-    """신청 가능한 세미나가 하나도 없어도 제목 복구분은 저장된다.
-
-    2026-09-02 run 33582276817: 목록 순회 기준이 span.ico_apply라
-    이미 신청한 세미나가 아예 안 잡혔고 두 계정 모두 no_target으로 끝났다.
-    복구가 조기 반환 뒤에 있으면 영원히 실행되지 않는다.
-    """
+def test_task_seminar_no_target_writes_nothing(tmp_path, monkeypatch):
+    """신청 가능한 세미나가 없으면 이력 파일을 건드리지 않고 no_target으로 끝난다."""
     applied_file = tmp_path / "seminar_applied.json"
     applied_file.write_text(json.dumps({"bjh7790": {"5597": {
         "applied_at": "2026-08-20T16:42:12+09:00",
@@ -363,9 +358,8 @@ def test_task_seminar_repairs_titles_even_when_nothing_applicable(tmp_path, monk
     res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
 
     assert res["status"] == "no_target"
-    assert res["titles_repaired"] == 1
     saved = json.loads(applied_file.read_text(encoding="utf-8"))["bjh7790"]
-    assert saved["5597"]["title"] == "ALL 4 ONE WEB Symposium"
+    assert saved["5597"]["title"] == "엠서클 통합회원"
 
 
 def test_task_seminar_only_applies_to_applicable_entries(tmp_path, monkeypatch):

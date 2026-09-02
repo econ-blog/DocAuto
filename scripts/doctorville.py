@@ -1191,34 +1191,20 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
     result["skipped_known"] = len(seminar_ids) - len(targets)
     dirty = False
 
-    # 이미 신청한 세미나는 상세를 열지 않으므로 제목을 새로 알 길이 없다(이력에
-    # 남은 제목은 대부분 오염돼 있다). 목록에서 긁은 제목은 페이지 로드 없이
-    # 공짜로 얻은 것이니, 이력의 오염된 제목을 여기서 덮어써 영구히 고친다 —
-    # 표에만 채워 넣던 예전 코드는 이력을 손대지 않아 오염이 계속 남았다.
-    repaired = 0
+    # 오늘 방송분 중 이미 신청 이력이 있는 건은 상세를 열지 않는다. 표의 '신청'
+    # 칸이 비지 않도록 여기서만 already_done으로 올린다(페이지 로드 없음).
     if account:
         today_str = datetime.now(common.KST).strftime("%Y-%m-%d")
-        for sid, listed_title in list_titles.items():
-            record = applied_data.get(account, {}).get(str(sid))
-            clean = runlog.clean_title(listed_title)
-            if not (record and clean):
+        for sid, record in applied_data.get(account, {}).items():
+            if record.get("start_date") != today_str:
                 continue
-            # 이력에 이미 멀쩡한 제목이 있으면 건드리지 않는다.
-            if not runlog.clean_title(record.get("title", "")):
-                record["title"] = clean
-                repaired += 1
-                dirty = True
-            if record.get("start_date") == today_str:
-                _log_seminar(sid, "already_done", account, clean, record.get("start", ""))
+            title = runlog.clean_title(list_titles.get(sid, "")) or record.get("title", "")
+            _log_seminar(sid, "already_done", account, title, record.get("start", ""))
 
-    # 제목 복구를 마친 뒤에 판정한다. 신청할 게 없어도 복구분은 저장해야 한다.
     if not seminar_ids:
-        if dirty:
-            save_applied(applied_data, applied_path)
         result["status"] = "no_target"
         result["message"] = "신청 가능한 세미나 없음"
         result["count"] = 0
-        result["titles_repaired"] = repaired
         return result
 
     for sid in targets:
@@ -1294,7 +1280,6 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
 
     result["applied"] = applied
     result["count"] = len(applied)
-    result["titles_repaired"] = repaired
 
     skipped = result["skipped_known"]
     suffix = f" (이력으로 상세 조회 생략 {skipped}건)" if skipped else ""
