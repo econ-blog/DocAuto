@@ -86,7 +86,7 @@
 | `scripts/logs/` | 실패 스크린샷·표 PNG (gitignore, artifact 7일) |
 | `logs/daily-YYYY-MM-DD.json` | daily 실행 로그. 런마다 `run{N}` append. 행=run, 열=모듈 |
 | `logs/seminar-YYYY-MM-DD.json` | 세미나 실행 로그. 행=세미나 |
-| `logs/errors-YYYY-MM.jsonl` | **영구 오류 로그**(append-only, prune 대상 아님). 예외 클래스·메시지·트레이스백·스크린샷·GH run |
+| `logs/errors-YYYY-MM.jsonl` | **영구 오류 로그**(append-only, prune 대상 아님). 예외 클래스·메시지·트레이스백·스크린샷·GH run. **에이전트 진단용 — 텔레그램으로 보내지 않는다** |
 
 Secrets: `CREDENTIALS_JSON`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
 
@@ -100,7 +100,7 @@ Secrets: `CREDENTIALS_JSON`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
 |---|---|
 | `no_answer` | `quiz_answers.json`에 깔린 보기 중 정답만 남긴다 → `.claude/skills/answer-bank/SKILL.md` |
 | `incomplete_bank` | 알림의 `bank` 값이 가리키는 설문 족보를 채운다 → 같은 스킬 |
-| `failed` / `unverified` | `logs/errors-YYYY-MM.jsonl` → Actions artifact 스크린샷 순으로 본다 |
+| `failed` / `unverified` | `logs/errors-YYYY-MM.jsonl`(트레이스백) → Actions artifact 스크린샷 순으로 본다 |
 | 연속 출석일이 10의 배수 근접 | 룰렛 수동 참여 안내 |
 | 채팅으로 받은 정답 | `제품명 시퀀스` / `제품명 정답` 두 형식 모두 처리 → 같은 스킬 |
 
