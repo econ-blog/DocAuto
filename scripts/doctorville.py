@@ -1078,10 +1078,14 @@ def task_quiz(page, creds: dict) -> dict:
 #
 # 조회를 a.list_detail 안으로 한정하는 게 핵심이다. document 전역으로 뒤지면
 # 사이트 헤더("엠서클 통합회원")가 제목으로 잡힌다.
+#
+# 순회 기준은 a.list_detail이지 span.ico_apply가 아니다. ico_apply(신청 가능
+# 배지)로 훑으면 **이미 신청한 세미나는 아예 안 잡힌다** — 2026-09-02 run
+# 33582276817이 두 계정 모두 no_target으로 끝나면서 확인됐다. 신청 대상은
+# applicable 플래그로 가리고, 제목은 목록에 있는 전부에서 긁는다(이미 신청한
+# 세미나의 오염된 이력 제목을 페이지 로드 없이 고치는 유일한 경로다).
 SEMINAR_LIST_JS = r"""
-    () => Array.from(document.querySelectorAll('span.ico_apply')).map(span => {
-        const aEl = span.closest('a.list_detail');
-        if (!aEl) return null;
+    () => Array.from(document.querySelectorAll('a.list_detail')).map(aEl => {
         let sid = null;
         try { sid = new URL(aEl.href).searchParams.get('seminarId'); } catch(e) { return null; }
         if (!sid) return null;
@@ -1097,7 +1101,7 @@ SEMINAR_LIST_JS = r"""
             );
             title = filtered.length > 0 ? filtered[0] : '';
         }
-        return { id: sid, title: title };
+        return { id: sid, title: title, applicable: !!aEl.querySelector('span.ico_apply') };
     }).filter(Boolean)
 """
 
@@ -1154,25 +1158,25 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
 
     seminar_ids = []
     list_titles = {}
+    seen = set()
     for item in listed or []:
-        # 정상 경로는 {"id","title"}. DOM이 바뀌어 문자열만 오더라도 id는 건지고
-        # 제목만 포기한다 — 제목 때문에 신청 자체가 멈추면 안 된다.
+        # 정상 경로는 {"id","title","applicable"}. DOM이 바뀌어 문자열만 오더라도
+        # id는 건지고 제목만 포기한다 — 제목 때문에 신청 자체가 멈추면 안 된다.
+        # applicable 키가 없는 옛 형태면 신청 대상으로 본다(기존 동작 유지).
         if isinstance(item, dict):
-            sid, title = item.get("id"), item.get("title") or ""
+            sid = item.get("id")
+            title = item.get("title") or ""
+            applicable = item.get("applicable", True)
         else:
-            sid, title = item, ""
+            sid, title, applicable = item, "", True
         if not sid:
             continue
         sid = str(sid)
-        if sid not in list_titles:
-            seminar_ids.append(sid)
+        if sid not in seen:
+            seen.add(sid)
+            if applicable:
+                seminar_ids.append(sid)
         list_titles[sid] = title
-
-    if not seminar_ids:
-        result["status"] = "no_target"
-        result["message"] = "신청 가능한 세미나 없음"
-        result["count"] = 0
-        return result
 
     applied = []
     failed = []
@@ -1188,6 +1192,7 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
     # 남은 제목은 대부분 오염돼 있다). 목록에서 긁은 제목은 페이지 로드 없이
     # 공짜로 얻은 것이니, 이력의 오염된 제목을 여기서 덮어써 영구히 고친다 —
     # 표에만 채워 넣던 예전 코드는 이력을 손대지 않아 오염이 계속 남았다.
+    repaired = 0
     if account:
         today_str = datetime.now(common.KST).strftime("%Y-%m-%d")
         for sid, listed_title in list_titles.items():
@@ -1198,9 +1203,20 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
             # 이력에 이미 멀쩡한 제목이 있으면 건드리지 않는다.
             if not runlog.clean_title(record.get("title", "")):
                 record["title"] = clean
+                repaired += 1
                 dirty = True
             if record.get("start_date") == today_str:
                 _log_seminar(sid, "already_done", account, clean, record.get("start", ""))
+
+    # 제목 복구를 마친 뒤에 판정한다. 신청할 게 없어도 복구분은 저장해야 한다.
+    if not seminar_ids:
+        if dirty:
+            save_applied(applied_data, applied_path)
+        result["status"] = "no_target"
+        result["message"] = "신청 가능한 세미나 없음"
+        result["count"] = 0
+        result["titles_repaired"] = repaired
+        return result
 
     for sid in targets:
         detail_url = f"{SEMINAR_DETAIL_URL}?seminarId={sid}"
@@ -1275,6 +1291,7 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
 
     result["applied"] = applied
     result["count"] = len(applied)
+    result["titles_repaired"] = repaired
 
     skipped = result["skipped_known"]
     suffix = f" (이력으로 상세 조회 생략 {skipped}건)" if skipped else ""

@@ -336,3 +336,56 @@ def test_task_seminar_repairs_polluted_title_in_applied_file(tmp_path, monkeypat
     saved = json.loads(applied_file.read_text(encoding="utf-8"))["bjh7790"]
     assert saved["5597"]["title"] == "ALL 4 ONE WEB Symposium"
     assert saved["5607"]["title"] == "진짜 세미나 이름"
+
+
+def test_task_seminar_repairs_titles_even_when_nothing_applicable(tmp_path, monkeypatch):
+    """신청 가능한 세미나가 하나도 없어도 제목 복구분은 저장된다.
+
+    2026-09-02 run 33582276817: 목록 순회 기준이 span.ico_apply라
+    이미 신청한 세미나가 아예 안 잡혔고 두 계정 모두 no_target으로 끝났다.
+    복구가 조기 반환 뒤에 있으면 영원히 실행되지 않는다.
+    """
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text(json.dumps({"bjh7790": {"5597": {
+        "applied_at": "2026-08-20T16:42:12+09:00",
+        "title": "엠서클 통합회원",
+        "start": "2026-09-09(수) 18:00 ~ 19:30",
+        "start_date": "2026-09-09",
+    }}}), encoding="utf-8")
+
+    mock_page = MagicMock()
+    mock_page.evaluate.side_effect = [
+        # 이미 신청해서 ico_apply 배지가 없다 → 신청 대상 0건
+        [{"id": "5597", "title": "ALL 4 ONE WEB Symposium", "applicable": False}],
+    ]
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+
+    res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+
+    assert res["status"] == "no_target"
+    assert res["titles_repaired"] == 1
+    saved = json.loads(applied_file.read_text(encoding="utf-8"))["bjh7790"]
+    assert saved["5597"]["title"] == "ALL 4 ONE WEB Symposium"
+
+
+def test_task_seminar_only_applies_to_applicable_entries(tmp_path, monkeypatch):
+    """applicable=False인 항목은 신청 대상 집계에서 빠진다(상세를 열지 않는다)."""
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text(json.dumps({"bjh7790": {
+        "5700": {"applied_at": "2026-09-01T10:00:00+09:00", "title": "신청 가능한 것"},
+        "5701": {"applied_at": "2026-09-01T10:00:00+09:00", "title": "이미 신청한 것"},
+    }}), encoding="utf-8")
+
+    mock_page = MagicMock()
+    mock_page.evaluate.side_effect = [
+        [
+            {"id": "5700", "title": "신청 가능한 것", "applicable": True},
+            {"id": "5701", "title": "이미 신청한 것", "applicable": False},
+        ],
+    ]
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+
+    res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+
+    # 신청 대상 후보는 5700 하나뿐이다. 5701은 목록에 있었지만 집계에 안 들어간다.
+    assert res["skipped_known"] == 1
