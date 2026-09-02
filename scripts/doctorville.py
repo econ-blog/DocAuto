@@ -1332,6 +1332,16 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
             # 통째로 터져 "재확인 실패"로 둔갑한다 — 개수는 진단에 남긴다.
             after_btns = page.locator("a.btn_bn")
             diag["btn_count_after"] = after_btns.count()
+            diag["url_after"] = page.url
+            # 로그인 증거. 이미 신청한 계정에도 "신청하기"가 보이면 이 페이지를
+            # 로그아웃 상태로 읽고 있다는 뜻이다 — 2026-09-02 5675에서 실제로
+            # 신청 완료된 bjh7790이 "신청하기"로 읽혔다.
+            try:
+                diag["logged_in"] = page.locator(
+                    ':text("로그아웃"), :text("마이페이지")'
+                ).count() > 0
+            except Exception:
+                diag["logged_in"] = None
             btn_text = after_btns.first.inner_text()
             diag["btn_after"] = (btn_text or "").strip()[:80]
             if "신청취소" in btn_text:
