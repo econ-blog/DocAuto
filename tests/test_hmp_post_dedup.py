@@ -29,6 +29,7 @@ def test_broken_selector_node_alerts_and_fails_run():
         "hmp": {
             "site": "hmp",
             "status": "already_done",
+            "verified_by": "evidence",
             "post": {"status": "success", "verified_by": "rtn_code_100"},
             "post_precheck": {
                 "status": "unverified",
@@ -48,6 +49,7 @@ def test_successful_precheck_stays_quiet():
         "hmp": {
             "site": "hmp",
             "status": "already_done",
+            "verified_by": "evidence",
             "post": {"status": "already_done", "verified_by": "my_post_list_date_match"},
         }
     }

@@ -209,3 +209,37 @@ def test_hmp_roulette_no_target_when_start_button_absent():
     assert results[0]["message"] == "START 버튼이 표시되지 않음"
 
 
+
+
+# ---------------------------------------------------------------------------
+# already_done도 긍정 증거를 요구한다 (2026-09-02)
+# ---------------------------------------------------------------------------
+
+def test_already_done_without_evidence_degrades_in_notify():
+    import notify
+    assert notify.severity_of({"status": "already_done"}) == "alert"
+    assert notify.severity_of({"status": "already_done", "verified_by": "x"}) == "quiet"
+
+
+def test_already_done_without_evidence_degrades_in_table():
+    import runlog
+    assert runlog.status_of({"status": "already_done"}) == "unverified"
+    assert runlog.status_of({"status": "already_done", "verified_by": "x"}) == "already_done"
+
+
+def test_notify_and_runlog_share_the_same_rule():
+    """표와 알림의 강등 규칙이 갈라지면 표는 초록인데 알림만 빨개진다."""
+    import notify
+    import runlog
+
+    assert runlog.notify.NEEDS_EVIDENCE is notify.NEEDS_EVIDENCE
+    for st in notify.NEEDS_EVIDENCE:
+        assert notify.severity_of({"status": st}) == "alert"
+        assert runlog.status_of({"status": st}) == "unverified"
+
+
+def test_quiet_statuses_still_need_no_evidence():
+    """건너뜀·대상없음·마감은 완료 주장이 아니므로 증거를 요구하지 않는다."""
+    import notify
+    for st in ("skipped", "no_target", "not_ready", "closed"):
+        assert notify.severity_of({"status": st}) == "quiet"

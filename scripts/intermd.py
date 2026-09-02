@@ -217,6 +217,7 @@ def run(account: str, credentials_path: Path, answer_path: Path, headless: bool 
             overlap = page.locator('p.quizOverlap[data-cont="over"]')
             if overlap.count() > 0 and overlap.first.is_visible():
                 result["status"] = "already_done"
+                result["verified_by"] = 'p.quizOverlap[data-cont="over"]'
                 result["message"] = "오늘 퀴즈에 이미 참여함."
                 return result
 

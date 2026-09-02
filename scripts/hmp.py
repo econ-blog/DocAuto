@@ -308,9 +308,17 @@ def _run_comment(page, account: str) -> dict:
         last["message"] = f"후보 {len(failures)}개 게시물 모두 실패. 마지막 오류: {last['message']}"
         return last
 
-    result["status"] = "already_done"
-    result["board_seq"] = skipped[0] if skipped else ""
-    result["message"] = f"후보 {len(skipped)}개 게시물에 이미 모두 댓글 작성됨 (게시물 {', '.join(skipped)})." if skipped else "댓글 작성 가능한 후보 게시물 없음"
+    if skipped:
+        result["status"] = "already_done"
+        result["verified_by"] = "cmtName_match"
+        result["board_seq"] = skipped[0]
+        result["message"] = f"후보 {len(skipped)}개 게시물에 이미 모두 댓글 작성됨 (게시물 {', '.join(skipped)})."
+    else:
+        # 후보 자체가 없는 것은 "이미 했다"가 아니라 "할 대상이 없다"다.
+        # already_done으로 뭉뚱그리면 증거 없는 완료로 남는다.
+        result["status"] = "no_target"
+        result["board_seq"] = ""
+        result["message"] = "댓글 작성 가능한 후보 게시물 없음"
     return result
 
 
@@ -344,6 +352,7 @@ def _comment_on_board(page, account: str, board_seq: str) -> dict:
             existing_names = [n.strip() for n in page.locator("#cmtDiv .cmtName").all_inner_texts()]
             if my_name in existing_names:
                 result["status"] = "already_done"
+                result["verified_by"] = f"cmtName: {my_name}"
                 result["message"] = f"이미 댓글 있음 (게시물 {board_seq}, 닉네임 {my_name})."
                 return result
 
@@ -743,6 +752,7 @@ def run(account: str, credentials_path: Path, headless: bool) -> dict:
                     # 캡슐 버튼 이상이어도 로그인 세션은 살아있으므로 댓글 시도는 계속한다
                 elif complete_btn.count() > 0 and complete_btn.first.is_visible():
                     result["status"] = "already_done"
+                    result["verified_by"] = "#capsuleBtnComplete visible"
                     result["message"] = "오늘 이미 캡슐 출석 완료된 상태."
                 else:
                     # ID 버튼이 보이면 우선 사용, 아니면 텍스트 버튼 사용

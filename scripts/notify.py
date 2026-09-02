@@ -31,10 +31,17 @@ SEVERITY = {
 SEVERITY_ORDER = {"quiet": 0, "ok": 1, "action": 2, "alert": 3}
 
 
+# 긍정 증거(verified_by)가 없으면 unverified로 강등되는 상태들.
+# already_done이 여기 들어간 이유: quiet이라 알림도 표도 조용히 넘어가는데,
+# 사이트가 완료 표식 셀렉터를 바꾸면 "이미 완료"로 오판하고도 며칠 모른다
+# (keymedi 2026-07-12~16 오판 재발 이력). 근거를 못 대면 완료로 치지 않는다.
+NEEDS_EVIDENCE = ("success", "already_done")
+
+
 def _node_sev(node: dict) -> str:
     if "status" in node:
         st = node["status"]
-        if st == "success" and not node.get("verified_by"):
+        if st in NEEDS_EVIDENCE and not node.get("verified_by"):
             return "alert"
         return SEVERITY.get(st, "alert")
     return "quiet"

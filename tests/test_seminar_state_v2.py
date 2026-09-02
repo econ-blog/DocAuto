@@ -82,14 +82,21 @@ def _live_page(monkeypatch, items):
     return MagicMock()
 
 
-def test_task_live_seminar_already_entered_has_no_false_evidence(monkeypatch):
+def test_task_live_seminar_already_entered_marks_evidence_as_cache(monkeypatch):
+    """이력 기반 already_done은 서버 증거를 참칭하면 안 된다.
+
+    2026-09-02: already_done도 verified_by가 없으면 unverified로 강등되도록 규칙이
+    바뀌었다. 이 판정의 근거는 서버가 아니라 로컬 상태(seminar_entered.json)이므로
+    `cache:` 접두사로 남겨, 표·로그에서 서버 증거(popup_acquired 등)와 구분된다.
+    """
     from seminar_live import task_live_seminar
     page = _live_page(monkeypatch, [{"id": 5473, "title": "심포지엄"}])
     state = {"date": "2026-08-02", "accounts": {"bjh7790": {"entered": [{"id": 5473}]}}}
 
     res = task_live_seminar(page, stay_seconds=20, account="bjh7790", state=state)
     assert res["status"] == "already_done"
-    assert "verified_by" not in res
+    assert res["verified_by"].startswith("cache:")
+    assert "popup" not in res["verified_by"], "서버 증거를 참칭하면 안 된다"
     assert res["already_entered"] == [5473]
     assert res["entered"] == []
 

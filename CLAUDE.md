@@ -122,9 +122,14 @@ Secrets: `CREDENTIALS_JSON`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
 | `alert` | `failed`, `blocked`, `unverified` | 오류 / 긍정 증거 미비 강등 | ❌ / ⚠️ |
 | `action` | `no_answer`, `incomplete_bank` | 사용자 개입 필요 | ❓ |
 | `ok` | `success` (`verified_by` 동반) | 성공 확정 | 전송 안 함 |
-| `quiet` | `already_done`, `skipped`, `no_target`, `not_ready`, `closed` | 완료·건너뜀·대상없음·마감 | 전송 안 함 |
+| `quiet` | `already_done`(`verified_by` 동반), `skipped`, `no_target`, `not_ready`, `closed` | 완료·건너뜀·대상없음·마감 | 전송 안 함 |
 
-`status: "success"`에 `verified_by`가 없으면 `unverified`(`alert`)로 강등된다.
+**`success`·`already_done`에 `verified_by`가 없으면 `unverified`(`alert`)로 강등된다**
+(`notify.NEEDS_EVIDENCE`, `runlog.status_of`가 공유). `already_done`이 포함된 이유:
+`quiet`이라 조용히 넘어가는데, 사이트가 완료 표식 셀렉터를 바꾸면 며칠간 오판을 모른다.
+
+`verified_by`의 `cache:` 접두사는 서버가 아니라 로컬 이력에 근거한 판정을 뜻한다
+(`cache: seminar_applied.json skipped_known`, `cache: state.entered`). 서버 증거보다 약하다.
 
 ---
 

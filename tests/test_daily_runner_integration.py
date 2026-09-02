@@ -34,9 +34,9 @@ def test_build_execution_plan():
 def test_exit_code_evaluation():
     # Success / quiet statuses return 0
     success_results = {
-        "keymedi": {"status": "already_done"},
+        "keymedi": {"status": "already_done", "verified_by": "evidence"},
         "hmp": {"status": "success", "roulette": [{"status": "no_target"}]},
-        "doctorville_bjh7790": {"attend": {"status": "success"}, "quiz": {"status": "already_done"}},
+        "doctorville_bjh7790": {"attend": {"status": "success"}, "quiz": {"status": "already_done", "verified_by": "evidence"}},
         "precheck_quiz": {"status": "no_answer"},
     }
     assert evaluate_exit_code(success_results) == 0
@@ -56,13 +56,14 @@ def test_exit_code_evaluation():
 
 def test_should_send_actionable_zero_calls():
     quiet_results = {
-        "keymedi": {"status": "already_done"},
+        "keymedi": {"status": "already_done", "verified_by": "evidence"},
         "hmp": {
             "status": "already_done",
-            "roulette": [{"status": "already_done"}],
+            "verified_by": "evidence",
+            "roulette": [{"status": "already_done", "verified_by": "evidence"}],
         },
-        "doctorville_bjh7790": {"attend": {"status": "already_done"}, "quiz": {"status": "already_done"}},
-        "precheck_quiz": {"status": "already_done"},
+        "doctorville_bjh7790": {"attend": {"status": "already_done", "verified_by": "evidence"}, "quiz": {"status": "already_done", "verified_by": "evidence"}},
+        "precheck_quiz": {"status": "already_done", "verified_by": "evidence"},
     }
     assert should_send(quiet_results, "actionable") is False
 

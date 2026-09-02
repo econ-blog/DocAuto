@@ -11,7 +11,9 @@ from notify import (
 def test_severity_mapping():
     assert severity_of({"status": "success", "verified_by": "modal"}) == "ok"
     assert severity_of({"status": "success"}) == "alert"  # missing verified_by -> unverified -> alert
-    assert severity_of({"status": "already_done"}) == "quiet"
+    assert severity_of({"status": "already_done", "verified_by": "#capsuleBtnComplete"}) == "quiet"
+    # 증거 없는 already_done도 강등된다 — 완료 표식 셀렉터가 바뀌면 조용히 오판하기 때문
+    assert severity_of({"status": "already_done"}) == "alert"
     assert severity_of({"status": "no_answer"}) == "action"
     assert severity_of({"status": "failed"}) == "alert"
 
@@ -25,9 +27,10 @@ def test_nested_hmp_and_list_severity():
     # and roulette: [{status: already_done}, {status: failed, message: "네트워크 오류"}]
     hmp_res = {
         "status": "already_done",
+        "verified_by": "evidence",
         "comment": {"status": "failed", "message": "저장 실패"},
         "roulette": [
-            {"status": "already_done"},
+            {"status": "already_done", "verified_by": "evidence"},
             {"status": "failed", "message": "네트워크 오류"},
         ],
     }
@@ -36,11 +39,12 @@ def test_nested_hmp_and_list_severity():
 
 def test_should_send_actionable_mode():
     quiet_or_ok = {
-        "keymedi": {"status": "already_done"},
+        "keymedi": {"status": "already_done", "verified_by": "evidence"},
         "doctorville": {"status": "success", "verified_by": "modal"},
         "hmp": {
             "status": "already_done",
-            "roulette": [{"status": "already_done"}],
+            "verified_by": "evidence",
+            "roulette": [{"status": "already_done", "verified_by": "evidence"}],
         },
     }
     assert should_send(quiet_or_ok, "actionable") is False
@@ -60,7 +64,7 @@ def test_should_send_actionable_mode():
 
 def test_build_message_all_mode():
     results = {
-        "keymedi": {"status": "already_done", "points": 10},
+        "keymedi": {"status": "already_done", "verified_by": "evidence", "points": 10},
         "doctorville_bjh7790": {
             "attend": {"status": "success", "verified_by": "ok", "points": 50},
             "quiz": {"status": "no_answer", "product": "우루사"},
@@ -75,7 +79,7 @@ def test_build_message_all_mode():
 def test_build_message_actionable_mode():
     # Actionable mode with actionable items
     results = {
-        "keymedi": {"status": "already_done", "points": 10},
+        "keymedi": {"status": "already_done", "verified_by": "evidence", "points": 10},
         "doctorville_bjh7790": {
             "attend": {"status": "success", "verified_by": "ok", "points": 50},
             "quiz": {"status": "no_answer", "product": "우루사", "message": "정답 없음"},
@@ -89,7 +93,7 @@ def test_build_message_actionable_mode():
 
     # Actionable mode with NO actionable items -> returns ""
     quiet_results = {
-        "keymedi": {"status": "already_done"},
+        "keymedi": {"status": "already_done", "verified_by": "evidence"},
         "doctorville": {"status": "success", "verified_by": "modal"},
     }
     msg_empty = build_message(quiet_results, "actionable", "2026-08-31")
@@ -97,7 +101,7 @@ def test_build_message_actionable_mode():
 
 
 def test_notify_empty_env_level_fallback():
-    quiet_results = {"keymedi": {"status": "already_done"}}
+    quiet_results = {"keymedi": {"status": "already_done", "verified_by": "evidence"}}
     assert should_send(quiet_results, "") is True
     assert should_send(quiet_results, "  ") is True
     assert should_send(quiet_results, "invalid_level") is True

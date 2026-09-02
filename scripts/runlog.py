@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 import common
+import notify  # NEEDS_EVIDENCE 공유 — 표와 알림의 강등 규칙이 갈라지면 안 된다
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -172,7 +173,7 @@ def prune(kind: str, keep: int = KEEP_FILES, log_dir: Path | str = None) -> list
 # ---------------------------------------------------------------------------
 
 def status_of(node) -> str:
-    """결과 노드에서 status를 뽑는다. verified_by 없는 success는 unverified로 강등.
+    """결과 노드에서 status를 뽑는다. verified_by 없는 success/already_done은 강등.
 
     notify.severity_of와 같은 규칙이라 표와 알림의 판정이 어긋나지 않는다.
     """
@@ -181,7 +182,7 @@ def status_of(node) -> str:
     st = node.get("status")
     if not st:
         return ""
-    if st == "success" and not node.get("verified_by"):
+    if st in notify.NEEDS_EVIDENCE and not node.get("verified_by"):
         return "unverified"
     return st
 

@@ -92,12 +92,12 @@ def test_daily_cells_flattens_runner_results():
             "quiz": {"status": "no_answer"},
             "seminar": {"status": "skipped"},
         },
-        "keymedi": {"status": "already_done"},
+        "keymedi": {"status": "already_done", "verified_by": "evidence"},
         "hmp": {
             "status": "success", "verified_by": "popup",
             "roulette": [{"status": "success", "verified_by": "y"}],
             "comment": {"status": "success", "verified_by": "z"},
-            "post": {"status": "already_done"},
+            "post": {"status": "already_done", "verified_by": "evidence"},
         },
         "precheck_quiz": {"precheck_quiz": {"status": "no_answer", "product": "징코샷"}},
     }

@@ -458,6 +458,8 @@ def task_live_seminar(
         )
     elif already_entered:
         result["status"] = "already_done"
+        # 서버가 아니라 로컬 상태(seminar_entered.json)에 근거한 판정이다.
+        result["verified_by"] = "cache: state.entered"
         result["message"] = f"이미입장 {len(already_entered)}건, 스킵 {len(skipped)}건. 신규 입장 없음."
     else:
         result["status"] = "skipped"

@@ -832,6 +832,7 @@ def task_quiz(page, creds: dict) -> dict:
         banner_class = quiz_banner.get_attribute("class") or ""
         if "ico_finish" in banner_class:
             result["status"] = "already_done"
+            result["verified_by"] = "#btn_quiz_banner.ico_finish"
             result["message"] = f"'{product}' 퀴즈 이미 완료."
             return result
     except PlaywrightTimeoutError:
@@ -988,6 +989,7 @@ def task_quiz(page, creds: dict) -> dict:
     if submit_btn.count() == 0 or not submit_btn.is_visible():
         if quiz_layer.locator(":text('축하드립니다')").count() > 0:
             result["status"] = "already_done"
+            result["verified_by"] = ":text('축하드립니다')"
             result["message"] = f"'{product}' 퀴즈 오늘 이미 완료 ('퀴즈 성공을 축하드립니다' 확인)."
             close_btn = quiz_layer.locator(".btn_cancel, .btn_close").first
             if close_btn.is_visible():
@@ -1000,6 +1002,7 @@ def task_quiz(page, creds: dict) -> dict:
         banner_class2 = page.locator("#btn_quiz_banner").get_attribute("class") or ""
         if "ico_finish" in banner_class2:
             result["status"] = "already_done"
+            result["verified_by"] = "#btn_quiz_banner.ico_finish"
             result["message"] = f"'{product}' 퀴즈 이미 완료 (ico_finish 확인)."
             return result
         result["message"] = "'정답 도전' 버튼을 찾지 못함."
@@ -1305,6 +1308,9 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
         result["message"] = f"신청 완료 {len(applied)}건{suffix}."
     elif result["skipped_known"] > 0 or dirty:
         result["status"] = "already_done"
+        # 서버 확인이 아니라 로컬 이력(seminar_applied.json)에 근거한 판정이다.
+        # cache: 접두사로 서버 증거와 구분되게 남긴다.
+        result["verified_by"] = "cache: seminar_applied.json skipped_known"
         result["message"] = f"신규 신청 대상 없음{suffix}."
     else:
         result["status"] = "skipped"

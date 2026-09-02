@@ -150,6 +150,7 @@ def run(account: str, credentials_path: Path, headless: bool) -> dict:
                 already_done = page.locator('button:has-text("출석완료")')
                 if already_done.count() > 0 and already_done.first.is_visible():
                     result["status"] = "already_done"
+                    result["verified_by"] = 'button:has-text("출석완료")'
                     result["message"] = "오늘 이미 출석체크 완료된 상태로 판단(출석체크하기 버튼 미발견)."
                     result["screenshot"] = common.save_screenshot(page, f"keymedi_{account}_already_done")
                     return result
