@@ -1186,13 +1186,20 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
 
     # 이미 신청한 세미나는 상세를 열지 않으므로 제목을 새로 알 길이 없다(이력에
     # 남은 제목은 대부분 오염돼 있다). 목록에서 긁은 제목은 페이지 로드 없이
-    # 공짜로 얻은 것이니, 오늘 방송분에 한해 표에 채워 넣는다.
+    # 공짜로 얻은 것이니, 이력의 오염된 제목을 여기서 덮어써 영구히 고친다 —
+    # 표에만 채워 넣던 예전 코드는 이력을 손대지 않아 오염이 계속 남았다.
     if account:
         today_str = datetime.now(common.KST).strftime("%Y-%m-%d")
         for sid, listed_title in list_titles.items():
             record = applied_data.get(account, {}).get(str(sid))
             clean = runlog.clean_title(listed_title)
-            if record and clean and record.get("start_date") == today_str:
+            if not (record and clean):
+                continue
+            # 이력에 이미 멀쩡한 제목이 있으면 건드리지 않는다.
+            if not runlog.clean_title(record.get("title", "")):
+                record["title"] = clean
+                dirty = True
+            if record.get("start_date") == today_str:
                 _log_seminar(sid, "already_done", account, clean, record.get("start", ""))
 
     for sid in targets:

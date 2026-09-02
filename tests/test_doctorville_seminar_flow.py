@@ -297,3 +297,42 @@ def test_task_seminar_fills_todays_titles_without_opening_details(tmp_path, monk
     rows = runlog.seminar_table(today)[1]
     assert rows[0][0] == "[TH] Love Life Love Liver w…"
     assert rows[0][1:4] == ["17:00", "18:30", "☑️"]
+
+
+def test_task_seminar_repairs_polluted_title_in_applied_file(tmp_path, monkeypatch):
+    """오염된 이력 제목은 목록 제목으로 영구히 덮어써진다 — 오늘 방송분이 아니어도.
+
+    예전 코드는 표에만 채워 넣고 이력은 그대로 뒀다. 그래서 이미 신청한
+    세미나(상세를 안 여는)의 제목은 "엠서클 통합회원"으로 영원히 남았다.
+    """
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text(json.dumps({"bjh7790": {
+        "5597": {                                    # 미래 방송분 + 오염된 제목
+            "applied_at": "2026-08-20T16:42:12+09:00",
+            "title": "엠서클 통합회원",
+            "start": "2026-09-09(수) 18:00 ~ 19:30",
+            "start_date": "2026-09-09",
+        },
+        "5607": {                                    # 이미 멀쩡한 제목은 건드리지 않는다
+            "applied_at": "2026-08-24T18:02:44+09:00",
+            "title": "진짜 세미나 이름",
+            "start": "2026-09-08(화) 18:30 ~ 20:00",
+            "start_date": "2026-09-08",
+        },
+    }}), encoding="utf-8")
+
+    mock_page = MagicMock()
+    mock_page.evaluate.side_effect = [
+        [
+            {"id": "5597", "title": "ALL 4 ONE WEB Symposium"},
+            {"id": "5607", "title": "엠서클 통합회원"},   # 목록 쪽이 오염돼도 무시
+        ],
+    ]
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+
+    res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+
+    assert res["skipped_known"] == 2
+    saved = json.loads(applied_file.read_text(encoding="utf-8"))["bjh7790"]
+    assert saved["5597"]["title"] == "ALL 4 ONE WEB Symposium"
+    assert saved["5607"]["title"] == "진짜 세미나 이름"
