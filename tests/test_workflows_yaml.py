@@ -17,15 +17,35 @@ def test_seminar_block_inbox_filter_and_dynamic_accounts():
     block_content = (repo_root / ".github/workflows/seminar_block.yml").read_text("utf-8")
     assert "11" in block_content
     assert "NOTIFY_LEVEL" in block_content
-    assert "scripts/doctorville.py --account all --task seminar" in block_content
     assert "scripts/seminar_live.py --account all" in block_content
     assert "scripts/seminar_survey.py --account all" in block_content
+
+def test_seminar_block_does_not_apply_for_seminars():
+    """30분 블록은 신청을 하지 않는다. 신청은 daily 1회 + manual 온디맨드."""
+    repo_root = Path(__file__).resolve().parent.parent
+    block_content = (repo_root / ".github/workflows/seminar_block.yml").read_text("utf-8")
+    assert "--task seminar" not in block_content
+    assert "id: apply" not in block_content
+
+
+def test_daily_runs_seminar_application():
+    """daily_runner는 --task를 넘기지 않아 doctorville 기본값 all(출석·퀴즈·세미나)로 돈다."""
+    repo_root = Path(__file__).resolve().parent.parent
+    runner = (repo_root / "scripts/daily_runner.py").read_text("utf-8")
+    plan_src = runner.split("def build_execution_plan")[1].split("\ndef ")[0]
+    doctorville_args = plan_src.split('plan[f"doctorville_{acc}"]')[1].split("plan[")[0]
+    assert '"--account", acc' in doctorville_args
+    assert "--task" not in doctorville_args  # 기본 all 유지 = 세미나 신청 포함
+    doctorville = (repo_root / "scripts/doctorville.py").read_text("utf-8")
+    assert '"--task", default="all"' in doctorville
+    assert '["attend", "quiz", "seminar"] if args.task == "all"' in doctorville
+
 
 def test_seminar_block_failures_reach_run_conclusion():
     """continue-on-error가 스텝 실패를 초록으로 덮으므로 집계 게이트가 있어야 한다."""
     repo_root = Path(__file__).resolve().parent.parent
     block_content = (repo_root / ".github/workflows/seminar_block.yml").read_text("utf-8")
-    for step_id in ("apply", "live", "survey"):
+    for step_id in ("live", "survey"):
         assert f"id: {step_id}" in block_content
         assert f"steps.{step_id}.outcome" in block_content
     assert "실패 집계" in block_content

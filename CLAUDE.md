@@ -25,7 +25,7 @@
 | 1 | 익일 닥터빌 퀴즈 사전 확인 | `doctorville.py --task precheck_quiz` | 운영 |
 | 2 | 닥터빌 퀴즈 답변 입력 | `doctorville.py --task quiz` | 운영 |
 | 3 | 닥터빌 출석 | `doctorville.py --task attend` | 운영 |
-| 4 | 닥터빌 세미나 신청 | `doctorville.py --task seminar` | 운영 |
+| 4 | 닥터빌 세미나 신청 | `doctorville.py --task seminar` | 운영 (daily 1회 + `manual.yml` 온디맨드) |
 | 5 | 키메디 출석 | `keymedi.py` | 운영 |
 | 6 | HMP 캡슐 출석 | `hmp.py` | 운영 |
 | 7 | HMP 룰렛(연속 10·20·30일에만 활성) | `hmp.py` 내장 | 운영 |
@@ -43,8 +43,8 @@
 
 | 워크플로우 | 트리거 | 실행 순서 |
 |---|---|---|
-| `daily.yml` | cron-job.org 00:15 KST(주) + GitHub cron `0 7 * * *`(16:00 KST 백스톱) | ① inbox fetch → ② 닥터빌(출석·퀴즈) → ③ 키메디 → ④ HMP(캡슐·룰렛·댓글·글쓰기) → ⑤ 익일 퀴즈 사전 확인 (`daily_runner.py`) → 정답 커밋 |
-| `seminar_block.yml` | cron-job.org → `workflow_dispatch` (11:00~14:30, 17:00~21:30 KST 30분 간격) | ① inbox fetch(11:00 런만) → ② 세미나 신청 → ③ 라이브 입장 → ④ 설문 → ⑤ 결과 표 전송 |
+| `daily.yml` | cron-job.org 00:15 KST(주) + GitHub cron `0 7 * * *`(16:00 KST 백스톱) | ① inbox fetch → ② 닥터빌(출석·퀴즈·**세미나 신청**) → ③ 키메디 → ④ HMP(캡슐·룰렛·댓글·글쓰기) → ⑤ 익일 퀴즈 사전 확인 (`daily_runner.py`) → 정답 커밋 |
+| `seminar_block.yml` | cron-job.org → `workflow_dispatch` (11:00~14:30, 17:00~21:30 KST 30분 간격) | ① inbox fetch(11:00 런만) → ② 라이브 입장 → ③ 설문 → ④ 결과 표 전송. **신청은 하지 않는다** |
 | `manual.yml` | `workflow_dispatch` 전용 | `task` 드롭다운 중 **하나만**, 항상 `--account all`. `seminar_block`과 같은 concurrency group |
 
 - 각 스크립트는 결과 JSON 1건을 stdout에 출력 → `daily_runner.py`·알림 게이트가 파싱·취합·전송.

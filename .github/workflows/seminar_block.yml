@@ -100,17 +100,10 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python3 scripts/telegram_inbox.py --confirm-offset "${{ steps.inbox.outputs.next_offset }}"
 
-      # Step 2: 닥터빌 세미나 신청 실행
-      - name: 닥터빌 세미나 신청 실행
-        id: apply
-        continue-on-error: true
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
-        run: xvfb-run -a python3 scripts/doctorville.py --account all --task seminar --headed
+      # 세미나 신청은 이 블록에 없다. daily 런(doctorville --task all)이 하루 1회 맡고,
+      # 급할 때는 manual.yml의 "세미나 신청"(--account all)으로 돌린다.
 
-      # Step 3: 라이브 세미나 입장 실행
+      # Step 2: 라이브 세미나 입장 실행
       - name: 라이브 세미나 입장 실행
         id: live
         continue-on-error: true
@@ -126,7 +119,7 @@ jobs:
             ${{ inputs.ignore_state && '--ignore-state' || '' }} \
             --headed
 
-      # Step 4: 세미나 설문조사 실행
+      # Step 3: 세미나 설문조사 실행
       - name: 세미나 설문조사 실행
         id: survey
         continue-on-error: true
@@ -139,8 +132,8 @@ jobs:
             --state-file scripts/state/seminar_entered.json \
             --headed
 
-      # Step 5: 블록 결과 표 전송 — 신청·입장·설문이 각자 남긴 로그를 모아 한 장으로.
-      # 세 스텝이 continue-on-error라 어디서 죽어도 여기까지는 온다(always).
+      # Step 4: 블록 결과 표 전송 — 신청(daily)·입장·설문이 각자 남긴 로그를 모아 한 장으로.
+      # 앞 스텝이 continue-on-error라 어디서 죽어도 여기까지는 온다(always).
       # 표 전송 실패는 런 성패에 반영하지 않는다(id 없음 = 실패 집계 대상 아님).
       - name: 세미나 결과 표 전송
         if: always()
@@ -152,8 +145,9 @@ jobs:
 
       # legacy는 승격(legacy → quiz/text)으로 줄어들기만 한다. 세 파일이 같은
       # 커밋에 들어가야 승격이 런 사이에 유실되지 않는다.
-      # seminar_applied.json이 같이 커밋돼야 다음 런이 이미 신청한 세미나의 상세를
-      # 다시 열지 않는다. 정리(prune)는 daily가 하루 1회 맡는다.
+      # 이 블록은 신청을 하지 않으므로 seminar_applied.json은 보통 그대로다. 그래도
+      # 커밋 목록에 남겨 둔다: 입장·설문 경로가 이력을 건드리면 유실되지 않게.
+      # 신청과 정리(prune)는 daily가 하루 1회 맡는다.
       - name: 설문 족보·신청 이력·실행 로그 커밋 및 푸시
         continue-on-error: true
         run: |
@@ -191,8 +185,7 @@ jobs:
         if: always()
         run: |
           fail=0
-          for s in "세미나 신청:${{ steps.apply.outcome }}" \
-                   "라이브 입장:${{ steps.live.outcome }}" \
+          for s in "라이브 입장:${{ steps.live.outcome }}" \
                    "설문조사:${{ steps.survey.outcome }}"; do
             if [ "${s##*:}" = "failure" ]; then
               echo "::error::${s%%:*} 단계 실패"
