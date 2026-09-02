@@ -502,4 +502,40 @@ def test_task_seminar_unverified_carries_text_diagnostics(tmp_path, monkeypatch)
     assert diag["btn_before"] == "신청하기"
     assert diag["btn_after"] == "신청하기"
     assert diag["btn_count_after"] == 2
-    assert diag["modal"] == "동의합니다."
+    assert diag["modal"] == 'button.btn_confirm:visible:has-text("동의합니다.")'
+
+
+def test_dismiss_agree_modal_falls_back_past_btn_confirm(monkeypatch):
+    """btn_confirm이 없어도 보이는 '동의' 버튼을 찾아 누른다.
+
+    2026-09-02 세미나 5675: btn_confirm 후보가 하나도 안 잡혀 동의를 못 누른 채
+    신청이 조용히 실패했다.
+    """
+    clicked = []
+
+    def locator_side_effect(sel):
+        loc = MagicMock()
+        if sel == 'button:visible:has-text("동의")':
+            loc.count.return_value = 1
+            loc.first.is_visible.return_value = True
+            loc.first.click.side_effect = lambda: clicked.append(sel)
+        else:
+            loc.count.return_value = 0
+        return loc
+
+    page = MagicMock()
+    page.locator.side_effect = locator_side_effect
+
+    assert doctorville.dismiss_agree_modal(page, timeout_ms=0) == 'button:visible:has-text("동의")'
+    assert clicked == ['button:visible:has-text("동의")']
+
+
+def test_dismiss_agree_modal_returns_none_without_modal(monkeypatch):
+    """모달이 없으면 아무것도 누르지 않고 none을 돌려준다."""
+    page = MagicMock()
+    empty = MagicMock()
+    empty.count.return_value = 0
+    page.locator.return_value = empty
+
+    assert doctorville.dismiss_agree_modal(page, timeout_ms=0) == "none"
+    empty.first.click.assert_not_called()

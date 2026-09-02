@@ -38,6 +38,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -466,6 +467,49 @@ def prune_applied_file(path: Path = None, days: int = APPLIED_RETENTION_DAYS, no
     else:
         result["status"] = "skipped"
     return result
+
+
+# 개인정보 동의 모달의 확인 버튼 후보. 앞에서부터 시도한다.
+#
+# 세미나마다 모달 마크업이 다르다. 5676은 `button.btn_confirm`에 "동의합니다."가
+# 붙지만, 5675는 이 두 셀렉터로 아무것도 못 잡아 동의를 못 누른 채 신청이 조용히
+# 실패했다(2026-09-02, 두 계정 3런 연속). "확인"은 페이지 어디에나 있을 수 있어
+# **보이는 레이어/팝업 컨테이너 안쪽으로만** 찾는다 — 무관한 버튼을 누르면
+# 신청이 아니라 다른 동작을 하게 된다.
+AGREE_MODAL_SELECTORS = (
+    'button.btn_confirm:visible:has-text("동의합니다.")',
+    "button.btn_confirm:visible",
+    'button:visible:has-text("동의")',
+    'a:visible:has-text("동의")',
+    '[class*="layer"]:visible button:visible:has-text("확인")',
+    '[class*="popup"]:visible button:visible:has-text("확인")',
+    '[class*="layer"]:visible a:visible:has-text("확인")',
+    '[class*="popup"]:visible a:visible:has-text("확인")',
+)
+
+
+def dismiss_agree_modal(page, timeout_ms: int = 5000) -> str:
+    """동의 모달을 눌러 닫고, 실제로 누른 셀렉터를 돌려준다. 못 찾으면 "none".
+
+    모달은 클릭 직후 곧바로 뜨지 않는다. 후보를 한 바퀴 돌고 잠깐 쉬는 것을
+    제한 시간까지 반복한다.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    while True:
+        for sel in AGREE_MODAL_SELECTORS:
+            try:
+                loc = page.locator(sel)
+                if loc.count() > 0 and loc.first.is_visible():
+                    loc.first.click()
+                    return sel
+            except Exception:
+                continue  # 셀렉터 하나가 터져도 나머지는 계속 본다
+        if time.monotonic() >= deadline:
+            return "none"
+        try:
+            page.wait_for_timeout(250)
+        except Exception:
+            return "none"
 
 
 def save_screenshot(page, tag: str) -> str:
@@ -1256,21 +1300,9 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
         # 개인정보 동의 모달 처리.
         #
         # button.btn_confirm은 페이지에 여러 개 있고 대부분 숨어 있다. **반드시
-        # :visible로 거를 것.** 예전 코드는 폴백에서 `locator("button.btn_confirm").first`
-        # 를 잡아 5초를 기다렸고, 그 첫 번째가 숨은 버튼이면 타임아웃 → except로
-        # 삼켜져 동의를 누르지 못한 채 신청이 조용히 실패했다(2026-09-02 세미나
-        # 5675, 두 계정 모두 unverified).
-        try:
-            visible_confirm = page.locator("button.btn_confirm:visible")
-            visible_confirm.first.wait_for(state="visible", timeout=5000)
-            agree_btn = page.locator('button.btn_confirm:visible:has-text("동의합니다.")')
-            if agree_btn.count() > 0:
-                target, diag["modal"] = agree_btn.first, "동의합니다."
-            else:
-                target, diag["modal"] = visible_confirm.first, "btn_confirm"
-            target.click()
-        except PlaywrightTimeoutError:
-            pass  # 모달 없는 세미나 (diag["modal"]는 "none" 유지)
+        # :visible로 거를 것.** 세미나마다 모달 마크업이 달라 후보를 여러 개
+        # 돌린다 — 근거는 AGREE_MODAL_SELECTORS 주석.
+        diag["modal"] = dismiss_agree_modal(page)
 
         # 완료 확인 — 상세 페이지 재진입 후 a.btn_bn 텍스트 = "신청취소" 검증
         common.goto_with_retry(page, detail_url, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS)
