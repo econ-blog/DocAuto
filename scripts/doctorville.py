@@ -512,6 +512,55 @@ def dismiss_agree_modal(page, timeout_ms: int = 5000) -> str:
             return "none"
 
 
+# 동의 뒤에 뜨는 완료 알림. 사용자 실측(2026-09-02 세미나 5675, m 화면):
+# 신청하기 → 개인정보 동의 모달 → "동의합니다." → **"세미나 신청이 완료되었습니다"
+# 알림 모달(확인)**. 네이티브 alert이 아니라 DOM 모달이다(진단에 dialogs가 안
+# 잡힌 이유). 동의 클릭 직후 바로 상세를 다시 열면 이 단계가 끝나기 전에
+# 페이지를 떠나게 되고, 진행 중이던 신청 요청이 취소될 수 있다.
+APPLY_NOTICE_MARKERS = ("신청이 완료", "완료되었습니다", "신청되었습니다")
+APPLY_NOTICE_CONFIRM = (
+    '[class*="layer"]:visible button:visible:has-text("확인")',
+    '[class*="popup"]:visible button:visible:has-text("확인")',
+    '[class*="layer"]:visible a:visible:has-text("확인")',
+    '[class*="popup"]:visible a:visible:has-text("확인")',
+    'button.btn_confirm:visible:has-text("확인")',
+)
+
+
+def ack_apply_notice(page, timeout_ms: int = 10000) -> str:
+    """완료 알림을 기다렸다가 확인을 누르고, 읽은 문구를 돌려준다. 없으면 "".
+
+    문구를 못 봐도 이 대기 자체가 의미가 있다 — 동의 직후의 요청이 끝날 시간을
+    준다.
+    """
+    deadline = time.monotonic() + timeout_ms / 1000
+    seen = ""
+    while time.monotonic() < deadline:
+        for marker in APPLY_NOTICE_MARKERS:
+            try:
+                loc = page.locator(f':text("{marker}")')
+                if loc.count() > 0 and loc.first.is_visible():
+                    seen = marker
+                    break
+            except Exception:
+                continue
+        if seen:
+            break
+        try:
+            page.wait_for_timeout(250)
+        except Exception:
+            return seen
+    for sel in APPLY_NOTICE_CONFIRM:
+        try:
+            loc = page.locator(sel)
+            if loc.count() > 0 and loc.first.is_visible():
+                loc.first.click()
+                return seen or "확인 클릭"
+        except Exception:
+            continue
+    return seen
+
+
 def save_screenshot(page, tag: str) -> str:
     return common.save_screenshot(page, f"doctorville_{tag}")
 
@@ -1322,6 +1371,9 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
         # :visible로 거를 것.** 세미나마다 모달 마크업이 달라 후보를 여러 개
         # 돌린다 — 근거는 AGREE_MODAL_SELECTORS 주석.
         diag["modal"] = dismiss_agree_modal(page)
+        # 동의 뒤 완료 알림까지 처리하고 나서 상세를 다시 연다. 바로 이동하면
+        # 신청 요청이 끝나기 전에 페이지를 떠난다.
+        diag["notice"] = ack_apply_notice(page)
         if dialog_messages:
             diag["dialogs"] = list(dialog_messages)
 

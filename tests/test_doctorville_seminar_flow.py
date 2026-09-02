@@ -1,6 +1,20 @@
+import pytest
 import json
 from unittest.mock import MagicMock
 import doctorville
+
+
+@pytest.fixture(autouse=True)
+def _fast_modal_waits(monkeypatch, request):
+    """모달 대기 루프는 실시간으로 몇 초씩 잡아먹는다. 헬퍼 자체를 검증하는
+    테스트는 함수를 직접 호출하므로, task_seminar 경로에서는 빠른 스텁을 쓴다."""
+    if "ack_apply_notice" in request.node.name or "dismiss_agree_modal" in request.node.name:
+        return  # 헬퍼 자체를 검증하는 테스트는 진짜 함수를 쓴다
+    monkeypatch.setattr(doctorville, "ack_apply_notice", lambda page, **k: "")
+    real = doctorville.dismiss_agree_modal
+    monkeypatch.setattr(
+        doctorville, "dismiss_agree_modal", lambda page, timeout_ms=0: real(page, timeout_ms=0)
+    )
 
 
 def test_task_seminar_records_already_applied_detail(tmp_path, monkeypatch):
@@ -588,3 +602,39 @@ def test_task_seminar_accepts_native_dialogs(tmp_path, monkeypatch):
 
     assert accepted == [True]
     assert res["diagnostics"]["6001"]["dialogs"] == ["confirm: 신청하시겠습니까?"]
+
+
+def test_ack_apply_notice_clicks_confirm():
+    """완료 알림을 읽고 확인을 누른다.
+
+    사용자 실측(세미나 5675): 동의합니다. 다음에 "세미나 신청이 완료되었습니다"
+    DOM 모달이 뜬다. 네이티브 alert이 아니라 진단의 dialogs에 안 잡힌다.
+    """
+    clicked = []
+
+    def locator_side_effect(sel):
+        loc = MagicMock()
+        if '신청이 완료' in sel or '완료되었습니다' in sel:
+            loc.count.return_value = 1
+            loc.first.is_visible.return_value = True
+        elif sel == '[class*="layer"]:visible button:visible:has-text("확인")':
+            loc.count.return_value = 1
+            loc.first.is_visible.return_value = True
+            loc.first.click.side_effect = lambda: clicked.append(sel)
+        else:
+            loc.count.return_value = 0
+        return loc
+
+    page = MagicMock()
+    page.locator.side_effect = locator_side_effect
+
+    assert doctorville.ack_apply_notice(page, timeout_ms=1000) == "신청이 완료"
+    assert len(clicked) == 1
+
+
+def test_ack_apply_notice_without_notice_returns_empty():
+    page = MagicMock()
+    empty = MagicMock()
+    empty.count.return_value = 0
+    page.locator.return_value = empty
+    assert doctorville.ack_apply_notice(page, timeout_ms=0) == ""
