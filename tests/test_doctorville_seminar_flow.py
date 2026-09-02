@@ -539,3 +539,52 @@ def test_dismiss_agree_modal_returns_none_without_modal(monkeypatch):
 
     assert doctorville.dismiss_agree_modal(page, timeout_ms=0) == "none"
     empty.first.click.assert_not_called()
+
+
+def test_task_seminar_accepts_native_dialogs(tmp_path, monkeypatch):
+    """네이티브 confirm/alert을 수락하고 메시지를 진단에 남겨야 한다.
+
+    핸들러가 없으면 Playwright가 자동 dismiss한다 — confirm 기반 신청 흐름에서는
+    그 dismiss가 곧 '취소'라 신청이 조용히 무산된다(2026-09-02 세미나 5675).
+    """
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text("{}", encoding="utf-8")
+
+    handlers = {}
+    mock_page = MagicMock()
+    mock_page.on.side_effect = lambda event, fn: handlers.__setitem__(event, fn)
+    mock_page.evaluate.return_value = ["6001"]
+
+    mock_btn = MagicMock()
+    mock_btn.inner_text.side_effect = ["신청하기"]
+    mock_btn.first.inner_text.return_value = "신청하기"
+    mock_btn.count.return_value = 1
+
+    accepted = []
+    dialog = MagicMock()
+    dialog.type = "confirm"
+    dialog.message = "신청하시겠습니까?"
+    dialog.accept.side_effect = lambda: accepted.append(True)
+
+    def click_raises_dialog():
+        handlers["dialog"](dialog)
+
+    mock_btn.click.side_effect = click_raises_dialog
+
+    def locator_side_effect(sel):
+        if "btn_bn" in sel:
+            return mock_btn
+        empty = MagicMock()
+        empty.count.return_value = 0
+        return empty
+
+    mock_page.locator.side_effect = locator_side_effect
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+    monkeypatch.setattr(doctorville, "_seminar_detail_meta", lambda p: ("대화상자 세미나", ""))
+    monkeypatch.setattr(doctorville, "save_screenshot", lambda *a, **k: "shot.png")
+    monkeypatch.setattr(doctorville, "dismiss_agree_modal", lambda page, **k: "none")
+
+    res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+
+    assert accepted == [True]
+    assert res["diagnostics"]["6001"]["dialogs"] == ["confirm: 신청하시겠습니까?"]

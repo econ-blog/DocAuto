@@ -1225,6 +1225,24 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
                 seminar_ids.append(sid)
         list_titles[sid] = title
 
+    # 네이티브 대화상자(alert/confirm)를 받는다.
+    #
+    # Playwright는 핸들러가 없으면 dialog를 **자동 dismiss**한다. 신청 흐름이
+    # DOM 모달이 아니라 confirm()을 쓰면 그 dismiss가 곧 '취소'라서, 클릭도
+    # 됐고 동의 버튼도 눌렸는데 신청만 안 되는 상태가 된다 — 2026-09-02
+    # 세미나 5675의 관측(btn_before=신청하기, 동의합니다. 클릭됨,
+    # btn_after=신청하기)과 정확히 맞는다. 개인정보 동의는 항상 동의가 정책이다.
+    dialog_messages = []
+
+    def _on_dialog(dialog):
+        dialog_messages.append(f"{dialog.type}: {dialog.message}"[:200])
+        try:
+            dialog.accept()
+        except Exception:
+            pass
+
+    page.on("dialog", _on_dialog)
+
     applied = []
     failed = []
     # 미검증 건의 화면. 이게 없어서 2026-09-02 세미나 5675 실패를 로그만으로
@@ -1258,6 +1276,7 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
         return result
 
     for sid in targets:
+        dialog_messages.clear()
         detail_url = f"{SEMINAR_DETAIL_URL}?seminarId={sid}"
         common.goto_with_retry(page, detail_url, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS)
 
@@ -1303,6 +1322,8 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
         # :visible로 거를 것.** 세미나마다 모달 마크업이 달라 후보를 여러 개
         # 돌린다 — 근거는 AGREE_MODAL_SELECTORS 주석.
         diag["modal"] = dismiss_agree_modal(page)
+        if dialog_messages:
+            diag["dialogs"] = list(dialog_messages)
 
         # 완료 확인 — 상세 페이지 재진입 후 a.btn_bn 텍스트 = "신청취소" 검증
         common.goto_with_retry(page, detail_url, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS)
@@ -1332,6 +1353,11 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
             diags[sid] = diag
             shots[sid] = save_screenshot(page, f"seminar_{sid}_unverified")
             _log_seminar(sid, "unverified", account, title, start)
+
+    try:
+        page.remove_listener("dialog", _on_dialog)
+    except Exception:
+        pass
 
     if dirty:
         save_applied(applied_data, applied_path)
