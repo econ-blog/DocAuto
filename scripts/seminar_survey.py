@@ -34,7 +34,9 @@ seminar_live.py로 입장에 성공한 세미나는 방송 팝업에서 설문�
       숫자가 아니면 보기 텍스트에 부분 포함으로 "유일 매칭"될 때만 선택한다.
       복수 선택은 "1,3" 또는 ["1", "3"].
     - 입력형(주관식): 저장값을 그대로 입력한다.
-    - 값이 빈 문자열("")이면 항상 미등록으로 취급한다.
+    - 값이 빈 문자열("")이면 항상 미등록으로 취급한다. 주관식을 **의도적으로
+      빈칸으로 제출**하려면 값에 "(빈칸)"(BLANK_ANSWER_MARKER)을 적는다.
+      선택형에 이 값이 들어오면 고를 보기가 없으므로 미등록으로 막힌다.
     - 번호는 위치 기반이라 같은 문항이라도 세미나마다 보기 순서가 다르면 오답이
       될 수 있다. 순서가 흔들릴 만한 문항은 텍스트로 적어두는 편이 안전하다.
 
@@ -274,6 +276,11 @@ def build_canonical_index(bank: dict) -> dict:
 
 # 퀴즈 족보(doctorville)와 같은 문구를 쓴다. 정의는 common에 있다.
 PLACEHOLDER_MARKER = common.ANSWER_PLACEHOLDER_MARKER
+
+# 주관식을 **의도적으로 빈칸으로 제출**하겠다는 표식. 빈 문자열은 "채워 넣기
+# 대기 중"(미등록)과 구분되지 않으므로, 빈칸 제출은 별도 값으로만 지시한다.
+# 선택형에는 쓸 수 없다 — 고를 보기가 있어야 하므로 미등록으로 막는다.
+BLANK_ANSWER_MARKER = "(빈칸)"
 
 
 def _coerce_answer(value):
@@ -516,10 +523,17 @@ def resolve_page(questions: list[dict], banks: dict) -> tuple[list[dict], list[d
         if q.get("kind") == "input":
             if isinstance(answer, list):
                 answer = " ".join(answer)
+            if answer == BLANK_ANSWER_MARKER:
+                answer = ""
             step = {"kind": "input", "name": q["name"], "value": answer}
             if source == "legacy":
                 step["promote"] = {"bank": kind, "question": normalize_question(text), "answer": answer}
             plan.append(step)
+            continue
+
+        if answer == BLANK_ANSWER_MARKER:
+            # 선택형에 빈칸 표식이 들어온 경우. 고를 보기가 없으므로 미등록.
+            _miss(kind)
             continue
 
         # 복수 선택은 리스트(["1", "3"])뿐 아니라 "1,3" 형태도 받는다.

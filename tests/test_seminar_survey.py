@@ -652,3 +652,21 @@ def test_dismiss_alerts_click_timeout_tries_next_candidate():
 
     assert flaky.clicks == 1 and good.clicks == 1
     assert closed == ["알림"]
+
+
+# --- 의도적 빈칸 제출 --------------------------------------------------------
+
+def test_free_text_blank_marker_submits_empty_string():
+    """"(빈칸)"은 미등록이 아니라 '빈칸으로 제출'이다."""
+    q = {"number": "1", "question": "의견을 적어주세요", "kind": "input", "name": "free.0", "options": []}
+    plan, missing = resolve_page([q], _banks(text={"의견을 적어주세요": seminar_survey.BLANK_ANSWER_MARKER}))
+    assert missing == []
+    assert plan == [{"kind": "input", "name": "free.0", "value": ""}]
+
+
+def test_choice_blank_marker_is_missing():
+    """선택형에는 고를 보기가 있어야 한다 — 빈칸 표식은 미등록으로 막힌다."""
+    q = _quiz_q("정답은?", ["가", "나"])
+    plan, missing = resolve_page([q], _banks(quiz={"정답은?": seminar_survey.BLANK_ANSWER_MARKER}))
+    assert plan == []
+    assert [m["bank"] for m in missing] == ["quiz"]
