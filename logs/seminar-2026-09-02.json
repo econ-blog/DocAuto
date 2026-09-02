@@ -51,6 +51,48 @@
         "wonju": "success"
       },
       "updated_at": "11:33"
+    },
+    "5648": {
+      "id": "5648",
+      "title": "메디컬 빌딩, 망하지 않는 개원 입지와 성공개원 부동산 노하우",
+      "start": "2026-09-02(수) 13:00 ~ 14:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "12:09",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
+    },
+    "5647": {
+      "id": "5647",
+      "title": "[EZcare WEEK] 스타틴 가짜 정보에 대한 현황 및 대응 전략",
+      "start": "2026-09-02(수) 13:00 ~ 14:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "12:09",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
+    },
+    "5610": {
+      "id": "5610",
+      "title": "제미다파정을 활용한 새로운 병용치료의 제안",
+      "start": "2026-09-02(수) 13:00 ~ 14:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "12:09",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     }
   }
 }
