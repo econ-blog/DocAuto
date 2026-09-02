@@ -562,6 +562,22 @@ C안(한 칸에 이모지 2개)은 순서 규칙을 외워야 해서 버렸다.
 
 ---
 
+## 세미나 신청을 daily로 이동 (2026-09-02 사용자 지시)
+
+`seminar_block`(30분 간격, 하루 18런)에서 신청 스텝을 뺐다. 신청은 이제 두 경로뿐이다.
+
+| 경로 | 명령 | 빈도 |
+|---|---|---|
+| `daily.yml` | `daily_runner` → `doctorville.py --account <acc>` (`--task` 미지정 = 기본 `all`) | 00:15 KST 1회 (+16:00 백스톱) |
+| `manual.yml` | `doctorville.py --account all --task seminar` | 온디맨드, 두 계정 1회 dispatch |
+
+- `daily_runner.build_execution_plan`은 계정별로 `--task`를 넘기지 않는다. 즉 `attend`+`quiz`+`seminar`가 한 브라우저 세션에서 돈다(타임아웃 240초). **`--task`를 붙이면 신청이 조용히 사라진다** — 회귀 테스트 `test_daily_runs_seminar_application`이 이걸 막는다.
+- `seminar_block`의 실패 집계에서 `apply` 스텝이 빠졌다. 남은 게이트는 `live`·`survey` 둘.
+- 신청 결과는 `logs/seminar-*.json`(세미나 로그)에 남는다. daily 표에는 원래 안 올라간다(`DAILY_HIDDEN_COLUMNS`). 그래서 신청 성패는 그날 첫 `seminar_block` 런(11:00)이 보내는 세미나 표에서 처음 보인다 — **신청 시각(00:15)과 표 도착(11:00) 사이 약 11시간 공백**이 생겼다.
+- `seminar_applied.json`의 prune은 원래부터 daily 담당이라 그대로다. `seminar_block`의 커밋 목록에는 남겨 뒀다(입장·설문 경로가 이력을 건드릴 경우 대비).
+
+**감수한 손실:** 하루 중간에 새로 열린 세미나는 다음 날 00:15까지 신청되지 않는다. 전에는 30분 안에 잡혔다. 방송 당일 오전에 올라오는 세미나가 있으면 정원 마감을 놓칠 수 있고, 그때는 `manual.yml`의 "세미나 신청"을 직접 돌려야 한다.
+
 ## 알려진 리스크
 
 1. **구형식 legacy 시도는 하루 3회 기회 중 1회를 태운다.** 위치가 맞은 사례(모비케어 `"123"`, 아림시스 `"112"`)와 어긋난 사례(펙수클루 `"332"`→`"323"` 정정, 커밋 `394d8ec`)가 모두 있다. 안전조건은 방어일 뿐 순서 섞임 자체는 못 막는다.
