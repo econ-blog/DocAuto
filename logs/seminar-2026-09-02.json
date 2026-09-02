@@ -1,0 +1,46 @@
+{
+  "kind": "seminar",
+  "date": "2026-09-02",
+  "seminars": {
+    "5667": {
+      "id": "5667",
+      "title": "ALL 4 ONE WEB Symposium",
+      "start": "2026-09-10(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "11:04"
+    },
+    "5668": {
+      "id": "5668",
+      "title": "일반 개원의가 바라보는 팩수클루",
+      "start": "2026-09-11(금) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "11:04"
+    },
+    "5665": {
+      "id": "5665",
+      "title": "소화기내과에서 바라보는 펙수클루",
+      "start": "2026-09-16(수) 19:00 ~ 20:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "11:04"
+    },
+    "5666": {
+      "id": "5666",
+      "title": "O.M.T Web Symposium",
+      "start": "2026-09-17(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "11:04"
+    }
+  }
+}
