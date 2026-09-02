@@ -114,13 +114,14 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "17:37",
+      "updated_at": "18:06",
       "live": {
         "bjh7790": "success",
         "wonju": "success"
       },
       "survey": {
-        "bjh7790": "not_ready"
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
       }
     },
     "5638": {
@@ -131,13 +132,14 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "17:37",
+      "updated_at": "18:06",
       "live": {
         "bjh7790": "success",
         "wonju": "success"
       },
       "survey": {
-        "bjh7790": "not_ready"
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
       }
     },
     "5670": {
@@ -168,6 +170,26 @@
         "wonju": "success"
       },
       "updated_at": "17:08"
+    },
+    "5675": {
+      "id": "5675",
+      "title": "ONE and MORE WEB SYMPOSIUM",
+      "start": "2026-09-03(목) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "unverified",
+        "wonju": "unverified"
+      },
+      "updated_at": "18:03"
+    },
+    "5676": {
+      "id": "5676",
+      "title": "Does Switching Within the DPP-4 Inhibitor Class Make a Real Difference?: Integrating Korean RWE into Diabetes Care",
+      "start": "2026-09-22(화) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "18:03"
     }
   }
 }

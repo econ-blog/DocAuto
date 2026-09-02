@@ -847,6 +847,22 @@
       "start_time": "19:00",
       "title": "[대한내분비학회] 제4회 ENstagram Webinar",
       "year": 2026
+    },
+    "5676": {
+      "applied_at": "2026-09-02T18:02:58.957811+09:00",
+      "date": "2026-09-22",
+      "day": 22,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-22(화) 13:00 ~ 14:00",
+      "start_date": "2026-09-22",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "Does Switching Within the DPP-4 Inhibitor Class Make a Real Difference?: Integrating Korean RWE into Diabetes Care",
+      "year": 2026
     }
   },
   "wonju": {
@@ -1712,6 +1728,22 @@
       "start_minute": 0,
       "start_time": "19:00",
       "title": "[대한내분비학회] 제4회 ENstagram Webinar",
+      "year": 2026
+    },
+    "5676": {
+      "applied_at": "2026-09-02T18:03:54.374003+09:00",
+      "date": "2026-09-22",
+      "day": 22,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-22(화) 13:00 ~ 14:00",
+      "start_date": "2026-09-22",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "Does Switching Within the DPP-4 Inhibitor Class Make a Real Difference?: Integrating Korean RWE into Diabetes Care",
       "year": 2026
     }
   }
