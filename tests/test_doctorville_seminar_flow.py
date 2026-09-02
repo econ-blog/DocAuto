@@ -383,3 +383,72 @@ def test_task_seminar_only_applies_to_applicable_entries(tmp_path, monkeypatch):
 
     # 신청 대상 후보는 5700 하나뿐이다. 5701은 목록에 있었지만 집계에 안 들어간다.
     assert res["skipped_known"] == 1
+
+
+def test_task_seminar_confirm_modal_uses_visible_selector(tmp_path, monkeypatch):
+    """동의 모달은 :visible로 걸러 잡는다.
+
+    2026-09-02 세미나 5675: 폴백이 `button.btn_confirm`의 첫 번째를 잡았는데
+    그게 숨은 버튼이라 5초 뒤 타임아웃 → except로 삼켜져 동의를 못 눌렀고,
+    두 계정 모두 신청 실패(unverified)로 끝났다. 숨은 버튼을 후보에서 빼야 한다.
+    """
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text("{}", encoding="utf-8")
+
+    mock_page = MagicMock()
+    mock_page.evaluate.return_value = ["6010"]
+
+    mock_btn = MagicMock()
+    mock_btn.inner_text.side_effect = ["신청하기", "신청취소"]
+
+    seen = []
+
+    def locator_side_effect(sel):
+        if "btn_bn" in sel:
+            return mock_btn
+        if "btn_confirm" in sel:
+            seen.append(sel)
+            m = MagicMock()
+            # "동의합니다." 버튼은 이 세미나에 없다 → 폴백 경로를 타게 한다.
+            m.count.return_value = 0 if "동의합니다." in sel else 1
+            return m
+        return MagicMock()
+
+    mock_page.locator.side_effect = locator_side_effect
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+    monkeypatch.setattr(doctorville, "_seminar_detail_meta", lambda p: ("모달 세미나", ""))
+
+    res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+
+    assert res["status"] == "success"
+    assert seen, "btn_confirm 조회가 아예 없었다"
+    assert all(":visible" in sel for sel in seen), seen
+
+
+def test_task_seminar_unverified_saves_screenshot(tmp_path, monkeypatch):
+    """미검증 건은 스크린샷을 남긴다 — 이 경로는 예외가 없어 log_error가 안 찍힌다."""
+    applied_file = tmp_path / "seminar_applied.json"
+    applied_file.write_text("{}", encoding="utf-8")
+
+    mock_page = MagicMock()
+    mock_page.evaluate.return_value = ["6011"]
+
+    mock_btn = MagicMock()
+    mock_btn.inner_text.side_effect = ["신청하기", "신청하기"]
+
+    def locator_side_effect(sel):
+        if "btn_bn" in sel:
+            return mock_btn
+        m = MagicMock()
+        m.count.return_value = 0
+        return m
+
+    mock_page.locator.side_effect = locator_side_effect
+    monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
+    monkeypatch.setattr(doctorville, "_seminar_detail_meta", lambda p: ("실패 세미나", ""))
+    monkeypatch.setattr(doctorville, "save_screenshot", lambda p, tag: f"/logs/{tag}.png")
+
+    res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
+
+    assert res["status"] == "unverified"
+    assert res["screenshots"] == {"6011": "/logs/seminar_6011_unverified.png"}

@@ -1183,6 +1183,9 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
 
     applied = []
     failed = []
+    # 미검증 건의 화면. 이게 없어서 2026-09-02 세미나 5675 실패를 로그만으로
+    # 진단할 수 없었다 — unverified 경로는 예외를 안 던져 log_error도 안 남는다.
+    shots = {}
 
     # 정리(prune)는 daily가 하루 1회 맡는다. 여기서 하면 30분마다 파일이 바뀌어
     # 커밋만 늘고, 지난 세미나가 남아 있어도 "상세를 안 연다"는 동작은 옳다.
@@ -1216,6 +1219,7 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
             btn.wait_for(state="visible", timeout=DEFAULT_TIMEOUT_MS)
         except PlaywrightTimeoutError:
             failed.append(sid)
+            shots[sid] = save_screenshot(page, f"seminar_{sid}_nobutton")
             continue
 
         btn_text = btn.inner_text() or ""
@@ -1242,17 +1246,19 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
 
         btn.click()
 
-        # 개인정보 동의 모달 처리
-        # button.btn_confirm이 페이지 내 여러 개 존재 — visible한 "동의합니다." 버튼 우선,
-        # 없으면 visible한 첫 번째 btn_confirm 클릭
+        # 개인정보 동의 모달 처리.
+        #
+        # button.btn_confirm은 페이지에 여러 개 있고 대부분 숨어 있다. **반드시
+        # :visible로 거를 것.** 예전 코드는 폴백에서 `locator("button.btn_confirm").first`
+        # 를 잡아 5초를 기다렸고, 그 첫 번째가 숨은 버튼이면 타임아웃 → except로
+        # 삼켜져 동의를 누르지 못한 채 신청이 조용히 실패했다(2026-09-02 세미나
+        # 5675, 두 계정 모두 unverified).
         try:
-            agree_btn = page.locator('button.btn_confirm:has-text("동의합니다.")')
-            if agree_btn.count() > 0 and agree_btn.first.is_visible():
-                agree_btn.first.click()
-            else:
-                confirm = page.locator("button.btn_confirm").first
-                confirm.wait_for(state="visible", timeout=5000)
-                confirm.click()
+            visible_confirm = page.locator("button.btn_confirm:visible")
+            visible_confirm.first.wait_for(state="visible", timeout=5000)
+            agree_btn = page.locator('button.btn_confirm:visible:has-text("동의합니다.")')
+            target = agree_btn.first if agree_btn.count() > 0 else visible_confirm.first
+            target.click()
         except PlaywrightTimeoutError:
             pass  # 모달 없는 세미나
 
@@ -1270,9 +1276,11 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
                 _log_seminar(sid, "success", account, title, start)
             else:
                 failed.append(sid)
+                shots[sid] = save_screenshot(page, f"seminar_{sid}_unverified")
                 _log_seminar(sid, "unverified", account, title, start)
         except Exception:
             failed.append(sid)
+            shots[sid] = save_screenshot(page, f"seminar_{sid}_unverified")
             _log_seminar(sid, "unverified", account, title, start)
 
     if dirty:
@@ -1286,6 +1294,7 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
 
     if failed:
         result["status"] = "unverified"
+        result["screenshots"] = shots
         result["message"] = f"신청 시도 후 상세 재확인 실패 — 완료 {len(applied)}건, 미검증 {len(failed)}건: {failed}{suffix}"
     elif applied:
         result["status"] = "success"

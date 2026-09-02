@@ -48,7 +48,9 @@ DocAuto의 상세 지식 저장소. 셀렉터·파일 포맷·설계 근거·버
 - 세미나 목록: `span.ico_apply` → `closest('a.list_detail')`의 `seminarId`. **제목도 여기서 긁는다**(`aEl.querySelector('.tit, dt, .title, strong')`, 없으면 innerText 줄 필터).
 - **세미나 제목은 상세가 아니라 목록에서 얻는다 (2026-08-28).** `_seminar_detail_meta`는 `document` 전역을 뒤져서 사이트 공통 요소를 집어왔다 — `seminar_applied.json` 108건의 제목이 전부 `엠서클 통합회원`(100) / `라이브세미나`(8)로, **단 한 번도 진짜 제목을 얻은 적이 없다.** 목록 추출은 `a.list_detail` 안으로 스코프가 한정돼 그 오염이 구조적으로 불가능하다. 상세 제목은 폴백으로만 남겼고, 오염된 값은 `runlog.clean_title`(`JUNK_TITLES`)이 걸러 표에서 세미나 번호로 대체한다.
   - 이미 신청한 세미나는 상세를 열지 않아 제목을 새로 알 길이 없다. 그래서 **오늘 방송분에 한해** 목록 제목을 표 로그에 채워 넣는다(페이지 로드 없음). 이력 파일의 오염된 제목은 그대로 남지만 표에는 쓰이지 않는다.
+  - 이력 제목을 목록 제목으로 되돌리던 복구 코드는 **2026-09-02 제거**했다. 오염 108건을 한 번 되돌리려던 일회성 장치였고, 이력이 정리된 뒤에는 매 런 순회 비용과 커밋만 남았다.
 - 세미나 신청: `/seminar/seminarDetail?seminarId=X` → `a.btn_bn`("신청하기") → `button.btn_confirm`(동의) → 텍스트가 "신청취소"로 바뀌면 완료.
+  - **`button.btn_confirm`은 반드시 `:visible`로 거른다.** 페이지에 여러 개가 상주하고 대부분 숨어 있다(출석 완료 팝업이 숨김 상태로 DOM에 남는 것과 같은 함정). 숨은 것을 잡으면 5초 뒤 타임아웃 → `except`에 삼켜져 동의를 못 누른 채 신청이 조용히 실패한다.
 - 라이브 입장: 목록 마커 `span.ico_enter` → 상세 `a.btn_bn.btn_enter`("입장하기", `onclick="playOnPopup(...)"` → `window.open`) → Playwright `expect_popup()`.
 - 설문: `/seminar/broadcastSeminarPopup?viewType=2&seminarId=X` → `a#surveyEnter` → `button.btn_answer:has-text("설문하기")` → `survey.villeway.com` 새 창.
 - 설문 폼: `form[id^="surveyForm"]`, 문항 `li[data-question-number]`, 문항 텍스트 = `label > div` 첫 줄(`[퀴즈]` 배지·후행 `*` 포함), 보기 = `ol li label` 내 `input[type=radio|checkbox]` + `span.col-start-2`, 제출 `input[type=submit][value="제출하기"]`.
@@ -339,6 +341,7 @@ GitHub `schedule`은 지연(최대 80분)·누락이 잦아 external cron (cron-
 | pId 조회 실패 | `/product/medicineList` 검색은 의약품 전용 — 모비케어 등 의료기기 미등록 | 캘린더 `td.today .pIdCls`에서 직접 추출(medicineList는 폴백만) |
 | 출석 매일 `unverified` → daily 백스톱 런이 매일 빨간불 (2026-08-05~10) | 출석은 **페이지 진입만으로 처리**되는데, 두 버튼이 DOM에 공존하며 `display`로만 토글된다. `button:has-text("출석하기")`는 매칭되지만 hidden이라 `wait_for(state="visible")`가 타임아웃 → "출석 버튼 없음(날짜 미확인)" | 버튼 대기 **이전에** `td[data-date="{today}"] div.point.complete` 확인 → `already_done` + `verified_by`. 클릭 후 폴백도 같은 표식으로 교체(기존 `#attend_btn, .btn_attend`는 실존하지 않는 셀렉터라 0개 매칭 시 예외). 포인트는 셀 `img[alt]`에서 읽음(100/보너스 500) |
 | 세미나 신청 전 계정 `failed` — `Page.evaluate: SyntaxError: Invalid or unexpected token` (2026-08-28) | 목록에서 제목을 긁는 JS를 **일반** 삼중따옴표 문자열에 넣었다. 그 안의 `\n`을 파이썬이 진짜 줄바꿈으로 바꿔 `split('` 에서 JS 문자열 리터럴이 끊겼다. `seminar_live`의 같은 JS는 `\\n`으로 이스케이프돼 있어 멀쩡했는데, 옮겨 심으면서 한 단계를 흘렸다 | JS를 모듈 상수 `SEMINAR_LIST_JS`로 빼고 **r-문자열**로 만들어 이스케이프 단계를 없앰. 회귀 테스트 `tests/test_embedded_js.py`가 evaluate JS의 줄별 따옴표 짝을 검사(브라우저 없이 검출) |
+| 세미나 신청 `unverified` — 클릭 후 재확인에서 여전히 "신청하기" (2026-09-02, 세미나 5675, 두 계정 동시) | 동의 모달 폴백이 `page.locator("button.btn_confirm").first`였다. 숨은 btn_confirm이 먼저 잡히면 `wait_for(visible, 5000)`가 타임아웃 → `except PlaywrightTimeoutError: pass`("모달 없는 세미나")로 삼켜져 동의를 못 눌렀다. 같은 런의 세미나 5676은 `동의합니다.` 빠른 경로를 타서 정상 신청됐다 — 그래서 네트워크·로그인 문제로 보이지 않았다 | 후보를 `button.btn_confirm:visible`로 한정. 더불어 **미검증 경로에 스크린샷 추가** — 이 경로는 예외를 던지지 않아 `log_error`도 `errors-*.jsonl`도 안 남고, 그래서 로그만으로는 원인을 특정할 수 없었다(`result["screenshots"]`) |
 | 출석 `failed` — "출석 버튼 클릭 후 완료 확인 실패" (2026-08-14) | 오늘 셀 확인이 `locator().count()` **즉시 읽기**였다. 달력은 `domcontentloaded` 시점에 아직 안 붙어 있어, 출석이 처리됐는데도 0 → 클릭 분기로 새고 → `reload()` 후에도 또 즉시 `count()` → 실패. 키메디 `already_done` 오판과 **같은 함정**(마운트 전 count) | `_attend_marked()`로 `wait_for_selector("td[data-date]")` → 오늘 셀 순서로 대기(8초). 버튼을 누르기 전에 **재접속 1회**를 넣어 진입=출석 경로를 정상 경로로 삼음(`success`, `verified_by`=오늘 셀). 클릭 후 폴백도 같은 대기로 교체 |
 
 ### keymedi.py
