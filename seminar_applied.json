@@ -815,6 +815,22 @@
       "start_time": "12:00",
       "title": "True Cardiovascular Event Prevention from the HEART, CRESTOR",
       "year": 2026
+    },
+    "5671": {
+      "applied_at": "2026-09-02T13:32:51.759527+09:00",
+      "date": "2026-09-15",
+      "day": 15,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-15(화) 13:00 ~ 14:00",
+      "start_date": "2026-09-15",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "Strategies for High-Risk Dyslipidemia Patients Focusing on ASCVD",
+      "year": 2026
     }
   },
   "wonju": {
@@ -1648,6 +1664,22 @@
       "start_minute": 0,
       "start_time": "13:00",
       "title": "DEEP INSIGHT WEDNESDAY WEBINAR_Dual Regeneration Strategy: ECM Restoration & Collagen Biostimulation",
+      "year": 2026
+    },
+    "5671": {
+      "applied_at": "2026-09-02T13:33:43.278493+09:00",
+      "date": "2026-09-15",
+      "day": 15,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-15(화) 13:00 ~ 14:00",
+      "start_date": "2026-09-15",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "Strategies for High-Risk Dyslipidemia Patients Focusing on ASCVD",
       "year": 2026
     }
   }
