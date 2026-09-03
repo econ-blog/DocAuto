@@ -46,7 +46,7 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "17:35",
+      "updated_at": "18:05",
       "live": {
         "bjh7790": "success",
         "wonju": "success"
@@ -64,12 +64,14 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "17:35",
+      "updated_at": "18:05",
       "live": {
-        "wonju": "success"
+        "wonju": "success",
+        "bjh7790": "success"
       },
       "survey": {
-        "wonju": "not_ready"
+        "wonju": "not_ready",
+        "bjh7790": "not_ready"
       }
     },
     "5640": {
@@ -98,12 +100,14 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "17:35",
+      "updated_at": "18:05",
       "live": {
-        "wonju": "success"
+        "wonju": "success",
+        "bjh7790": "success"
       },
       "survey": {
-        "wonju": "not_ready"
+        "wonju": "not_ready",
+        "bjh7790": "not_ready"
       }
     },
     "5675": {
