@@ -1,0 +1,84 @@
+{
+  "kind": "seminar",
+  "date": "2026-09-04",
+  "seminars": {
+    "5619": {
+      "id": "5619",
+      "title": "[소화기계질환] B형간염 질환에서의 실리마린의 의의",
+      "start": "2026-09-04(금) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5620": {
+      "id": "5620",
+      "title": "ARB Strategies in Atrial Fibrillation – Clinical value of Olmesartan",
+      "start": "2026-09-04(금) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5621": {
+      "id": "5621",
+      "title": "[EZcare WEEK] 지질과 동맥경화의 관점에서 바라보는 이상지질혈증의 모든 것",
+      "start": "2026-09-04(금) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5622": {
+      "id": "5622",
+      "title": "순환기내과에서 바라보는 NOAC & FEXUCLUE",
+      "start": "2026-09-04(금) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5650": {
+      "id": "5650",
+      "title": "[EZcare WEEK]True Cardiovascular Event Prevention from the HEART, CRESTOR",
+      "start": "2026-09-04(금) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5659": {
+      "id": "5659",
+      "title": "Easyef MD Spray for Cutaneous and Mucosal Regeneration: From EGF Biology to Clinical Evidence",
+      "start": "2026-09-04(금) 18:00 ~ 19:00",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "00:19"
+    },
+    "5679": {
+      "id": "5679",
+      "title": "전문직과 직장인을 위한 거북목·일자목 관리 전략",
+      "start": "2026-09-18(금) 13:00 ~ 14:00",
+      "apply": {
+        "wonju": "success"
+      },
+      "updated_at": "00:20"
+    },
+    "5678": {
+      "id": "5678",
+      "title": "비뇨기질환에서 프로바이오틱스의 최신지견과 의의",
+      "start": "2026-09-22(화) 18:30 ~ 19:30",
+      "apply": {
+        "wonju": "success"
+      },
+      "updated_at": "00:20"
+    }
+  }
+}

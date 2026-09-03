@@ -1425,6 +1425,38 @@
       "start_time": "13:00",
       "title": "Does Switching Within the DPP-4 Inhibitor Class Make a Real Difference?: Integrating Korean RWE into Diabetes Care",
       "year": 2026
+    },
+    "5678": {
+      "applied_at": "2026-09-04T00:20:19.097645+09:00",
+      "date": "2026-09-22",
+      "day": 22,
+      "end_hour": 19,
+      "end_minute": 30,
+      "end_time": "19:30",
+      "month": 9,
+      "start": "2026-09-22(화) 18:30 ~ 19:30",
+      "start_date": "2026-09-22",
+      "start_hour": 18,
+      "start_minute": 30,
+      "start_time": "18:30",
+      "title": "비뇨기질환에서 프로바이오틱스의 최신지견과 의의",
+      "year": 2026
+    },
+    "5679": {
+      "applied_at": "2026-09-04T00:20:04.565494+09:00",
+      "date": "2026-09-18",
+      "day": 18,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-18(금) 13:00 ~ 14:00",
+      "start_date": "2026-09-18",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "전문직과 직장인을 위한 거북목·일자목 관리 전략",
+      "year": 2026
     }
   }
 }
