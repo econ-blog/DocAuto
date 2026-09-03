@@ -46,7 +46,15 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "00:19"
+      "updated_at": "17:05",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     },
     "5618": {
       "id": "5618",
