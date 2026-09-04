@@ -1,0 +1,25 @@
+{
+  "kind": "seminar",
+  "date": "2026-09-05",
+  "seminars": {
+    "5692": {
+      "id": "5692",
+      "title": "CLOART, the Answer from HOST-PREVENTION & HOST-EXAM RCT",
+      "start": "2026-10-07(수) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success"
+      },
+      "updated_at": "00:18"
+    },
+    "5693": {
+      "id": "5693",
+      "title": "O.M.T Web Symposium",
+      "start": "2026-10-08(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "00:20"
+    }
+  }
+}
