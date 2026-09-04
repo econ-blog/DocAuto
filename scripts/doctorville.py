@@ -672,9 +672,12 @@ def _do_mims_login(page, creds: dict) -> bool:
     """mims-account.shop.co.kr 로그인 폼을 채우고 제출한다.
     셀렉터: input[name="identifier"], input[type="password"], button[type="submit"]
     """
+    # 네트워크 오류(net::ERR_CONNECTION_CLOSED)는 PlaywrightTimeoutError가 아니라
+    # PlaywrightError로 온다. Timeout만 잡으면 SSO가 소켓을 끊을 때 예외가 그대로
+    # 위로 튀어 계정 전체가 트레이스백 한 덩어리로 죽는다 — 로그인 실패로 접는다.
     try:
         page.wait_for_selector('input[name="identifier"]', timeout=DEFAULT_TIMEOUT_MS)
-    except PlaywrightTimeoutError:
+    except (PlaywrightTimeoutError, PlaywrightError):
         return False
 
     page.fill('input[name="identifier"]', creds["email"])
@@ -684,9 +687,12 @@ def _do_mims_login(page, creds: dict) -> bool:
     # 클릭 후 doctorville.co.kr로 리다이렉트될 때까지 대기.
     # wait_for_load_state("load")는 mims 페이지 자체가 이미 loaded 상태이므로
     # 리다이렉트 완료 전에 리턴될 수 있음 — wait_for_url로 교체.
+    # 제출 직후 리다이렉트 구간이 실제로 가장 자주 끊기는 지점이다(errors 로그 참조).
+    # goto는 goto_with_retry로 감쌌지만 여기는 맨몸이었다 — 재시도를 붙이지 않고
+    # 예외만 흡수한다. 아래 URL 검사가 성공/실패를 최종 판정한다.
     try:
         page.wait_for_url("*doctorville.co.kr*", timeout=DEFAULT_TIMEOUT_MS)
-    except PlaywrightTimeoutError:
+    except (PlaywrightTimeoutError, PlaywrightError):
         pass
 
     return "doctorville.co.kr" in page.url and "mims-account" not in page.url
@@ -1508,6 +1514,24 @@ def run_precheck_quiz(page, credentials_path: str = None) -> dict:
 
 # ---------------------------------------------------------------------------
 
+def _emit_progress(account: str, task: str, result: dict) -> None:
+    """태스크 하나가 끝날 때마다 진행 상황을 stderr에 한 줄 남긴다.
+
+    부모(daily_runner)가 이 프로세스를 타임아웃으로 죽이면 stdout 최종 JSON은
+    영영 나오지 않아, 이미 끝난 출석·퀴즈까지 통째로 "계정 failed" 한 줄로 뭉개진다.
+    stdout은 결과 JSON 전용 계약이므로(_extract_json이 역방향으로 줄을 훑는다)
+    진행 로그는 반드시 stderr로 보낸다.
+    """
+    try:
+        line = json.dumps(
+            {"_progress": {"account": account, "task": task, "status": result.get("status", "")}},
+            ensure_ascii=False,
+        )
+        print(line, file=sys.stderr, flush=True)
+    except Exception:
+        pass
+
+
 def run(account: str, credentials_path: Path, headless: bool, tasks: list[str]) -> dict:
     creds = load_credentials(credentials_path, account)
     output = {
@@ -1548,6 +1572,7 @@ def run(account: str, credentials_path: Path, headless: bool, tasks: list[str]) 
                         output[t] = {"status": "failed", "message": f"{t} 중 예외 발생: {e}"}
                         shot = save_screenshot(page, f"{t}_error")
                         common.log_error("doctorville", e, account=account, task=t, screenshot=shot)
+                    _emit_progress(account, t, output[t])
 
         except Exception as e:
             output["error"] = f"예외 발생: {e}"

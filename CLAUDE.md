@@ -86,6 +86,7 @@
 | `scripts/logs/` | 실패 스크린샷·표 PNG (gitignore, artifact 7일) |
 | `logs/daily-YYYY-MM-DD.json` | daily 실행 로그. 런마다 `run{N}` append. 행=run, 열=모듈 |
 | `logs/seminar-YYYY-MM-DD.json` | 세미나 실행 로그. 행=세미나 |
+| `logs/retries-YYYY-MM.jsonl` | **재시도 계측**(append-only, prune 대상 아님). `goto`/`reload` 재시도가 실패를 건져냈는지(`recovered`)와 태운 시간(`waited_sec`). 첫 시도 성공은 기록하지 않는다 |
 | `logs/errors-YYYY-MM.jsonl` | **영구 오류 로그**(append-only, prune 대상 아님). 예외 클래스·메시지·트레이스백·스크린샷·GH run. **에이전트 진단용 — 텔레그램으로 보내지 않는다** |
 
 Secrets: `CREDENTIALS_JSON`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.

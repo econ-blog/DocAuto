@@ -67,6 +67,33 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
+def _salvage_progress(stderr: str | bytes | None) -> dict:
+    """타임아웃으로 죽은 자식의 stderr에서 `_progress` 라인을 긁어 완료분을 복원한다.
+
+    자식은 최종 결과 JSON을 stdout에 마지막에 한 번만 찍는다. 타임아웃으로 죽으면
+    그 JSON이 없어 이미 끝난 태스크까지 "계정 failed" 한 줄로 사라진다(2026-09-04).
+    자식이 태스크마다 stderr에 남기는 진행 라인만 되살려 알림에 붙인다.
+    부분 결과는 진단용이다 — 성공으로 승격하지 않는다.
+    """
+    if not stderr:
+        return {}
+    if isinstance(stderr, bytes):
+        stderr = stderr.decode("utf-8", "replace")
+    done = {}
+    for line in stderr.splitlines():
+        line = line.strip()
+        if not line.startswith("{") or "_progress" not in line:
+            continue
+        try:
+            prog = json.loads(line).get("_progress") or {}
+        except json.JSONDecodeError:
+            continue
+        task = prog.get("task")
+        if task:
+            done[task] = prog.get("status", "")
+    return done
+
+
 def run_script(script_name: str, extra_args: list[str] = None, timeout: int = 120) -> dict:
     """서브프로세스로 스크립트를 실행하고 stdout JSON을 파싱해 반환한다."""
     script_path = SCRIPT_DIR / script_name
@@ -103,9 +130,15 @@ def run_script(script_name: str, extra_args: list[str] = None, timeout: int = 12
                 os.killpg(e.pid, signal.SIGKILL)
             except Exception:
                 pass
+        partial = _salvage_progress(e.stderr)
         common.log_error(script_name, e, task=" ".join(extra_args or []), status="timeout",
-                         extra={"timeout_sec": timeout})
-        return {"status": "failed", "message": f"{script_name} 타임아웃 ({timeout}초)."}
+                         extra={"timeout_sec": timeout, "partial": partial})
+        result = {"status": "failed", "message": f"{script_name} 타임아웃 ({timeout}초)."}
+        if partial:
+            done = ", ".join(f"{k}={v}" for k, v in partial.items())
+            result["message"] += f" 완료분: {done}"
+            result["partial"] = partial
+        return result
     except Exception as e:
         common.log_error(script_name, e, task=" ".join(extra_args or []))
         return {"status": "failed", "message": f"실행 예외: {e}"}

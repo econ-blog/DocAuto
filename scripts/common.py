@@ -197,6 +197,44 @@ def log_error(
         return ""
 
 
+def log_retry(op: str, url: str, attempts: list[dict], recovered: bool, waited_sec: float) -> str:
+    """재시도 통계(logs/retries-YYYY-MM.jsonl)에 한 줄 append하고 경로를 반환한다.
+
+    왜 필요한가: 백오프 재시도가 실제로 성공을 건져내는지 지금까지 측정한 적이 없다.
+    "첫 시도가 실패하면 나머지도 같이 실패한다"가 맞다면 재시도는 시간만 태우는
+    비용이고, 예산을 늘리는 게 아니라 줄이거나 없애는 게 맞다. 그 판단에 필요한
+    숫자만 남긴다 — 실패가 한 번이라도 난 호출만 기록하므로 평상시에는 0바이트다.
+
+    recovered=True는 N번째 시도에서 살아난 경우(재시도가 값을 한 경우),
+    False는 예산을 다 쓰고도 실패한 경우(재시도가 헛돈 경우)다.
+    두 카운트의 비가 곧 재시도의 효용이다.
+
+    실패해도 예외를 밖으로 던지지 않는다 — 계측이 본 흐름을 죽이면 안 된다.
+    """
+    try:
+        import sys as _sys
+
+        entry = {
+            "ts": datetime.now(KST).isoformat(timespec="seconds"),
+            "script": Path(_sys.argv[0]).name if _sys.argv and _sys.argv[0] else "",
+            "op": op,
+            "url": url.split("?")[0][:200],
+            "attempts": len(attempts),
+            "recovered": recovered,
+            "succeeded_at": len(attempts) + 1 if recovered else 0,
+            "waited_sec": round(waited_sec, 1),
+            "errors": attempts,
+            "gh_run": os.environ.get("GITHUB_RUN_ID", ""),
+        }
+        path = ERROR_LOG_DIR / f"retries-{datetime.now(KST):%Y-%m}.jsonl"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        return str(path)
+    except Exception:
+        return ""
+
+
 def save_screenshot(page, name_stem: str) -> str:
     """logs/<name_stem>_<타임스탬프>.png 저장 후 경로 반환(실패 시 빈 문자열)."""
     LOG_DIR.mkdir(exist_ok=True)
@@ -228,6 +266,43 @@ def _is_retryable(exc: Exception) -> bool:
     return any(m in msg for m in RETRYABLE_ERROR_MARKERS)
 
 
+def _retry_navigation(
+    op: str,
+    url: str,
+    action,
+    page,
+    retries: int,
+    backoff_delays: tuple[float, ...],
+):
+    """네비게이션 재시도 루프 + 계측. goto/reload가 공유한다.
+
+    예산(retries, backoff_delays)은 호출자가 정한 값을 그대로 쓴다 — 여기서 늘리지 않는다.
+    실패가 한 번이라도 나면 log_retry로 시도 이력을 남긴다.
+    """
+    attempts = []
+    waited = 0.0
+    last_exc = None
+    for attempt in range(retries + 1):
+        try:
+            action()
+            if attempts:
+                log_retry(op, url, attempts, recovered=True, waited_sec=waited)
+            return
+        except (PlaywrightTimeoutError, PlaywrightError) as e:
+            last_exc = e
+            attempts.append({"n": attempt + 1, "type": type(e).__name__, "msg": str(e).splitlines()[0][:120]})
+            if attempt < retries and _is_retryable(e):
+                delay = backoff_delays[attempt] if attempt < len(backoff_delays) else backoff_delays[-1]
+                waited += delay
+                try:
+                    page.wait_for_timeout(int(delay * 1000))
+                except Exception:
+                    time.sleep(delay)
+                continue
+            log_retry(op, url, attempts, recovered=False, waited_sec=waited)
+            raise last_exc
+
+
 def goto_with_retry(
     page,
     url: str,
@@ -245,23 +320,16 @@ def goto_with_retry(
     네트워크 일시 지연/서버 리셋으로 판단, goto 자체에 재시도를 추가해 흡수한다.
     지수 백오프(기본: 3초, 7초, 15초)를 두어 WAF의 일시적 차단 창을 넘기도록 한다.
 
+    이 재시도가 실제로 값을 하는지는 logs/retries-YYYY-MM.jsonl로 측정한다
+    (common.log_retry). recovered=false만 쌓이면 예산을 줄이는 근거가 된다.
+
     마지막 시도에서도 실패하면 발생한 예외(PlaywrightTimeoutError / PlaywrightError)를 그대로 전파한다.
     """
-    last_exc = None
-    for attempt in range(retries + 1):
-        try:
-            page.goto(url, wait_until=wait_until, timeout=timeout_ms)
-            return
-        except (PlaywrightTimeoutError, PlaywrightError) as e:
-            last_exc = e
-            if attempt < retries and _is_retryable(e):
-                delay = backoff_delays[attempt] if attempt < len(backoff_delays) else backoff_delays[-1]
-                try:
-                    page.wait_for_timeout(int(delay * 1000))
-                except Exception:
-                    time.sleep(delay)
-                continue
-            raise last_exc
+    _retry_navigation(
+        "goto", url,
+        lambda: page.goto(url, wait_until=wait_until, timeout=timeout_ms),
+        page, retries, backoff_delays,
+    )
 
 
 def reload_with_retry(
@@ -273,22 +341,11 @@ def reload_with_retry(
     backoff_delays: tuple[float, ...] = (3.0, 7.0, 15.0),
 ):
     """page.reload() 타임아웃 또는 네트워크 연결 오류(net::ERR_CONNECTION_CLOSED 등) 발생 시 지수 백오프로 재시도한다."""
-    last_exc = None
-    for attempt in range(retries + 1):
-        try:
-            page.reload(wait_until=wait_until, timeout=timeout_ms)
-            return
-        except (PlaywrightTimeoutError, PlaywrightError) as e:
-            last_exc = e
-            if attempt < retries and _is_retryable(e):
-                delay = backoff_delays[attempt] if attempt < len(backoff_delays) else backoff_delays[-1]
-                try:
-                    page.wait_for_timeout(int(delay * 1000))
-                except Exception:
-                    time.sleep(delay)
-                continue
-            raise last_exc
-
+    _retry_navigation(
+        "reload", getattr(page, "url", ""),
+        lambda: page.reload(wait_until=wait_until, timeout=timeout_ms),
+        page, retries, backoff_delays,
+    )
 
 
 def form_login(
