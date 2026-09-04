@@ -10,7 +10,7 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "11:05",
+      "updated_at": "11:36",
       "live": {
         "bjh7790": "success",
         "wonju": "success"
@@ -53,12 +53,20 @@
     "5650": {
       "id": "5650",
       "title": "[EZcare WEEK]True Cardiovascular Event Prevention from the HEART, CRESTOR",
-      "start": "2026-09-04(금) 13:00 ~ 14:00",
+      "start": "2026-09-04(금) 12:30 ~ 13:30",
       "apply": {
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "00:19"
+      "updated_at": "11:36",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     },
     "5659": {
       "id": "5659",
