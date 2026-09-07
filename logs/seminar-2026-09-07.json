@@ -9,14 +9,14 @@
       "apply": {
         "wonju": "already_done"
       },
-      "updated_at": "19:08",
+      "updated_at": "19:38",
       "live": {
         "wonju": "success",
         "bjh7790": "success"
       },
       "survey": {
-        "wonju": "not_ready",
-        "bjh7790": "not_ready"
+        "wonju": "incomplete_bank",
+        "bjh7790": "incomplete_bank"
       }
     },
     "5613": {
@@ -77,7 +77,7 @@
       "apply": {
         "wonju": "already_done"
       },
-      "updated_at": "19:07",
+      "updated_at": "19:37",
       "live": {
         "wonju": "success",
         "bjh7790": "success"
@@ -94,7 +94,7 @@
       "apply": {
         "wonju": "already_done"
       },
-      "updated_at": "19:08",
+      "updated_at": "19:38",
       "live": {
         "wonju": "success",
         "bjh7790": "success"
