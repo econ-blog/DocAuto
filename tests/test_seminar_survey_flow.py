@@ -163,6 +163,7 @@ def test_run_survey_verified_by_detail_button_after_submit(monkeypatch):
     monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda page: [])
     monkeypatch.setattr(seminar_survey, "apply_plan", lambda page, plan: None)
     monkeypatch.setattr(seminar_survey, "find_advance_button", lambda page: (MagicMock(), "submit"))
+    monkeypatch.setattr(seminar_survey, "tick_consents", lambda page: [])
     calls = _stub_detail(monkeypatch, "done", ["설문 참여 완료", "세미나 종료"])
 
     result = seminar_survey.run_survey(MagicMock(), 5600, bank_paths={})
@@ -181,6 +182,7 @@ def test_run_survey_unverified_when_detail_shows_only_seminar_end(monkeypatch):
     monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda page: [])
     monkeypatch.setattr(seminar_survey, "apply_plan", lambda page, plan: None)
     monkeypatch.setattr(seminar_survey, "find_advance_button", lambda page: (MagicMock(), "submit"))
+    monkeypatch.setattr(seminar_survey, "tick_consents", lambda page: [])
     monkeypatch.setattr(seminar_survey.common, "save_screenshot", lambda page, name: "shot.png")
     _stub_detail(monkeypatch, "not_done", ["세미나 종료"])
 
@@ -195,17 +197,22 @@ def test_run_survey_unverified_when_detail_shows_only_seminar_end(monkeypatch):
 
 def test_run_survey_confirms_success_even_when_the_window_closes(monkeypatch):
     """제출 후 창이 닫혀도 상세에 완료 표시가 있으면 성공이다(예전엔 무조건 unverified)."""
+    closed = {"v": False}
     survey_page = MagicMock()
-    survey_page.is_closed.side_effect = [False, True, True, True]
+    # 호출 횟수가 아니라 실제 상태로 답한다 — 제출 버튼을 누르면 창이 닫힌다.
+    survey_page.is_closed.side_effect = lambda: closed["v"]
     survey_page.evaluate.return_value = [
         {"number": "1", "question": "만족하셨습니까?", "kind": "radio", "name": "q1",
          "options": [{"text": "예", "id": "o1", "name": "q1", "value": "1", "qnum": "1", "index": 0},
                      {"text": "아니오", "id": "o2", "name": "q1", "value": "2", "qnum": "1", "index": 1}]}
     ]
+    submit = MagicMock()
+    submit.click.side_effect = lambda: closed.__setitem__("v", True)
     monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (survey_page, ""))
     monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda page: [])
     monkeypatch.setattr(seminar_survey, "apply_plan", lambda page, plan: None)
-    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda page: (MagicMock(), "submit"))
+    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda page: (submit, "submit"))
+    monkeypatch.setattr(seminar_survey, "tick_consents", lambda page: [])
     _stub_detail(monkeypatch, "done", ["설문 참여 완료", "세미나 종료"])
 
     result = seminar_survey.run_survey(MagicMock(), 5600, bank_paths={})
@@ -482,3 +489,175 @@ def test_mobile_detail_waits_for_the_marker_to_render(monkeypatch):
     monkeypatch.setattr(seminar_survey, "read_detail_buttons", late_buttons)
 
     assert seminar_survey.confirm_survey_done(page, 5602)[0] == "done"
+
+
+# ---------------------------------------------------------------------------
+# 페이지 진행 (세미나 5616, 2026-09-07)
+# ---------------------------------------------------------------------------
+
+def _radio_question(number="1", text="만족하셨습니까?"):
+    return {
+        "number": number, "question": text, "kind": "radio", "name": f"q{number}",
+        "options": [
+            {"text": "예", "id": f"o{number}a", "name": f"q{number}", "value": "1",
+             "qnum": number, "index": 0},
+            {"text": "아니오", "id": f"o{number}b", "name": f"q{number}", "value": "2",
+             "qnum": number, "index": 1},
+        ],
+    }
+
+
+class _ScriptedPage:
+    """읽을 때마다 정해진 문항 목록을 내주는 설문 창.
+
+    `evaluate`에 넘어온 JS로 어떤 조회인지 가른다 — 호출 순서에 묶이지 않는다.
+    """
+
+    def __init__(self, reads, errors=None):
+        self._reads = list(reads)
+        self._errors = errors or []
+        self.reads = 0
+        self.waited_ms = 0
+        self.probed = 0
+
+    def is_closed(self):
+        return False
+
+    def evaluate(self, js):
+        if "CSS.escape" in js:            # tick_consents
+            return []
+        if 'role="alert"' in js:          # page_error_texts
+            return list(self._errors)
+        if "outside:" in js:              # stuck_probe
+            self.probed += 1
+            return {"questions": [], "outside": []}
+        self.reads += 1                   # read_questions
+        idx = min(self.reads - 1, len(self._reads) - 1)
+        return list(self._reads[idx])
+
+    def wait_for_timeout(self, ms):
+        self.waited_ms += ms
+
+    def close(self):
+        pass
+
+
+def test_wait_for_page_change_polls_until_the_page_actually_changes():
+    """고정 5초로 한 번만 읽던 것이 문제였다 — 늦게 바뀌어도 잡아야 한다."""
+    p1, p2 = [_radio_question("1")], [_radio_question("2", "다른 문항")]
+    page = _ScriptedPage([p1, p1, p1, p2])
+    before = seminar_survey.page_fingerprint(p1)
+
+    moved, questions = seminar_survey.wait_for_page_change(page, before)
+
+    assert moved is True
+    assert seminar_survey.page_fingerprint(questions) != before
+    # 바뀌자마자 끝난다 — 남은 대기 시간을 통째로 태우지 않는다.
+    assert page.waited_ms < seminar_survey.ADVANCE_WAIT_MS
+
+
+def test_wait_for_page_change_reports_no_change_after_timeout():
+    """정말 안 바뀌면 제한 시간까지 기다린 뒤 False를 돌려준다."""
+    p1 = [_radio_question("1")]
+    page = _ScriptedPage([p1])
+
+    moved, questions = seminar_survey.wait_for_page_change(page, seminar_survey.page_fingerprint(p1))
+
+    assert moved is False
+    assert questions == p1
+    assert page.waited_ms >= seminar_survey.ADVANCE_WAIT_MS
+
+
+def test_wait_for_page_change_treats_a_closed_window_as_progress():
+    page = _ScriptedPage([[_radio_question("1")]])
+    page.is_closed = lambda: True
+
+    assert seminar_survey.wait_for_page_change(page, "무엇이든") == (True, None)
+
+
+def _stuck_run(monkeypatch, page, advance=None):
+    button = advance or MagicMock()
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda p, sid: (page, ""))
+    monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda p: [])
+    monkeypatch.setattr(seminar_survey, "apply_plan", lambda p, plan: None)
+    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda p: (button, "next"))
+    monkeypatch.setattr(seminar_survey, "dump_survey_dom", lambda p, sid: "dom.html")
+    monkeypatch.setattr(seminar_survey.common, "save_screenshot", lambda p, name: "shot.png")
+    _stub_detail(monkeypatch, "unknown", [])
+    return button, seminar_survey.run_survey(MagicMock(), 5616, bank_paths={})
+
+
+def test_run_survey_retries_the_advance_click_before_declaring_stuck(monkeypatch):
+    """한 번 눌러서 안 넘어가면 다시 눌러 본다. 페이지가 그대로면 중복 제출이 아니다."""
+    page = _ScriptedPage([[_radio_question("1")]])
+
+    button, result = _stuck_run(monkeypatch, page)
+
+    assert button.click.call_count == seminar_survey.ADVANCE_ATTEMPTS
+    assert result["status"] == "failed"
+    # 눌린 횟수와 무관하게 "제출한 페이지"는 1이다.
+    assert result["pages"] == 1
+
+
+def test_stuck_result_carries_why_it_did_not_advance(monkeypatch):
+    """artifact는 7일이면 사라진다 — 원인은 결과 JSON에 실려야 한다(세미나 5616)."""
+    page = _ScriptedPage([[_radio_question("1")]], errors=["필수 항목입니다."])
+
+    _, result = _stuck_run(monkeypatch, page)
+
+    assert result["page_errors"] == ["필수 항목입니다."]
+    assert result["stuck_probe"] == {"questions": [], "outside": []}
+    assert result["dom_dump"] == "dom.html"
+    assert result["screenshot"] == "shot.png"
+    assert result["advance"] == "next"
+
+
+def test_dismissed_alert_text_is_kept_in_the_result(monkeypatch):
+    """진행이 막힌 이유가 알림 문구에 적혀 있는데 예전엔 버려졌다."""
+    page = _ScriptedPage([[_radio_question("1")]])
+    monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda p: ["필수 문항에 응답해 주세요."])
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda p, sid: (page, ""))
+    monkeypatch.setattr(seminar_survey, "apply_plan", lambda p, plan: None)
+    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda p: (MagicMock(), "next"))
+    monkeypatch.setattr(seminar_survey, "dump_survey_dom", lambda p, sid: "")
+    monkeypatch.setattr(seminar_survey.common, "save_screenshot", lambda p, name: "")
+    _stub_detail(monkeypatch, "unknown", [])
+
+    result = seminar_survey.run_survey(MagicMock(), 5616, bank_paths={})
+
+    assert "필수 문항에 응답해 주세요." in result["alerts"]
+
+
+# ---------------------------------------------------------------------------
+# 문항 목록 밖의 개인정보 동의 체크박스 (tick_consents)
+# ---------------------------------------------------------------------------
+
+def test_tick_consents_returns_labels_it_checked():
+    page = MagicMock()
+    page.evaluate.return_value = ["개인정보 수집·이용에 동의합니다."]
+
+    assert seminar_survey.tick_consents(page) == ["개인정보 수집·이용에 동의합니다."]
+
+
+def test_tick_consents_never_raises():
+    """여기서 죽으면 답을 다 채운 설문까지 통째로 실패한다."""
+    page = MagicMock()
+    page.evaluate.side_effect = RuntimeError("boom")
+
+    assert seminar_survey.tick_consents(page) == []
+
+
+def test_checked_consents_are_recorded_in_the_result(monkeypatch):
+    page = _ScriptedPage([[_radio_question("1")]])
+    monkeypatch.setattr(seminar_survey, "tick_consents", lambda p: ["개인정보 수집에 동의합니다."])
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda p, sid: (page, ""))
+    monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda p: [])
+    monkeypatch.setattr(seminar_survey, "apply_plan", lambda p, plan: None)
+    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda p: (MagicMock(), "next"))
+    monkeypatch.setattr(seminar_survey, "dump_survey_dom", lambda p, sid: "")
+    monkeypatch.setattr(seminar_survey.common, "save_screenshot", lambda p, name: "")
+    _stub_detail(monkeypatch, "unknown", [])
+
+    result = seminar_survey.run_survey(MagicMock(), 5616, bank_paths={})
+
+    assert result["consents"] == ["개인정보 수집에 동의합니다."]

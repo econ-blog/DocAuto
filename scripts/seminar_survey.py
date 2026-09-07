@@ -48,6 +48,18 @@ seminar_live.py로 입장에 성공한 세미나는 방송 팝업에서 설문�
 (status=incomplete_bank). 설문은 페이지 순차 제출형이라 뒷 페이지는 앞 페이지를
 제출해야 볼 수 있으므로, 페이지 단위 검증이 도달 가능한 최대 안전선이다.
 
+페이지 진행 (2026-09-07 세미나 5616):
+    진행 버튼을 누른 뒤 고정 5초를 재우고 딱 한 번 다시 읽던 것을, 페이지가 실제로
+    바뀔 때까지 폴링하도록 바꿨다(`wait_for_page_change`). 안 바뀌면 답을 다시
+    적용하고 한 번 더 누른다 — 페이지가 그대로라는 건 제출이 안 됐다는 뜻이라
+    중복 제출이 아니다. 그래도 안 바뀌면 `failed`로 끊되, 그때 닫은 알림 문구
+    (`alerts`)·보이는 오류 문구(`page_errors`)·응답 상태(`stuck_probe`)·DOM 덤프를
+    결과에 담는다. 예전에는 `static_items` 하나만 남아 원인을 좁힐 수 없었다.
+
+    `li[data-question-number]` 밖에 놓인 개인정보 동의 체크박스는 문항으로 읽히지
+    않아 필수여도 빈 채로 남는다. `tick_consents`가 진행 직전에 눌러 둔다 —
+    동의는 사용자 사전 승인이 끝난 정책이다(CLAUDE.md "정책").
+
 완료 판정 (2026-08-28 도입, 2026-08-31 모바일 우선으로 변경):
     제출 직후 완료 화면 문구가 아니라, **세미나 상세에 재접속했을 때** 사이트가
     보여주는 **보이는** 버튼으로 판정한다(`confirm_survey_done`). 상세는
@@ -114,6 +126,17 @@ SURVEY_POPUP_TIMEOUT_MS = 8000
 
 # 문항이 통째로 빈 값으로 읽혔을 때 렌더를 한 번 더 기다리는 시간.
 BLANK_RETRY_WAIT_MS = 5000
+
+# 진행 버튼을 누른 뒤 페이지가 실제로 바뀔 때까지 기다리는 시간. 예전에는 고정 5초를
+# 재우고 딱 한 번 다시 읽어, 렌더가 그보다 늦으면 같은 페이지를 읽고 "막힘"으로 끊었다
+# (2026-09-07 세미나 5616). 대부분의 설문은 1초 안에 바뀌므로 평균 대기는 오히려 준다.
+ADVANCE_WAIT_MS = 20000
+ADVANCE_POLL_MS = 500
+# 알림 모달을 닫고 나서야 뒤늦게 넘어가는 폼을 위한 짧은 재확인.
+ADVANCE_SETTLE_MS = 3000
+# 페이지가 안 바뀌면 한 번 더 누른다. 페이지가 그대로라는 것은 제출이 안 됐다는
+# 뜻이므로 중복 제출이 아니다.
+ADVANCE_ATTEMPTS = 2
 
 # 설문 완료의 양성 증거. 제출 직후 완료 화면이 아니라 **세미나 상세에 재접속했을
 # 때** 사이트가 보여주는 버튼으로 판정한다(2026-08-28 사용자 실측 화면):
@@ -953,6 +976,142 @@ def page_fingerprint(questions: list[dict]) -> str:
     return "|".join(f"{q.get('number')}:{normalize_question(q.get('question', ''))}" for q in questions)
 
 
+def wait_for_page_change(survey_page, before_fp: str, timeout_ms: int = ADVANCE_WAIT_MS):
+    """진행 버튼을 누른 뒤 페이지가 실제로 바뀔 때까지 기다린다.
+
+    `(바뀌었는가, 새로 읽은 문항)`을 돌려준다. 창이 닫혔으면 `(True, None)`이다.
+    새로 읽은 문항을 같이 돌려주므로 호출부가 같은 페이지를 두 번 읽지 않는다.
+
+    예전에는 고정 5초를 재우고 딱 한 번 다시 읽었다. 렌더가 그보다 늦으면 같은
+    페이지를 읽고 "막힘"으로 끊었고(2026-09-07 세미나 5616), 즉시 넘어가는 대부분의
+    설문에서는 5초를 통째로 버렸다.
+    """
+    waited = 0
+    while True:
+        if survey_page.is_closed():
+            return True, None
+        try:
+            questions = read_questions(survey_page)
+        except Exception:
+            # 페이지 이동 중에는 실행 컨텍스트가 사라져 evaluate가 죽는다.
+            questions = None
+        if questions is not None and page_fingerprint(questions) != before_fp:
+            return True, questions
+        if waited >= timeout_ms:
+            return False, questions
+        survey_page.wait_for_timeout(ADVANCE_POLL_MS)
+        waited += ADVANCE_POLL_MS
+
+
+# 문항 목록 밖에 있는 동의 체크박스를 누른다. 브라우저에 넘기는 JS는 r-문자열이다.
+CONSENT_JS = r"""
+() => {
+    const done = [];
+    const labelOf = (el) => {
+        const own = el.closest('label');
+        const forId = el.id ? document.querySelector('label[for="' + CSS.escape(el.id) + '"]') : null;
+        const src = own || forId || el.parentElement;
+        return ((src && src.innerText) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+    };
+    document.querySelectorAll('input[type=checkbox], input[type=radio]').forEach(el => {
+        // 문항은 족보가 맡는다. 여기서 건드리면 오답이 된다.
+        if (el.closest('li[data-question-number]')) return;
+        if (el.disabled || el.checked) return;
+        const t = labelOf(el);
+        if (!t.includes('동의')) return;
+        if (/동의하지|동의 안|비동의|미동의/.test(t)) return;   // 거부 보기는 누르지 않는다
+        el.click();
+        if (el.checked) done.push(t);
+    });
+    return done;
+}
+"""
+
+
+def tick_consents(survey_page) -> list[str]:
+    """문항 목록 밖에 있는 개인정보 동의 체크박스를 눌러 둔다. 누른 라벨 목록 반환.
+
+    `read_questions`는 `li[data-question-number]` 안만 본다. 그 밖에 놓인 필수 동의
+    체크박스는 스크립트 눈에 안 보이는데, 안 누르면 진행 버튼이 먹지 않는다.
+    동의 자체는 사용자 사전 승인이 끝난 정책이다(CLAUDE.md "정책").
+
+    거부 보기('동의하지 않습니다')는 라벨로 걸러 내고, 실패해도 예외를 던지지 않는다 —
+    여기서 죽으면 답을 다 채운 설문까지 통째로 실패가 된다.
+    """
+    try:
+        return survey_page.evaluate(CONSENT_JS) or []
+    except Exception:
+        return []
+
+
+# 막힌 페이지의 구조만 읽는다. 문항 텍스트·입력값은 담지 않는다(개인정보).
+STUCK_PROBE_JS = r"""
+() => {
+    const rows = Array.from(document.querySelectorAll('li[data-question-number]')).map(li => {
+        const boxes = Array.from(li.querySelectorAll('input[type=radio], input[type=checkbox]'));
+        const frees = Array.from(li.querySelectorAll('textarea, input[type=text]'));
+        const sels = Array.from(li.querySelectorAll('select'));
+        return {
+            n: li.getAttribute('data-question-number'),
+            req: /\*/.test(li.innerText || ''),
+            boxes: boxes.length,
+            checked: boxes.filter(e => e.checked).length,
+            disabled: boxes.filter(e => e.disabled).length,
+            frees: frees.length,
+            filled: frees.filter(e => (e.value || '').trim()).length,
+            selects: sels.length,
+            selected: sels.filter(e => e.selectedIndex > 0).length,
+        };
+    });
+    const outside = Array.from(document.querySelectorAll(
+            'input[type=checkbox], input[type=radio], select, textarea, input[type=text]'))
+        .filter(e => !e.closest('li[data-question-number]'))
+        .map(e => ({
+            tag: e.tagName.toLowerCase(),
+            type: e.type || '',
+            req: !!e.required,
+            checked: !!e.checked,
+            // 체크박스·라디오는 value가 기본 'on'이라 filled로 재면 늘 참이 된다.
+            filled: (e.type === 'checkbox' || e.type === 'radio')
+                ? !!e.checked : !!((e.value || '') + '').trim(),
+        }));
+    return {questions: rows, outside: outside};
+}
+"""
+
+
+def stuck_probe(survey_page) -> dict:
+    """진행이 막힌 페이지의 응답 상태를 구조만 읽는다(실패 시 빈 dict)."""
+    try:
+        return survey_page.evaluate(STUCK_PROBE_JS) or {}
+    except Exception:
+        return {}
+
+
+# 폼 검증 실패는 모달이 아니라 인라인 빨간 글씨로 뜨는 쪽이 많다.
+PAGE_ERROR_JS = r"""
+() => {
+    const sel = '[role="alert"], .error, .invalid-feedback, [class*="error"], '
+              + '[class*="text-red"], [class*="warning"]';
+    const out = [];
+    document.querySelectorAll(sel).forEach(el => {
+        if (el.offsetParent === null) return;
+        const t = (el.innerText || '').replace(/\s+/g, ' ').trim();
+        if (t && t.length <= 120 && out.indexOf(t) === -1) out.push(t);
+    });
+    return out.slice(0, 10);
+}
+"""
+
+
+def page_error_texts(survey_page) -> list[str]:
+    """페이지에 보이는 검증·오류 문구(실패 시 빈 목록)."""
+    try:
+        return survey_page.evaluate(PAGE_ERROR_JS) or []
+    except Exception:
+        return []
+
+
 def body_text(survey_page) -> str:
     try:
         if survey_page.is_closed():
@@ -1359,8 +1518,11 @@ def run_survey(
         pages_done = 0
         seen_pages = []
         promoted = {}
+        # 진행 대기(wait_for_page_change)가 이미 읽어 둔 문항을 그대로 쓴다.
+        questions = None
         for _ in range(MAX_PAGES):
-            questions = read_questions(survey_page)
+            if questions is None:
+                questions = read_questions(survey_page)
             if any(is_blank_question(q) for q in questions):
                 # 렌더가 덜 끝났을 수 있으니 한 번 더 읽는다. 그래도 비어 있으면
                 # 마크업이 다른 것이므로 스크린샷·DOM을 남겨 다음 작업 거리로 삼는다.
@@ -1406,7 +1568,13 @@ def run_survey(
                 result["status"] = "failed"
                 result["pages"] = pages_done
                 result["message"] = f"{pages_done}페이지 진행 후에도 같은 문항이 다시 표시됨 — 중단."
+                # 왜 안 넘어갔는지를 결과 JSON에 실어 보낸다. 스크린샷은 artifact
+                # 7일 보관이라 지나면 못 본다 — 2026-09-07 세미나 5616이 그 상태였고,
+                # `static_items` 하나만으로는 원인을 좁힐 수 없었다.
+                result["page_errors"] = page_error_texts(survey_page)
+                result["stuck_probe"] = stuck_probe(survey_page)
                 result["screenshot"] = common.save_screenshot(survey_page, f"survey_{seminar_id}_stuck")
+                result["dom_dump"] = dump_survey_dom(survey_page, seminar_id)
                 return result
             seen_pages.append(fp)
 
@@ -1438,17 +1606,47 @@ def run_survey(
 
             apply_plan(survey_page, plan)
             dismiss_alerts(survey_page)
+            # 문항 목록 밖에 놓인 개인정보 동의 체크박스는 read_questions가 보지
+            # 못한다. 필수인데 안 눌러 두면 진행 버튼이 먹지 않는다.
+            agreed = tick_consents(survey_page)
+            if agreed:
+                result["consents"] = sorted(set(result.get("consents", []) + agreed))
+
             advance, kind = find_advance_button(survey_page)
             if advance is None:
                 result["message"] = f"{pages_done + 1}페이지에서 제출/다음 버튼을 찾지 못함."
                 result["screenshot"] = common.save_screenshot(survey_page, f"survey_{seminar_id}_nosubmit")
                 return result
-            advance.click()
-            survey_page.wait_for_timeout(5000)
-            pages_done += 1
+            result["advance"] = kind
 
-            if not survey_page.is_closed():
-                dismiss_alerts(survey_page)
+            moved, questions = False, None
+            for attempt in range(ADVANCE_ATTEMPTS):
+                if attempt:
+                    # 페이지가 그대로라는 건 제출이 안 됐다는 뜻이므로 중복 제출이
+                    # 아니다. 답을 다시 적용하고(이미 고른 보기는 그대로다) 버튼을
+                    # 새로 찾아 한 번 더 누른다.
+                    apply_plan(survey_page, plan)
+                    tick_consents(survey_page)
+                    advance, kind = find_advance_button(survey_page)
+                    if advance is None:
+                        break
+                advance.click()
+                if not attempt:
+                    pages_done += 1
+                moved, questions = wait_for_page_change(survey_page, fp)
+                if survey_page.is_closed():
+                    moved = True
+                    break
+                closed_alerts = dismiss_alerts(survey_page)
+                if closed_alerts:
+                    # 이 문구가 막힘의 이유일 때가 많은데 예전엔 버려지고 있었다.
+                    result["alerts"] = result.get("alerts", []) + closed_alerts
+                if moved:
+                    break
+                # 알림을 닫고 나서야 뒤늦게 넘어가는 폼이 있다.
+                moved, questions = wait_for_page_change(survey_page, fp, ADVANCE_SETTLE_MS)
+                if moved:
+                    break
 
             if kind == "submit" and common.is_recon_enabled():
                 try:
