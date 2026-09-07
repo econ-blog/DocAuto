@@ -144,16 +144,26 @@ def _stub_detail(monkeypatch, verdict, buttons=None):
 
 
 def _submitted_survey_page():
-    """1페이지 제출 후 문항이 사라진 설문 창 mock."""
+    """1페이지 제출 후 문항이 사라지는 설문 창 mock.
+
+    호출 횟수가 아니라 제출 여부로 답한다 — 진행 대기가 몇 번 읽든 결과가 같다.
+    """
+    q = {"number": "1", "question": "만족하셨습니까?", "kind": "radio", "name": "q1",
+         "options": [{"text": "예", "id": "o1", "name": "q1", "value": "1", "qnum": "1", "index": 0},
+                     {"text": "아니오", "id": "o2", "name": "q1", "value": "2", "qnum": "1", "index": 1}]}
+    state = {"submitted": False}
     page = MagicMock()
     page.is_closed.return_value = False
-    page.evaluate.side_effect = [
-        [{"number": "1", "question": "만족하셨습니까?", "kind": "radio", "name": "q1",
-          "options": [{"text": "예", "id": "o1", "name": "q1", "value": "1", "qnum": "1", "index": 0},
-                      {"text": "아니오", "id": "o2", "name": "q1", "value": "2", "qnum": "1", "index": 1}]}],
-        [],   # 제출 후 — 문항 없음
-    ]
+    page.evaluate.side_effect = lambda js: [] if state["submitted"] else [dict(q)]
+    page.submit_now = lambda: state.__setitem__("submitted", True)
     return page
+
+
+def _submit_button(survey_page):
+    """누르면 설문 창이 '제출됨' 상태로 넘어가는 버튼."""
+    button = MagicMock()
+    button.click.side_effect = survey_page.submit_now
+    return button
 
 
 def test_run_survey_verified_by_detail_button_after_submit(monkeypatch):
@@ -162,7 +172,8 @@ def test_run_survey_verified_by_detail_button_after_submit(monkeypatch):
     monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (survey_page, ""))
     monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda page: [])
     monkeypatch.setattr(seminar_survey, "apply_plan", lambda page, plan: None)
-    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda page: (MagicMock(), "submit"))
+    monkeypatch.setattr(seminar_survey, "find_advance_button",
+                        lambda page: (_submit_button(survey_page), "submit"))
     monkeypatch.setattr(seminar_survey, "tick_consents", lambda page: [])
     calls = _stub_detail(monkeypatch, "done", ["설문 참여 완료", "세미나 종료"])
 
@@ -181,7 +192,8 @@ def test_run_survey_unverified_when_detail_shows_only_seminar_end(monkeypatch):
     monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (survey_page, ""))
     monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda page: [])
     monkeypatch.setattr(seminar_survey, "apply_plan", lambda page, plan: None)
-    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda page: (MagicMock(), "submit"))
+    monkeypatch.setattr(seminar_survey, "find_advance_button",
+                        lambda page: (_submit_button(survey_page), "submit"))
     monkeypatch.setattr(seminar_survey, "tick_consents", lambda page: [])
     monkeypatch.setattr(seminar_survey.common, "save_screenshot", lambda page, name: "shot.png")
     _stub_detail(monkeypatch, "not_done", ["세미나 종료"])
@@ -661,3 +673,100 @@ def test_checked_consents_are_recorded_in_the_result(monkeypatch):
     result = seminar_survey.run_survey(MagicMock(), 5616, bank_paths={})
 
     assert result["consents"] == ["개인정보 수집에 동의합니다."]
+
+
+# ---------------------------------------------------------------------------
+# 조건부로 열리는 문항 / 일시적 "문항 0건" (세미나 5616·5623, 2026-09-07)
+# ---------------------------------------------------------------------------
+
+def test_wait_for_page_change_does_not_trust_a_single_empty_read():
+    """재렌더 중 잠깐 0건으로 읽히는 것을 '제출 완료'로 오해하면 안 된다."""
+    p1 = [_radio_question("1")]
+    # 한 번만 0건이었다가 원래 페이지로 돌아온다.
+    page = _ScriptedPage([p1, [], p1, p1, p1, p1, p1, p1])
+
+    moved, questions = seminar_survey.wait_for_page_change(
+        page, seminar_survey.page_fingerprint(p1), timeout_ms=2000
+    )
+
+    assert moved is False
+    assert questions == p1
+
+
+def test_wait_for_page_change_accepts_a_sustained_empty_page():
+    """정말 제출돼서 계속 0건이면 넘어간 것으로 본다."""
+    p1 = [_radio_question("1")]
+    page = _ScriptedPage([p1] + [[]] * (seminar_survey.EMPTY_CONFIRM_POLLS + 2))
+
+    moved, questions = seminar_survey.wait_for_page_change(page, seminar_survey.page_fingerprint(p1))
+
+    assert moved is True
+    assert questions == []
+
+
+def test_answerable_count_ignores_items_without_controls():
+    assert seminar_survey.answerable_count([
+        _radio_question("1"),
+        {"number": "2", "question": "안내문", "kind": "unknown", "name": "", "options": []},
+    ]) == 1
+
+
+class _RevealPage:
+    """1번에 답해야 11번의 보기가 생기는 설문 창(세미나 5616 실측)."""
+
+    def __init__(self):
+        self.answered = False
+        self.reads = 0
+
+    def _questions(self):
+        q11 = (_radio_question("11", "전반적으로 만족하셨습니까?") if self.answered
+               else {"number": "11", "question": "전반적으로 만족하셨습니까?",
+                     "kind": "unknown", "name": "", "options": []})
+        return [_radio_question("1", "전공의 이신가요?"), q11]
+
+    def is_closed(self):
+        return False
+
+    def evaluate(self, js):
+        if "CSS.escape" in js:
+            return []
+        if 'role="alert"' in js:
+            return []
+        if "outside:" in js:
+            return {"questions": [], "outside": []}
+        self.reads += 1
+        return self._questions()
+
+    def wait_for_timeout(self, ms):
+        pass
+
+    def close(self):
+        pass
+
+
+def test_run_survey_fills_questions_that_only_appear_after_answering(monkeypatch):
+    """세미나 5616 11번: 1번에 답하기 전에는 보기가 없어 static으로 빠졌다."""
+    page = _RevealPage()
+    applied = []
+
+    def fake_apply(survey_page, plan):
+        applied.append(plan)
+        page.answered = True      # 1번에 답하면 11번 보기가 열린다
+
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda p, sid: (page, ""))
+    monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda p: [])
+    monkeypatch.setattr(seminar_survey, "tick_consents", lambda p: [])
+    monkeypatch.setattr(seminar_survey, "apply_plan", fake_apply)
+    monkeypatch.setattr(seminar_survey, "find_advance_button", lambda p: (MagicMock(), "next"))
+    monkeypatch.setattr(seminar_survey, "dump_survey_dom", lambda p, sid: "")
+    monkeypatch.setattr(seminar_survey.common, "save_screenshot", lambda p, name: "")
+    _stub_detail(monkeypatch, "unknown", [])
+
+    result = seminar_survey.run_survey(MagicMock(), 5616, bank_paths={})
+
+    # 1라운드는 1번만, 2라운드에서 열린 11번까지 채운다.
+    assert len(applied) >= 2
+    assert len(applied[0]) == 1
+    assert len(applied[-1]) == 2
+    assert result.get("revealed") == 1
+    assert "static_items" not in result   # 11번이 더 이상 static이 아니다

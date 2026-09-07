@@ -60,6 +60,15 @@ seminar_live.py로 입장에 성공한 세미나는 방송 팝업에서 설문�
     않아 필수여도 빈 채로 남는다. `tick_consents`가 진행 직전에 눌러 둔다 —
     동의는 사용자 사전 승인이 끝난 정책이다(CLAUDE.md "정책").
 
+    **조건부로 열리는 문항:** 앞 문항에 답해야 뒤 문항의 보기가 렌더되는 설문이
+    있다(5616의 11번 — 처음 읽을 때는 보기가 없어 static으로 빠졌고, 1번에 답하자
+    보기 5개가 생겨 필수 미응답으로 진행이 막혔다). 답을 넣은 뒤 다시 읽어, 응답
+    가능한 문항이 늘었으면 그것까지 채우고 나서 진행한다(`REVEAL_ROUNDS`).
+
+    **"문항 0건"은 확인 후에 믿는다:** 0건은 제출 완료로 읽히는 자리인데 페이지
+    이동·재렌더 중에도 잠깐 그렇게 읽힌다. 연속 `EMPTY_CONFIRM_POLLS`회 0건일
+    때만 인정한다 — 안 그러면 남은 페이지를 두고 완료 판정으로 샌다.
+
 완료 판정 (2026-08-28 도입, 2026-08-31 모바일 우선으로 변경):
     제출 직후 완료 화면 문구가 아니라, **세미나 상세에 재접속했을 때** 사이트가
     보여주는 **보이는** 버튼으로 판정한다(`confirm_survey_done`). 상세는
@@ -137,6 +146,13 @@ ADVANCE_SETTLE_MS = 3000
 # 페이지가 안 바뀌면 한 번 더 누른다. 페이지가 그대로라는 것은 제출이 안 됐다는
 # 뜻이므로 중복 제출이 아니다.
 ADVANCE_ATTEMPTS = 2
+# "문항 0건"은 제출 완료로 읽히는데, 페이지 이동·재렌더 중에도 잠깐 그렇게 읽힌다.
+# 이만큼 연속으로 0건이어야 진짜 완료로 인정한다.
+EMPTY_CONFIRM_POLLS = 6
+
+# 앞 문항에 답해야 뒤 문항의 보기가 렌더되는 설문이 있다(2026-09-07 세미나 5616의
+# 11번). 답을 넣은 뒤 다시 읽어 새로 열린 문항을 채우는 횟수 상한.
+REVEAL_ROUNDS = 3
 
 # 설문 완료의 양성 증거. 제출 직후 완료 화면이 아니라 **세미나 상세에 재접속했을
 # 때** 사이트가 보여주는 버튼으로 판정한다(2026-08-28 사용자 실측 화면):
@@ -986,7 +1002,7 @@ def wait_for_page_change(survey_page, before_fp: str, timeout_ms: int = ADVANCE_
     페이지를 읽고 "막힘"으로 끊었고(2026-09-07 세미나 5616), 즉시 넘어가는 대부분의
     설문에서는 5초를 통째로 버렸다.
     """
-    waited = 0
+    waited, empty_polls = 0, 0
     while True:
         if survey_page.is_closed():
             return True, None
@@ -996,11 +1012,26 @@ def wait_for_page_change(survey_page, before_fp: str, timeout_ms: int = ADVANCE_
             # 페이지 이동 중에는 실행 컨텍스트가 사라져 evaluate가 죽는다.
             questions = None
         if questions is not None and page_fingerprint(questions) != before_fp:
-            return True, questions
+            if questions:
+                return True, questions
+            # 문항 0건은 "제출 완료"로 읽히는 자리다. 그런데 페이지 이동·재렌더
+            # 중에도 잠깐 0건으로 읽혀, 아직 남은 페이지를 두고 완료 판정으로
+            # 새어 나갔다(2026-09-07 세미나 5616·5623). 연속으로 0건일 때만 믿는다.
+            empty_polls += 1
+            if empty_polls >= EMPTY_CONFIRM_POLLS:
+                return True, questions
+        else:
+            empty_polls = 0
         if waited >= timeout_ms:
-            return False, questions
+            final = page_fingerprint(questions) if questions is not None else before_fp
+            return final != before_fp, questions
         survey_page.wait_for_timeout(ADVANCE_POLL_MS)
         waited += ADVANCE_POLL_MS
+
+
+def answerable_count(questions: list[dict]) -> int:
+    """응답 컨트롤이 있는 문항 수. 조건부로 열리는 문항을 세는 데 쓴다."""
+    return sum(1 for q in questions if q.get("kind") != "unknown")
 
 
 # 문항 목록 밖에 있는 동의 체크박스를 누른다. 브라우저에 넘기는 JS는 r-문자열이다.
@@ -1583,34 +1614,55 @@ def run_survey(
                 bank_paths.get("text", DEFAULT_TEXT_BANK_FILE),
                 bank_paths.get("legacy", DEFAULT_LEGACY_BANK_FILE),
             )
-            plan, missing = resolve_page(questions, banks)
+            # 앞 문항에 답해야 뒤 문항의 보기가 그제야 렌더되는 설문이 있다.
+            # 2026-09-07 세미나 5616의 11번이 그랬다 — 처음 읽을 때는 보기가 없어
+            # static으로 빠졌는데, 1번에 답하자 보기 5개가 생겼고 필수라서
+            # "11번 문항을 확인해 주세요" 알림에 진행이 막혔다. 답을 넣은 뒤 다시
+            # 읽어, 새로 열린 문항이 있으면 그것까지 채우고 나서 진행한다.
+            for _ in range(REVEAL_ROUNDS):
+                plan, missing = resolve_page(questions, banks)
+                if missing:
+                    counts = add_missing_to_banks(banks, missing)
+                    result["status"] = "incomplete_bank"
+                    result["missing"] = missing
+                    result["questions"] = missing
+                    prefix = f"[{title}] " if title else ""
+                    result["message"] = (
+                        f"{prefix}{pages_done + 1}페이지에 미등록 문항 {len(missing)}건 — 제출하지 않음"
+                        f"({format_bank_counts(counts)} 빈 값 추가)."
+                    )
+                    return result
+
+                for name, n in apply_promotions(banks, plan).items():
+                    promoted[name] = promoted.get(name, 0) + n
+
+                apply_plan(survey_page, plan)
+                dismiss_alerts(survey_page)
+                # 문항 목록 밖에 놓인 개인정보 동의 체크박스는 read_questions가 보지
+                # 못한다. 필수인데 안 눌러 두면 진행 버튼이 먹지 않는다.
+                agreed = tick_consents(survey_page)
+                if agreed:
+                    result["consents"] = sorted(set(result.get("consents", []) + agreed))
+
+                revealed = read_questions(survey_page)
+                if answerable_count(revealed) <= answerable_count(questions):
+                    questions = revealed or questions
+                    break
+                questions = revealed
+                result["revealed"] = result.get("revealed", 0) + 1
+
+            if promoted:
+                result["promoted"] = dict(promoted)
             static_items = sum(1 for q in questions if q.get("kind") == "unknown")
             if static_items:
                 result["static_items"] = static_items
-            if missing:
-                counts = add_missing_to_banks(banks, missing)
-                result["status"] = "incomplete_bank"
-                result["missing"] = missing
-                result["questions"] = missing
-                prefix = f"[{title}] " if title else ""
-                result["message"] = (
-                    f"{prefix}{pages_done + 1}페이지에 미등록 문항 {len(missing)}건 — 제출하지 않음"
-                    f"({format_bank_counts(counts)} 빈 값 추가)."
-                )
-                return result
 
-            for name, n in apply_promotions(banks, plan).items():
-                promoted[name] = promoted.get(name, 0) + n
-            if promoted:
-                result["promoted"] = dict(promoted)
-
-            apply_plan(survey_page, plan)
-            dismiss_alerts(survey_page)
-            # 문항 목록 밖에 놓인 개인정보 동의 체크박스는 read_questions가 보지
-            # 못한다. 필수인데 안 눌러 두면 진행 버튼이 먹지 않는다.
-            agreed = tick_consents(survey_page)
-            if agreed:
-                result["consents"] = sorted(set(result.get("consents", []) + agreed))
+            # 보기가 새로 열리면서 문항 텍스트 자리가 바뀔 수 있으므로 지문을 다시
+            # 뜬다. 진행 대기·막힘 판정 모두 진행 직전의 화면을 기준으로 해야 한다.
+            fp_after = page_fingerprint(questions)
+            if fp_after != fp:
+                seen_pages.append(fp_after)
+                fp = fp_after
 
             advance, kind = find_advance_button(survey_page)
             if advance is None:

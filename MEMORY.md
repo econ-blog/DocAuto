@@ -506,18 +506,43 @@ gh run download 32693921094 -n seminar-block-logs-12
 | 보이는 오류 문구·응답 상태 프로브·DOM 덤프 | `page_errors` / `stuck_probe` / `dom_dump` | artifact는 7일이면 사라진다. 원인은 결과 JSON(=텔레그램·잡 로그)에 실려야 한다 |
 | 문항 목록 밖 동의 체크박스 클릭 | `tick_consents` | `read_questions`는 `li[data-question-number]` 안만 본다. 그 밖의 필수 동의 체크박스는 스크립트 눈에 안 보이는데, 안 누르면 진행이 막힌다. 동의는 사용자 사전 승인 정책 |
 
-### 유력 후보 (다음 런에서 `stuck_probe`로 가른다)
+### 원인 확정 (run 34086929817, 프로브가 바로 잡았다)
 
-1. **문항 목록 밖의 필수 동의 체크박스** — 이번에 누르도록 바꿨다. 이게 원인이었다면 다음 런에서 통과한다.
-2. **`<select>`만 있는 문항** — `read_questions`는 `<select>`를 컨트롤로 세지 않아 그런 항목이 `kind="unknown"`(static)으로 빠진다. 필수면 진행이 막힌다. **일부러 자동 응답은 넣지 않았다**(추측 금지). `stuck_probe.questions[].selects`/`selected`가 이걸 드러낸다.
-3. **엉뚱한 "다음" 버튼 클릭** — `find_advance_button`이 라벨에 "다음"이 든 첫 요소를 집는다. `result["advance"]`와 스크린샷으로 가른다.
+wonju 결과 JSON:
+
+```
+"alerts": ["필수 문항 확인 11번 문항을 확인해 주세요. 확인", (재시도분 1건 더)]
+"page_errors": ["*", "필수 입력 항목입니다.", "설문"]
+"stuck_probe.questions": 1번 → boxes 2, checked 1   (답했음)
+                         11번 → req true, boxes 5, checked 0   (안 했음)
+"outside": []       ← 문항 밖 동의 체크박스는 없었다(후보 1 기각)
+"static_items": 10  ← 2~10번(9건) + 11번
+```
+
+**11번은 1번에 답해야 보기가 렌더되는 조건부 문항이다.** 처음 읽을 때는 컨트롤이
+하나도 없어 `kind="unknown"`(static)으로 빠졌고, `apply_plan`이 1번을 체크하자
+보기 5개가 생겼는데 계획에는 없으니 빈 채로 진행 버튼을 눌러 막혔다.
+
+같은 계정 대비가 결정적이었다 — bjh7790은 `static_items: 9`(11번이 이미 열려 있었다)라
+페이지 1을 넘어갔고, wonju는 `static_items: 10`이라 막혔다.
+
+### 2차 수정
+
+| 변경 | 위치 | 근거 |
+|---|---|---|
+| 답을 넣은 뒤 다시 읽어, 응답 가능한 문항이 늘었으면 그것까지 채우고 진행 | `run_survey` (`REVEAL_ROUNDS`) | 위 원인 그 자체 |
+| 문항 0건은 연속 확인 후에만 "제출됨"으로 인정 | `wait_for_page_change` (`EMPTY_CONFIRM_POLLS`) | 1차 수정의 회귀. 폴링이 재렌더 중의 일시적 0건을 잡아 5616(bjh7790)·5623(wonju)이 페이지를 남긴 채 `unverified`로 샜다 |
+
+### 남은 후보 (아직 미확인)
+
+- **`<select>`만 있는 문항** — `read_questions`는 `<select>`를 컨트롤로 세지 않아 static으로 빠진다. 필수면 진행이 막힌다. 자동 응답은 넣지 않았다(추측 금지). `stuck_probe.questions[].selects`/`selected`가 드러낸다.
+- **엉뚱한 "다음" 버튼** — `find_advance_button`은 라벨에 "다음"이 든 첫 요소를 집는다. `result["advance"]`로 가른다.
 
 ### 다음 런에서 확인할 것
 
-- 5616류 설문이 통과했는가. 통과했다면 `consents`에 무엇이 찍혔는가(→ 후보 1 확정).
-- 또 막혔다면 `alerts` / `page_errors` / `stuck_probe`를 본다. `stuck_probe.questions`에서
-  `req: true`인데 `checked: 0` & `filled: 0` & `selected: 0`인 항목이 범인이다.
-- `outside`에 `req: true`인데 `checked: false`인 컨트롤이 있으면 후보 1의 변종이다.
+- 5616이 통과했는가. `revealed` 값이 1 이상이면 조건부 문항 처리가 실제로 돌았다는 뜻이다.
+- 5623이 2페이지 이후까지 가는가(1차 수정 전에는 2페이지에서 `incomplete_bank`였다).
+- 또 막히면 `stuck_probe.questions`에서 `req: true`인데 `checked: 0` & `filled: 0` & `selected: 0`인 항목이 범인이다.
 
 ---
 
