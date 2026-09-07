@@ -1197,9 +1197,110 @@ SEMINAR_LIST_JS = r"""
             );
             title = filtered.length > 0 ? filtered[0] : '';
         }
-        return { id: sid, title: title, applicable: !!aEl.querySelector('span.ico_apply') };
+        const raw = (aEl.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        return { id: sid, title: title, raw: raw, applicable: !!aEl.querySelector('span.ico_apply') };
     }).filter(Boolean)
 """
+
+
+# ---------------------------------------------------------------------------
+# 목록 텍스트 → 방송 일시
+#
+# 왜 필요한가: 표의 행 출처가 `seminar_applied.json`(신청 이력)뿐이라, 정원
+# 마감으로 신청하지 못한 세미나는 행 자체가 생기지 않았다. 2026-09-07 세미나
+# 5657(New WAVE Webinar, 정원 마감)이 표에서 통째로 사라진 게 그 결과다.
+# MEMORY.md에 2026-08-28부터 미해결로 적혀 있던 한계와 같은 것이다.
+#
+# 목록에는 이미 일시가 찍혀 있으니 페이지를 더 열 필요가 없다. 다만 목록 표기가
+# 상세의 `dd.date`(`2026-09-07(월) 12:30 ~ 13:30`)와 같은 형식이라는 보장이 없어
+# 원문(raw)을 그대로 받아 파이썬에서 방어적으로 판다. **파싱 실패는 fail-closed**
+# — 행을 만들지 않고 세기만 한다. 실패했는데 행을 만들면 수 주치 세미나가 오늘
+# 표에 쏟아진다.
+# ---------------------------------------------------------------------------
+
+_LIST_FULL_DATE_RE = re.compile(r"(\d{4})\s*[-./]\s*(\d{1,2})\s*[-./]\s*(\d{1,2})")
+_LIST_SHORT_DATE_RE = re.compile(r"(?<![\d:])(\d{1,2})\s*(?:[-./]|월\s*)\s*(\d{1,2})\s*일?(?![\d:])")
+_LIST_TIME_RE = re.compile(r"(?<!\d)(\d{1,2}):(\d{2})(?!\d)")
+_WEEKDAYS = "월화수목금토일"
+
+
+def _infer_year(month: int, day: int, now: datetime) -> int | None:
+    """연도 없는 목록 표기(`09.07`)의 연도를 오늘에서 가장 가까운 쪽으로 고른다.
+
+    12월/1월 경계에서 연도를 틀리지 않게 하는 유일한 목적이다.
+    """
+    best, best_delta = None, None
+    for year in (now.year - 1, now.year, now.year + 1):
+        try:
+            cand = datetime(year, month, day, tzinfo=common.KST)
+        except ValueError:
+            continue  # 2월 30일 등
+        delta = abs((cand.date() - now.date()).days)
+        if best_delta is None or delta < best_delta:
+            best, best_delta = year, delta
+    return best
+
+
+def parse_list_datetime(raw: str, now: datetime = None) -> str:
+    """목록 항목 텍스트에서 상세 `dd.date`와 같은 형식의 일시 문자열을 만든다.
+
+    `'... 09.07 12:30~13:30 ...'` → `'2026-09-07(월) 12:30 ~ 13:30'`.
+    끝 시각이 없으면 시작 시각까지만 담는다(없는 값을 지어내지 않는다).
+    날짜나 시작 시각을 못 찾으면 빈 문자열 — 호출부는 행을 만들지 않는다.
+    """
+    if not raw or not isinstance(raw, str):
+        return ""
+    now = now or datetime.now(common.KST)
+
+    year = month = day = None
+    m = _LIST_FULL_DATE_RE.search(raw)
+    if m:
+        year, month, day = (int(g) for g in m.groups())
+    else:
+        m = _LIST_SHORT_DATE_RE.search(raw)
+        if m:
+            month, day = (int(g) for g in m.groups())
+            year = _infer_year(month, day, now)
+    if not year or not month or not day:
+        return ""
+
+    try:
+        d = datetime(year, month, day, tzinfo=common.KST)
+    except ValueError:
+        return ""
+
+    times = [f"{int(h):02d}:{mm}" for h, mm in _LIST_TIME_RE.findall(raw) if int(h) < 24]
+    if not times:
+        return ""
+
+    stamp = f"{d.strftime('%Y-%m-%d')}({_WEEKDAYS[d.weekday()]}) {times[0]}"
+    return f"{stamp} ~ {times[1]}" if len(times) > 1 else stamp
+
+
+def list_rows_for_today(listed: list, now: datetime = None) -> tuple[list[dict], int]:
+    """목록 스캔 결과에서 **오늘 방송분 전부**를 (신청 여부와 무관하게) 뽑는다.
+
+    Returns: ([{id, title, start}, ...], 일시_파싱_실패_건수)
+    """
+    now = now or datetime.now(common.KST)
+    today = now.strftime("%Y-%m-%d")
+    rows, unparsed = [], 0
+    seen = set()
+    for item in listed or []:
+        if not isinstance(item, dict):
+            continue
+        sid = item.get("id")
+        if not sid or str(sid) in seen:
+            continue
+        start = parse_list_datetime(item.get("raw", ""), now)
+        if not start:
+            unparsed += 1
+            continue
+        if not start.startswith(today):
+            continue
+        seen.add(str(sid))
+        rows.append({"id": str(sid), "title": runlog.clean_title(item.get("title", "")), "start": start})
+    return rows, unparsed
 
 
 def _seminar_detail_meta(page) -> tuple[str, str]:
@@ -1308,6 +1409,21 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
     result["skipped_known"] = len(seminar_ids) - len(targets)
     dirty = False
 
+    # 오늘 방송분은 **신청 여부와 무관하게** 전부 표에 행으로 올린다(페이지 로드
+    # 없음). 정원 마감이라 목록에 `span.ico_apply`가 안 붙은 세미나는 targets에도
+    # 안 들어가 상세의 `closed` 경로조차 타지 않는다 — 2026-09-07 세미나 5657이
+    # 그렇게 사라졌다. 상태 없는 행은 표에서 ❔로 뜨고, 그게 "자동화가 신청하지
+    # 못한 세미나"라는 신호다. 이력 파일(seminar_applied.json)은 건드리지 않는다:
+    # 목록 시각은 상세 dd.date보다 신뢰도가 낮고, 그 값이 seminar_live의 입장
+    # 윈도우 계산에 쓰이기 때문이다.
+    today_rows, unparsed = list_rows_for_today(listed)
+    result["listed_today"] = len(today_rows)
+    result["list_unparsed"] = unparsed
+    list_starts = {}
+    for row in today_rows:
+        list_starts[row["id"]] = row["start"]
+        _log_seminar(row["id"], "", account, row["title"], row["start"])
+
     # 오늘 방송분 중 이미 신청 이력이 있는 건은 상세를 열지 않는다. 표의 '신청'
     # 칸이 비지 않도록 여기서만 already_done으로 올린다(페이지 로드 없음).
     if account:
@@ -1316,7 +1432,11 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
             if record.get("start_date") != today_str:
                 continue
             title = runlog.clean_title(list_titles.get(sid, "")) or record.get("title", "")
-            _log_seminar(sid, "already_done", account, title, record.get("start", ""))
+            # 이력의 시각은 신청 시점 값이라 주최 측이 시간을 바꾸면 고착된다
+            # (2026-09-07 세미나 5613: 이력 12:00, 실제 12:30). 목록에서 오늘
+            # 방송분의 시각을 방금 읽었으면 그쪽이 최신이다.
+            _log_seminar(sid, "already_done", account, title,
+                         list_starts.get(sid) or record.get("start", ""))
 
     if not seminar_ids:
         result["status"] = "no_target"
