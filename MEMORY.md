@@ -308,6 +308,28 @@ GitHub `schedule`은 지연(최대 80분)·누락이 잦아 external cron (cron-
 
 **분리 못 한 대안 가설:** Azure 러너 IP가 해당 사이트 WAF에서 평판 페널티를 받고 있을 가능성. 로그만으로는 요청량과 IP평판을 구분할 수 없다. 구분 실험 = 같은 시각 집 IP에서 동일 스크립트 실행.
 
+**추가 대응책 (2026-09-07) — 실패 지점 특정 후:**
+
+`logs/errors-2026-09.jsonl` 30건 집계: 28건이 `ERR_CONNECTION_CLOSED`,
+그중 **27건이 `_do_mims_login`의 `wait_for_url` 한 줄**(스크립트 분포
+seminar_live 17 / seminar_survey 6+1 / doctorville 4 — 전부 같은 로그인 경로).
+즉 산발적 잡음이 아니라 mims 로그인 POST 직후 리다이렉트 구간에 집중된다.
+
+4. `_do_mims_login`에 재시도 추가. 기존 코드는 `PlaywrightTimeoutError`만 잡아
+   `PlaywrightError`인 `ERR_CONNECTION_CLOSED`를 그대로 전파 → 계정 런 전체 사망.
+   이제 네트워크성 오류면 백오프(3/7/15초) 후 로그인 페이지부터 재시도하고,
+   비네트워크성(strict mode violation 등)은 즉시 전파한다(`common.is_retryable_error`).
+   끊긴 뒤 리다이렉트가 이미 완료된 경우도 성공으로 인정한다.
+5. `common.ResponseRecorder` — page 응답을 순환 버퍼(기본 20건)에 담아
+   실패 시 `log_error(extra.responses)`에 붙인다. 상태 코드 + 게이트웨이 헤더
+   (`server`, `cf-ray`, `retry-after`, `x-cache` 등 화이트리스트)만 담고
+   쿼리스트링·`set-cookie`는 담지 않는다.
+   **목적: 요청량 차단(403/429 후 소켓 종료) vs 순수 인프라 끊김 분리.**
+   지금까지 로그로는 이 둘을 구분할 수 없었고, 위 "분리 못 한 대안 가설"이
+   여기에 걸려 있다. 다음 발생 시 `extra.responses`의 마지막 응답을 볼 것 —
+   403/429가 찍히면 요청량·IP평판 쪽, 응답 자체가 없으면 인프라 쪽이다.
+   회귀 테스트: `tests/test_mims_login_retry.py`.
+
 **적용된 대응책 (2026-08-15):**
 1. `common.reload_with_retry()` 추가 및 `doctorville.py` / `recon.py`의 `page.reload()` 교체.
 2. `goto_with_retry` / `reload_with_retry`에 지수 백오프(`3.0, 7.0, 15.0`초) 적용으로 WAF 일시 차단 창 회피.

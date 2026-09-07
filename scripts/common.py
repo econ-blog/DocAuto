@@ -228,6 +228,84 @@ def _is_retryable(exc: Exception) -> bool:
     return any(m in msg for m in RETRYABLE_ERROR_MARKERS)
 
 
+def is_retryable_error(exc: Exception) -> bool:
+    """_is_retryable의 공개 별칭 — 다른 스크립트가 같은 판정을 공유하게 한다."""
+    return _is_retryable(exc)
+
+
+# 응답 기록기에 담을 헤더 화이트리스트.
+# 게이트웨이/WAF 판정에 필요한 것만 — set-cookie·authorization 등 비밀 값은
+# 목록에 없으므로 기록되지 않는다.
+RESPONSE_LOG_HEADERS = (
+    "server", "via", "location", "content-type", "content-length",
+    "retry-after", "cf-ray", "cf-cache-status", "x-cache", "x-served-by",
+)
+
+
+class ResponseRecorder:
+    """page의 최근 응답을 순환 버퍼에 담아 실패 시 감별 근거로 남긴다.
+
+    왜 필요한가: `net::ERR_CONNECTION_CLOSED` 문자열 하나로는 WAF 차단
+    (403/429 응답 뒤 소켓 종료)과 순수 인프라 끊김을 구분할 수 없다.
+    둘은 대응이 갈린다 — 전자는 요청 형태·간격 조정, 후자는 백오프 연장.
+    끊기기 직전 응답의 상태 코드와 게이트웨이 헤더가 있어야 고를 수 있다.
+
+    개인정보: URL은 쿼리스트링을 버리고, 헤더는 위 화이트리스트만 담는다.
+    """
+
+    def __init__(self, page, limit: int = 20, url_filter: tuple[str, ...] | None = None):
+        self.page = page
+        self.limit = limit
+        self.url_filter = url_filter
+        self.records: list[dict] = []
+        self._t0 = time.monotonic()
+        try:
+            page.on("response", self._on_response)
+            self._attached = True
+        except Exception:
+            self._attached = False
+
+    def _on_response(self, response) -> None:
+        # 이벤트 핸들러에서 던진 예외는 본 흐름을 죽일 수 있다 — 전부 삼킨다.
+        try:
+            url = (response.url or "").split("?")[0]
+            if self.url_filter and not any(f in url for f in self.url_filter):
+                return
+            try:
+                raw = response.headers or {}
+            except Exception:
+                raw = {}
+            headers = {
+                k.lower(): str(v)[:200]
+                for k, v in raw.items()
+                if k.lower() in RESPONSE_LOG_HEADERS
+            }
+            try:
+                method = response.request.method
+            except Exception:
+                method = ""
+            self.records.append({
+                "t": round(time.monotonic() - self._t0, 2),
+                "method": method,
+                "status": response.status,
+                "url": url[:160],
+                "headers": headers,
+            })
+            if len(self.records) > self.limit:
+                del self.records[:-self.limit]
+        except Exception:
+            pass
+
+    def detach(self) -> None:
+        if not self._attached:
+            return
+        try:
+            self.page.remove_listener("response", self._on_response)
+        except Exception:
+            pass
+        self._attached = False
+
+
 def goto_with_retry(
     page,
     url: str,

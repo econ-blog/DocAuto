@@ -668,9 +668,21 @@ def ensure_logged_in(page, creds: dict) -> bool:
     return True
 
 
-def _do_mims_login(page, creds: dict) -> bool:
-    """mims-account.shop.co.kr 로그인 폼을 채우고 제출한다.
-    셀렉터: input[name="identifier"], input[type="password"], button[type="submit"]
+MIMS_LOGIN_BACKOFF = (3.0, 7.0, 15.0)
+MIMS_LOGIN_HOSTS = ("mims-account", "doctorville.co.kr")
+
+
+def _sleep(page, seconds: float) -> None:
+    try:
+        page.wait_for_timeout(int(seconds * 1000))
+    except Exception:
+        time.sleep(seconds)
+
+
+def _mims_submit_once(page, creds: dict) -> bool:
+    """로그인 폼을 한 번 채우고 제출한 뒤 리다이렉트 완료 여부를 반환한다.
+
+    네트워크성 예외는 잡지 않고 그대로 올린다 — 재시도 판정은 호출자가 한다.
     """
     try:
         page.wait_for_selector('input[name="identifier"]', timeout=DEFAULT_TIMEOUT_MS)
@@ -689,7 +701,64 @@ def _do_mims_login(page, creds: dict) -> bool:
     except PlaywrightTimeoutError:
         pass
 
-    return "doctorville.co.kr" in page.url and "mims-account" not in page.url
+    return _mims_login_done(page)
+
+
+def _mims_login_done(page) -> bool:
+    try:
+        url = page.url
+    except Exception:
+        return False
+    return "doctorville.co.kr" in url and "mims-account" not in url
+
+
+def _do_mims_login(page, creds: dict, retries: int = 2) -> bool:
+    """mims-account.shop.co.kr 로그인 폼을 채우고 제출한다.
+    셀렉터: input[name="identifier"], input[type="password"], button[type="submit"]
+
+    왜 재시도가 필요한가: 제출 직후 리다이렉트 구간에서
+    net::ERR_CONNECTION_CLOSED가 빈발한다(2026-09 오류 로그 30건 중 28건이
+    이 예외, 그중 27건이 이 함수의 wait_for_url 한 줄). 이전 코드는
+    PlaywrightTimeoutError만 잡아 이 예외를 그대로 전파했고, 계정 런 전체가
+    죽었다. 네트워크성 오류면 백오프 후 로그인 페이지부터 다시 시도한다.
+
+    마지막 시도까지 실패하면 끊기기 직전 응답 기록(상태 코드·게이트웨이 헤더)을
+    붙여 log_error에 남긴다 — WAF 차단인지 인프라 끊김인지 사후 감별용.
+    """
+    recorder = common.ResponseRecorder(page, url_filter=MIMS_LOGIN_HOSTS)
+    login_url = page.url
+    last_exc: Exception | None = None
+    try:
+        for attempt in range(retries + 1):
+            try:
+                if _mims_submit_once(page, creds):
+                    return True
+                last_exc = None
+            except (PlaywrightTimeoutError, PlaywrightError) as e:
+                if not common.is_retryable_error(e):
+                    raise
+                last_exc = e
+                # 소켓이 끊긴 뒤에도 리다이렉트는 완료돼 있는 경우가 있다.
+                if _mims_login_done(page):
+                    return True
+
+            if attempt >= retries:
+                break
+            _sleep(page, MIMS_LOGIN_BACKOFF[min(attempt, len(MIMS_LOGIN_BACKOFF) - 1)])
+            try:
+                common.goto_with_retry(page, login_url, wait_until="domcontentloaded",
+                                       timeout_ms=DEFAULT_TIMEOUT_MS)
+            except (PlaywrightTimeoutError, PlaywrightError):
+                pass  # 다음 시도의 wait_for_selector가 다시 판정한다
+
+        if last_exc is not None:
+            common.log_error(
+                "doctorville", last_exc, task="mims_login", status="failed",
+                extra={"responses": recorder.records, "attempts": retries + 1},
+            )
+        return _mims_login_done(page)
+    finally:
+        recorder.detach()
 
 
 # ---------------------------------------------------------------------------
