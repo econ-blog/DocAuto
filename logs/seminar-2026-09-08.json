@@ -103,6 +103,16 @@
       "survey": {
         "bjh7790": "success"
       }
+    },
+    "5698": {
+      "id": "5698",
+      "title": "소화기내과에서 바라보는 펙수클루",
+      "start": "2026-10-08(목) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:01"
     }
   }
 }
