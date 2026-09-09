@@ -11,7 +11,9 @@
     "HMP\n룰렛",
     "HMP\n댓글",
     "HMP\n글쓰기",
-    "익일\n퀴즈"
+    "익일\n퀴즈",
+    "닥터빌\nbjh7790",
+    "닥터빌\nwonju"
   ],
   "runs": [
     {
@@ -27,6 +29,20 @@
         "HMP\n룰렛": "no_target",
         "HMP\n댓글": "success",
         "HMP\n글쓰기": "success",
+        "익일\n퀴즈": "already_done"
+      }
+    },
+    {
+      "run": 2,
+      "at": "21:20",
+      "cells": {
+        "닥터빌\nbjh7790": "failed",
+        "닥터빌\nwonju": "failed",
+        "키메디\n출석": "already_done",
+        "HMP\n캡슐": "already_done",
+        "HMP\n룰렛": "no_target",
+        "HMP\n댓글": "success",
+        "HMP\n글쓰기": "already_done",
         "익일\n퀴즈": "already_done"
       }
     }

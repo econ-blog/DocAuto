@@ -1,37 +1,5 @@
 {
   "bjh7790": {
-    "5597": {
-      "applied_at": "2026-08-20T16:42:12.628561+09:00",
-      "date": "2026-09-09",
-      "day": 9,
-      "end_hour": 19,
-      "end_minute": 30,
-      "end_time": "19:30",
-      "month": 9,
-      "start": "2026-09-09(수) 18:00 ~ 19:30",
-      "start_date": "2026-09-09",
-      "start_hour": 18,
-      "start_minute": 0,
-      "start_time": "18:00",
-      "title": "[대한심장학회] 심장성쇼크연구회 2026 In-depth Webinar",
-      "year": 2026
-    },
-    "5627": {
-      "applied_at": "2026-08-25T16:44:03.905926+09:00",
-      "date": "2026-09-09",
-      "day": 9,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 9,
-      "start": "2026-09-09(수) 18:30 ~ 20:00",
-      "start_date": "2026-09-09",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "Love Life Love Liver",
-      "year": 2026
-    },
     "5628": {
       "applied_at": "2026-08-25T16:44:15.685776+09:00",
       "date": "2026-09-10",
@@ -110,22 +78,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "O.M.T Web Symposium",
-      "year": 2026
-    },
-    "5637": {
-      "applied_at": "2026-08-25T18:32:47.704677+09:00",
-      "date": "2026-09-09",
-      "day": 9,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 9,
-      "start": "2026-09-09(수) 18:30 ~ 20:00",
-      "start_date": "2026-09-09",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "[ENDO WEEK] 엔블로 Web Symposium",
       "year": 2026
     },
     "5639": {
@@ -238,22 +190,6 @@
       "start_minute": 0,
       "start_time": "19:00",
       "title": "For Strong Bone, STOBOCLO",
-      "year": 2026
-    },
-    "5655": {
-      "applied_at": "2026-08-27T13:32:45.686100+09:00",
-      "date": "2026-09-09",
-      "day": 9,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 9,
-      "start": "2026-09-09(수) 13:00 ~ 14:00",
-      "start_date": "2026-09-09",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "[ENDO WEEK] Advances in Diabetes Management Clinical Benefits of SGLT-2 Inhibitors in Combination Therapy",
       "year": 2026
     },
     "5660": {
@@ -498,38 +434,6 @@
     }
   },
   "wonju": {
-    "5597": {
-      "applied_at": "2026-08-20T16:44:06.828384+09:00",
-      "date": "2026-09-09",
-      "day": 9,
-      "end_hour": 19,
-      "end_minute": 30,
-      "end_time": "19:30",
-      "month": 9,
-      "start": "2026-09-09(수) 18:00 ~ 19:30",
-      "start_date": "2026-09-09",
-      "start_hour": 18,
-      "start_minute": 0,
-      "start_time": "18:00",
-      "title": "[대한심장학회] 심장성쇼크연구회 2026 In-depth Webinar",
-      "year": 2026
-    },
-    "5627": {
-      "applied_at": "2026-08-25T16:46:30.689119+09:00",
-      "date": "2026-09-09",
-      "day": 9,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 9,
-      "start": "2026-09-09(수) 18:30 ~ 20:00",
-      "start_date": "2026-09-09",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "Love Life Love Liver",
-      "year": 2026
-    },
     "5628": {
       "applied_at": "2026-08-25T16:46:39.061113+09:00",
       "date": "2026-09-10",
@@ -608,22 +512,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "O.M.T Web Symposium",
-      "year": 2026
-    },
-    "5637": {
-      "applied_at": "2026-08-25T18:33:44.576727+09:00",
-      "date": "2026-09-09",
-      "day": 9,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 9,
-      "start": "2026-09-09(수) 18:30 ~ 20:00",
-      "start_date": "2026-09-09",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "[ENDO WEEK] 엔블로 Web Symposium",
       "year": 2026
     },
     "5639": {
@@ -738,22 +626,6 @@
       "title": "For Strong Bone, STOBOCLO",
       "year": 2026
     },
-    "5655": {
-      "applied_at": "2026-08-27T13:33:46.027809+09:00",
-      "date": "2026-09-09",
-      "day": 9,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 9,
-      "start": "2026-09-09(수) 13:00 ~ 14:00",
-      "start_date": "2026-09-09",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "[ENDO WEEK] Advances in Diabetes Management Clinical Benefits of SGLT-2 Inhibitors in Combination Therapy",
-      "year": 2026
-    },
     "5660": {
       "applied_at": "2026-08-28T18:04:02.044188+09:00",
       "date": "2026-10-19",
@@ -864,22 +736,6 @@
       "start_minute": 0,
       "start_time": "12:00",
       "title": "True Cardiovascular Event Prevention from the HEART, CRESTOR",
-      "year": 2026
-    },
-    "5670": {
-      "applied_at": "2026-09-02T13:03:11.913326+09:00",
-      "date": "2026-09-09",
-      "day": 9,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 9,
-      "start": "2026-09-09(수) 13:00 ~ 14:00",
-      "start_date": "2026-09-09",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "DEEP INSIGHT WEDNESDAY WEBINAR_Dual Regeneration Strategy: ECM Restoration & Collagen Biostimulation",
       "year": 2026
     },
     "5671": {

@@ -5,7 +5,7 @@
     "5597": {
       "id": "5597",
       "title": "[대한심장학회] 심장성쇼크연구회 2026 In-depth Webinar",
-      "start": "2026-09-09(수) 18:00 ~ 20:00",
+      "start": "2026-09-09(수) 18:00 ~ 19:30",
       "apply": {
         "bjh7790": "already_done",
         "wonju": "already_done"
@@ -41,7 +41,7 @@
     "5637": {
       "id": "5637",
       "title": "[ENDO WEEK] 엔블로 Web Symposium",
-      "start": "2026-09-09(수) 18:00 ~ 20:00",
+      "start": "2026-09-09(수) 18:30 ~ 20:00",
       "apply": {
         "bjh7790": "already_done",
         "wonju": "already_done"
@@ -102,6 +102,126 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       }
+    },
+    "5700": {
+      "id": "5700",
+      "title": "No.1 Collaboration 심포지엄",
+      "start": "2026-09-30(수) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:15"
+    },
+    "5715": {
+      "id": "5715",
+      "title": "DIVE (Digital Innovation, Value & Experience) Web symposium",
+      "start": "2026-10-01(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:15"
+    },
+    "5713": {
+      "id": "5713",
+      "title": "Breathe Well Symposium",
+      "start": "2026-10-01(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:15"
+    },
+    "5701": {
+      "id": "5701",
+      "title": "From Continuous Monitoring to Sustained Control_CART BP Pro and Olmesartan-Based Therapy",
+      "start": "2026-10-13(화) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:16"
+    },
+    "5702": {
+      "id": "5702",
+      "title": "ARB Strategies in Atrial Fibrillation – Clinical Value of Olmesartan",
+      "start": "2026-10-14(수) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:16"
+    },
+    "5703": {
+      "id": "5703",
+      "title": "DIVE (Digital Innovation, Value & Experience) Web symposium",
+      "start": "2026-10-14(수) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:16"
+    },
+    "5707": {
+      "id": "5707",
+      "title": "하트빌 웹 심포지엄",
+      "start": "2026-10-15(목) 18:00 ~ 19:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:16"
+    },
+    "5705": {
+      "id": "5705",
+      "title": "O.M.T Web Symposium",
+      "start": "2026-10-15(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:16"
+    },
+    "5710": {
+      "id": "5710",
+      "title": "Breathe Well Symposium",
+      "start": "2026-10-16(금) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:17"
+    },
+    "5709": {
+      "id": "5709",
+      "title": "클린콜 케이스리뷰, 대장내시경 정결의 최적 선택",
+      "start": "2026-10-16(금) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:17"
+    },
+    "5716": {
+      "id": "5716",
+      "title": "전공의를 위한 호흡기내과 증례강의",
+      "start": "2026-10-19(월) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:17"
+    },
+    "5717": {
+      "id": "5717",
+      "title": "ARB Strategies in Atrial Fibrillation – Clinical Value of Olmesartan",
+      "start": "2026-10-20(화) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:17"
     }
   }
 }
