@@ -1,4 +1,6 @@
+from datetime import datetime
 from unittest.mock import MagicMock
+
 import seminar_survey
 from notify import severity_of
 
@@ -249,12 +251,30 @@ def test_run_survey_marks_already_done_when_popup_never_opens_but_detail_says_do
     assert state["accounts"]["bjh7790"]["survey"]["5600"] == "done"
 
 
-def test_run_survey_still_not_ready_when_detail_has_no_done_marker(monkeypatch):
-    """상세에 완료 표시가 없으면 종전대로 not_ready — 30분 뒤 다시 시도한다."""
+def test_run_survey_unverified_when_window_is_open_but_popup_never_opens(monkeypatch):
+    """창이 열려 있는데 못 열었으면 unverified(alert)다.
+
+    2026-09-09 세미나 5627: 같은 런에서 한 계정만 not_ready로 떨어졌는데 quiet이라
+    알림이 안 갔다. 창이 열린 동안의 실패는 조용히 넘기지 않는다.
+    """
     monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (None, "팝업 안 열림"))
     _stub_detail(monkeypatch, "unknown")
 
     result = seminar_survey.run_survey(MagicMock(), 5600, bank_paths={})
+
+    assert result["status"] == "unverified"
+    # 다음 런이 깜깜하지 않도록 갈림길의 증거는 그대로 남긴다.
+    assert result["detail_verdict"] == "unknown"
+
+
+def test_run_survey_not_ready_when_window_has_not_opened(monkeypatch):
+    """창 자체가 안 열렸으면 종전대로 not_ready — 30분 뒤 다시 시도한다."""
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (None, "팝업 안 열림"))
+    _stub_detail(monkeypatch, "unknown")
+    item = {"id": 5600, "start": "2026-09-09(수) 18:30 ~ 20:00"}
+    now = datetime(2026, 9, 9, 18, 35, tzinfo=seminar_survey.kst)  # 창은 19:00부터
+
+    result = seminar_survey.run_survey(MagicMock(), item, bank_paths={}, now_dt=now)
 
     assert result["status"] == "not_ready"
 

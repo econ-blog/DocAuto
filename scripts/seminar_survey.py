@@ -704,6 +704,23 @@ def evaluate_survey_cutoff(item: dict, now_dt: datetime = None) -> str:
     return "ready"
 
 
+def unopened_status(item: dict, now_dt: datetime = None) -> str:
+    """설문에 손도 못 댔을 때의 상태.
+
+    - 창이 아직 안 열렸으면 `not_ready`, 마감 후면 `closed` — 둘 다 정상이므로 quiet.
+    - **창이 열려 있는데도 못 열었으면 `unverified`**(alert). 성공도 실패도 확인
+      못 한 상태다.
+
+    2026-09-09 세미나 5627: 같은 런에서 bjh7790은 success, wonju만 `not_ready`로
+    떨어졌다. 창은 열려 있었으니 "아직 안 열림"이 아니라 그냥 못 연 것이었는데,
+    `not_ready`가 quiet이라 텔레그램에 뜨지 않았다. 손으로 재시도해서 붙였을 뿐,
+    안 봤으면 창이 닫힐 때까지 한 계정만 누락된 채로 끝났다. 창이 열린 동안의
+    실패는 조용히 넘기지 않는다.
+    """
+    st = evaluate_survey_cutoff(item, now_dt)
+    return st if st in ("not_ready", "closed") else "unverified"
+
+
 def placeholder_value(option_texts: list[str] | None):
     """족보에 깔아둘 미기입 값. 보기가 있으면 [표시, 보기…], 없으면 빈 문자열.
 
@@ -1577,8 +1594,7 @@ def run_survey(
                 mark_survey_status(state, account, sid_val, "done", state_file)
             return result
 
-        st = evaluate_survey_cutoff(item, now_dt)
-        result["status"] = "closed" if st == "closed" else "not_ready"
+        result["status"] = unopened_status(item, now_dt)
         if result["status"] == "closed" and state is not None and account:
             mark_survey_status(state, account, sid_val, "closed", state_file)
         result["message"] = f"{prefix}{result['status']}: {err}"
@@ -1619,8 +1635,7 @@ def run_survey(
                 if pages_done:
                     result.update(finalize_after_submit(page, seminar_id, pages_done, title))
                 else:
-                    st = evaluate_survey_cutoff(item, now_dt)
-                    result["status"] = "closed" if st == "closed" else "not_ready"
+                    result["status"] = unopened_status(item, now_dt)
                     if result["status"] == "closed" and state is not None and account:
                         mark_survey_status(state, account, sid_val, "closed", state_file)
                     prefix = f"[{title}] " if title else ""
