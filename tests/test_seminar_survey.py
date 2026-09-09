@@ -670,3 +670,56 @@ def test_choice_blank_marker_is_missing():
     plan, missing = resolve_page([q], _banks(quiz={"정답은?": seminar_survey.BLANK_ANSWER_MARKER}))
     assert plan == []
     assert [m["bank"] for m in missing] == ["quiz"]
+
+
+# --- 복합 문항(보기 + 입력란) -----------------------------------------------
+# 2026-09-09: 보기가 하나라도 있으면 입력란을 버리고 'choice'로 접던 판독기 탓에
+# 주관식 칸이 빈 채로 제출됐다. 미등록으로도 잡히지 않아 알림도 뜨지 않았다.
+
+def _mixed_q(text, options, base="userQuestions.0.optionIds", free="userQuestions.0.text"):
+    q = _choice_q(text, options, base=base)
+    q["kind"] = "mixed"
+    q["name"] = free
+    q["free_name"] = free
+    return q
+
+
+def test_resolve_page_mixed_blocks_when_text_bank_is_empty():
+    """선택 파트를 풀 수 있어도 입력 파트가 미등록이면 페이지가 막힌다."""
+    q = _mixed_q("만족하셨습니까? 이유도 적어주세요", ["예", "아니오"])
+    plan, missing = resolve_page([q], _banks())
+    assert [m["bank"] for m in missing] == ["text"]
+    # 주관식 자리에는 보기 목록을 깔지 않는다 — 깔면 선택지가 답으로 박힌다.
+    assert missing[0]["option_texts"] == []
+    assert not any(s["kind"] == "input" for s in plan)
+
+
+def test_resolve_page_mixed_fills_both_parts():
+    q = _mixed_q("만족하셨습니까? 이유도 적어주세요", ["예", "아니오"])
+    plan, missing = resolve_page(
+        [q], _banks(text={"만족하셨습니까? 이유도 적어주세요": "그럭저럭임"})
+    )
+    assert missing == []
+    kinds = [s["kind"] for s in plan]
+    assert kinds == ["choice", "input"]
+    # 선택 파트는 일반 문항 규칙대로 2번 보기.
+    assert plan[0]["targets"][0]["value"] == "1"
+    # 입력은 보기 name이 아니라 입력란 name에 넣는다.
+    assert plan[1]["name"] == "userQuestions.0.text"
+    assert plan[1]["value"] == "그럭저럭임"
+
+
+def test_resolve_page_mixed_quiz_part_blocks_when_quiz_bank_is_empty():
+    """복합 문항의 선택 파트가 퀴즈면 추측하지 않는다."""
+    q = _mixed_q("[퀴즈] 문항1", ["가", "나"])
+    _, missing = resolve_page([q], _banks(text={"[퀴즈] 문항1": "적당히 씀"}))
+    assert [m["bank"] for m in missing] == ["quiz"]
+
+
+def test_resolve_page_mixed_blank_marker_submits_empty_text():
+    q = _mixed_q("병원 정보를 남겨주세요", ["예", "아니오"])
+    plan, missing = resolve_page(
+        [q], _banks(text={"병원 정보를 남겨주세요": "(빈칸)"})
+    )
+    assert missing == []
+    assert plan[1] == {"kind": "input", "name": "userQuestions.0.text", "value": ""}

@@ -24,6 +24,12 @@ seminar_live.py로 입장에 성공한 세미나는 방송 팝업에서 설문�
     분류 이전에, 응답 컨트롤(라디오·체크박스·입력란)이 하나도 없는 항목은
     `resolve_page`가 건너뛴다. 안내문·읽기 전용 표시이지 문항이 아니다.
 
+    보기와 입력란이 **함께** 있는 복합 문항(kind="mixed")은 두 파트를 각각 푼다.
+    선택 파트는 위 규칙대로, 입력 파트는 언제나 text 족보다. 예전에는 보기가
+    하나라도 있으면 입력란을 통째로 버려(`options.length ? 'choice' : …`) 선택
+    파트만 2번으로 찍고 주관식을 빈 채로 제출했다 — 족보에 오르지도, 알림이
+    뜨지도 않아 며칠간 드러나지 않는 유형의 사고였다.
+
     `[퀴즈]` 배지는 같은 문항이라도 세미나에 따라 빠질 때가 있다(실측). 그래서
     배지가 없더라도 **퀴즈 족보에 키가 이미 있으면 quiz로 분류**한다 — 값이 빈
     문자열이면 general로 새는 대신 incomplete_bank로 막힌다.
@@ -388,7 +394,11 @@ def bank_has_key(bank: dict, question: str) -> bool:
 
 
 def classify_question(q: dict, quiz_bank: dict = None) -> str:
-    """문항 종류를 'quiz' | 'text' | 'general'로 판정한다."""
+    """문항 종류를 'quiz' | 'text' | 'general'로 판정한다.
+
+    복합 문항(kind="mixed")에 대해서는 **선택 파트**의 종류를 돌려준다. 입력
+    파트는 언제나 text 족보를 쓰므로 따로 판정할 것이 없다.
+    """
     if q.get("kind") == "input":
         return "text"
     if is_quiz_badged(q.get("question", "")):
@@ -515,24 +525,30 @@ def resolve_page(questions: list[dict], banks: dict) -> tuple[list[dict], list[d
     `bank` 키가 붙는다(고를 보기 자체가 없으면 None).
 
     응답 컨트롤이 없는 항목(kind="unknown")은 계획에도 미등록에도 넣지 않는다.
+
+    복합 문항(kind="mixed", 보기 + 입력란)은 두 파트를 각각 푼다. 선택 파트는
+    퀴즈/일반 규칙, 입력 파트는 text 족보다. 어느 한쪽이라도 미등록이면 페이지가
+    막힌다 — 예전처럼 보기만 찍고 입력란을 빈 채로 넘기지 않는다.
     """
     plan, missing = [], []
     indexes = {k: build_canonical_index(banks.get(k, {})) for k in ("quiz", "text", "legacy")}
     for q in questions:
         text = q.get("question", "")
         options = [normalize(o["text"]) for o in q.get("options", [])]
+        form = q.get("kind")
 
-        def _miss(bank_name):
+        def _miss(bank_name, option_texts=None):
+            opts = options if option_texts is None else option_texts
             missing.append({
                 "question": normalize_question(text),
-                "options": [f"{i + 1}. {o}" for i, o in enumerate(options)],
+                "options": [f"{i + 1}. {o}" for i, o in enumerate(opts)],
                 # 족보에 깔아둘 보기 원문(번호 없음) — 저장값 형식이 보기 텍스트라
                 # 사람이 한 줄 남기면 그대로 매칭된다.
-                "option_texts": list(options),
+                "option_texts": list(opts),
                 "bank": bank_name,
             })
 
-        if q.get("kind") == "unknown":
+        if form == "unknown":
             # 라디오·체크박스·입력란이 하나도 없는 항목. 답할 컨트롤이 없으므로
             # 문항이 아니라 안내문·읽기 전용 표시다(2026-08-24 세미나 5587 실측:
             # `<p>` 두 개로만 된 항목 10건). 미등록으로 막지 않고 건너뛴다.
@@ -542,65 +558,89 @@ def resolve_page(questions: list[dict], banks: dict) -> tuple[list[dict], list[d
 
         kind = classify_question(q, banks.get("quiz", {}))
 
-        if kind == "general":
-            if len(options) <= GENERAL_OPTION_INDEX:
-                # 보기가 2개 미만이면 "2번"이 존재하지 않는다. DOM 이상이므로
-                # 아무 보기나 찍지 않고 사람이 보게 남긴다.
-                _miss(None)
+        # --- 선택 파트 ------------------------------------------------------
+        # 'input'·'unknown'이 아니면 보기가 있는 문항으로 본다. DOM 판독기가
+        # 'choice' 외의 값을 주더라도(테스트 픽스처의 'radio' 등) 종전과 같이
+        # 선택 파트로 처리된다.
+        if form not in ("input", "unknown"):
+            step = _resolve_choice(q, text, options, kind, banks, indexes, _miss)
+            if step is None:
                 continue
-            plan.append({
-                "kind": "choice",
-                "targets": [q["options"][GENERAL_OPTION_INDEX]],
-            })
-            continue
-
-        answer, source = lookup_in_banks(banks, text, kind, indexes)
-        if answer is None:
-            _miss(kind)
-            continue
-
-        if q.get("kind") == "input":
-            if isinstance(answer, list):
-                answer = " ".join(answer)
-            if answer == BLANK_ANSWER_MARKER:
-                answer = ""
-            step = {"kind": "input", "name": q["name"], "value": answer}
-            if source == "legacy":
-                step["promote"] = {"bank": kind, "question": normalize_question(text), "answer": answer}
             plan.append(step)
-            continue
 
-        if answer == BLANK_ANSWER_MARKER:
-            # 선택형에 빈칸 표식이 들어온 경우. 고를 보기가 없으므로 미등록.
-            _miss(kind)
-            continue
-
-        # 복수 선택은 리스트(["1", "3"])뿐 아니라 "1,3" 형태도 받는다.
-        if isinstance(answer, str) and "," in answer:
-            parts = [p.strip() for p in answer.split(",")]
-            answer = parts if all(p.isdigit() for p in parts if p) else answer
-        wanted = answer if isinstance(answer, list) else [answer]
-        indices = []
-        for w in wanted:
-            idx = match_option(w, options)
-            if idx is None:
-                indices = None
-                break
-            indices.append(idx)
-        if indices is None:
-            _miss(kind)
-            continue
-        step = {"kind": "choice", "targets": [q["options"][i] for i in indices]}
-        if source == "legacy":
-            promoted = promotable_option_texts(indices, options)
-            if promoted is not None:
-                step["promote"] = {
-                    "bank": kind,
-                    "question": normalize_question(text),
-                    "answer": promoted,
-                }
-        plan.append(step)
+        # --- 입력 파트 ------------------------------------------------------
+        if form in ("input", "mixed"):
+            step = _resolve_input(q, text, banks, indexes, _miss)
+            if step is not None:
+                plan.append(step)
     return plan, missing
+
+
+def _resolve_input(q, text, banks, indexes, _miss):
+    """주관식(입력란) 파트를 푼다. 미등록이면 _miss를 부르고 None."""
+    answer, source = lookup_in_banks(banks, text, "text", indexes)
+    if answer is None:
+        # 복합 문항이라도 입력란에는 고를 보기가 없다. 보기 목록을 족보에
+        # 깔면 주관식 자리에 선택지가 들어가므로 빈 값으로 깐다.
+        _miss("text", option_texts=[])
+        return None
+    if isinstance(answer, list):
+        answer = " ".join(answer)
+    if answer == BLANK_ANSWER_MARKER:
+        answer = ""
+    name = q.get("free_name") or q.get("name")
+    step = {"kind": "input", "name": name, "value": answer}
+    if source == "legacy":
+        step["promote"] = {
+            "bank": "text",
+            "question": normalize_question(text),
+            "answer": answer,
+        }
+    return step
+
+
+def _resolve_choice(q, text, options, kind, banks, indexes, _miss):
+    """선택 파트를 푼다. 미등록이면 _miss를 부르고 None."""
+    if kind == "general":
+        if len(options) <= GENERAL_OPTION_INDEX:
+            # 보기가 2개 미만이면 "2번"이 존재하지 않는다. DOM 이상이므로
+            # 아무 보기나 찍지 않고 사람이 보게 남긴다.
+            _miss(None)
+            return None
+        return {"kind": "choice", "targets": [q["options"][GENERAL_OPTION_INDEX]]}
+
+    answer, source = lookup_in_banks(banks, text, kind, indexes)
+    if answer is None:
+        _miss(kind)
+        return None
+
+    if answer == BLANK_ANSWER_MARKER:
+        # 선택형에 빈칸 표식이 들어온 경우. 고를 보기가 없으므로 미등록.
+        _miss(kind)
+        return None
+
+    # 복수 선택은 리스트(["1", "3"])뿐 아니라 "1,3" 형태도 받는다.
+    if isinstance(answer, str) and "," in answer:
+        parts = [p.strip() for p in answer.split(",")]
+        answer = parts if all(p.isdigit() for p in parts if p) else answer
+    wanted = answer if isinstance(answer, list) else [answer]
+    indices = []
+    for w in wanted:
+        idx = match_option(w, options)
+        if idx is None:
+            _miss(kind)
+            return None
+        indices.append(idx)
+    step = {"kind": "choice", "targets": [q["options"][i] for i in indices]}
+    if source == "legacy":
+        promoted = promotable_option_texts(indices, options)
+        if promoted is not None:
+            step["promote"] = {
+                "bank": kind,
+                "question": normalize_question(text),
+                "answer": promoted,
+            }
+    return step
 
 
 def get_survey_window(item: dict) -> tuple[datetime | None, datetime | None]:
@@ -813,8 +853,13 @@ def read_questions(survey_page) -> list[dict]:
             return {
                 number: qnum,
                 question,
-                kind: options.length ? 'choice' : (free ? 'input' : 'unknown'),
+                // 보기와 입력란이 함께 있는 복합 문항은 'mixed'다. 예전에는
+                // options.length만 보고 'choice'로 접어 입력란을 통째로 버렸고,
+                // 그 결과 주관식 칸이 빈 채로 제출됐다(알림도 뜨지 않았다).
+                kind: options.length ? (free ? 'mixed' : 'choice')
+                                     : (free ? 'input' : 'unknown'),
                 name: free ? free.name : (options[0] || {}).name || '',
+                free_name: free ? free.name : '',
                 options,
             };
         })"""

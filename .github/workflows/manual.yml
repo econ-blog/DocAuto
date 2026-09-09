@@ -1,7 +1,7 @@
 name: 수동 실행 (단일 모듈)
 
 # 닥터빌 퀴즈/세미나 신청/세미나 입장/세미나 설문을 하나씩 골라 돌린다.
-# 계정은 account 입력으로 고른다(기본 all).
+# 두 계정(--account all)을 항상 함께 실행한다.
 on:
   workflow_dispatch:
     inputs:
@@ -15,15 +15,6 @@ on:
           - "세미나 신청"
           - "세미나 입장"
           - "세미나 설문"
-      account:
-        description: "대상 계정 — 설문 문항 수집처럼 한 계정만 먼저 돌릴 때 사용"
-        type: choice
-        required: true
-        default: "all"
-        options:
-          - "all"
-          - "bjh7790"
-          - "wonju"
       stay_seconds:
         description: "세미나 팝업 체류 시간(초) — '세미나 입장'에만 적용"
         type: string
@@ -94,7 +85,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
-        run: xvfb-run -a python3 scripts/doctorville.py --account ${{ inputs.account || 'all' }} --task quiz --headed
+        run: xvfb-run -a python3 scripts/doctorville.py --account all --task quiz --headed
 
       - name: 세미나 신청
         if: inputs.task == '세미나 신청'
@@ -102,7 +93,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
-        run: xvfb-run -a python3 scripts/doctorville.py --account ${{ inputs.account || 'all' }} --task seminar --headed
+        run: xvfb-run -a python3 scripts/doctorville.py --account all --task seminar --headed
 
       - name: 세미나 입장
         if: inputs.task == '세미나 입장'
@@ -111,7 +102,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: |
-          xvfb-run -a python3 scripts/seminar_live.py --account ${{ inputs.account || 'all' }} \
+          xvfb-run -a python3 scripts/seminar_live.py --account all \
             --stay-seconds ${{ inputs.stay_seconds || '20' }} \
             --block auto \
             --state-file scripts/state/seminar_entered.json \
@@ -125,7 +116,7 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: |
-          xvfb-run -a python3 scripts/seminar_survey.py --account ${{ inputs.account || 'all' }} \
+          xvfb-run -a python3 scripts/seminar_survey.py --account all \
             --state-file scripts/state/seminar_entered.json \
             --headed
 

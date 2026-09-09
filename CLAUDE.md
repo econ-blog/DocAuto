@@ -75,6 +75,7 @@
 | `scripts/runlog.py` | 실행 로그 적재(`logs/`) + 표 데이터 구성 + 표 전송 |
 | `scripts/tablepng.py` | 표 HTML을 Playwright로 렌더해 PNG 저장 |
 | `scripts/seminar_report.py` | 세미나 블록 결과 표 렌더·전송 |
+| `scripts/bank_pending.py` | 족보 미기입 항목 조회 (`--bank`, `--json`) |
 | `quiz_answers.json` | 닥터빌 퀴즈 족보 `{제품명: {문항: 정답}}` |
 | `quiz_answers_legacy.json` | 구형식 폴백 `{제품명: "111"}` |
 | `intermd_answer.json` | 인터엠디 최신 정답 1건(덮어쓰기, 없으면 미생성) |
@@ -142,6 +143,7 @@ venv/bin/pytest
 venv/bin/python3 scripts/daily_runner.py --no-telegram --headed
 venv/bin/python3 scripts/doctorville.py --account bjh7790 --task quiz --headed
 venv/bin/python3 scripts/seminar_report.py --no-telegram
+python3 scripts/bank_pending.py          # 미기입 족보 항목 (있으면 exit 1)
 ```
 
 ---
