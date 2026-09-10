@@ -150,10 +150,10 @@
         "bjh7790": "success",
         "wonju": "success"
       },
-      "updated_at": "20:36",
+      "updated_at": "21:05",
       "survey": {
-        "bjh7790": "unverified",
-        "wonju": "unverified"
+        "bjh7790": "incomplete_bank",
+        "wonju": "incomplete_bank"
       }
     }
   }
