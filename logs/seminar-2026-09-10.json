@@ -22,7 +22,7 @@
     },
     "5642": {
       "id": "5642",
-      "title": "[ENDO WEEK] 골다공증, 제대로 이해하기",
+      "title": "[ENDO WEEK] 골다공증,제대로 이해하기",
       "start": "2026-09-10(목) 13:00 ~ 14:00",
       "apply": {
         "bjh7790": "already_done",
@@ -40,8 +40,8 @@
     },
     "5645": {
       "id": "5645",
-      "title": "[ENDO WEEK] 골다공증 톺아보기",
-      "start": "2026-09-10(목) 18:00 ~ 20:00",
+      "title": "[ENDO WEEK] For Strong Bone \"STOBOCLO\" Web symposium",
+      "start": "2026-09-10(목) 18:00 ~ 19:20",
       "apply": {
         "bjh7790": "already_done",
         "wonju": "already_done"
@@ -155,6 +155,66 @@
         "bjh7790": "incomplete_bank",
         "wonju": "incomplete_bank"
       }
+    },
+    "5723": {
+      "id": "5723",
+      "title": "ARB Strategies in Atrial Fibrillation – Clinical value of Olmesartan",
+      "start": "2026-10-15(목) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:07"
+    },
+    "5719": {
+      "id": "5719",
+      "title": "투게더 심포지엄",
+      "start": "2026-10-20(화) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:07"
+    },
+    "5718": {
+      "id": "5718",
+      "title": "ENVLO WEB SYMPOSIUM",
+      "start": "2026-10-20(화) 18:30 ~ 19:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:08"
+    },
+    "5722": {
+      "id": "5722",
+      "title": "ARB Strategies in Atrial Fibrillation – Clinical Value of Olmesartan",
+      "start": "2026-10-27(화) 12:30 ~ 13:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:08"
+    },
+    "5720": {
+      "id": "5720",
+      "title": "고혈압 WEEK",
+      "start": "2026-10-29(목) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:08"
+    },
+    "5721": {
+      "id": "5721",
+      "title": "고혈압 WEEK",
+      "start": "2026-10-30(금) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:08"
     }
   }
 }
