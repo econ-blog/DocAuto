@@ -10,7 +10,7 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "17:36",
+      "updated_at": "18:06",
       "live": {
         "bjh7790": "success",
         "wonju": "success"
@@ -68,6 +68,20 @@
       "survey": {
         "bjh7790": "success",
         "wonju": "success"
+      }
+    },
+    "5696": {
+      "id": "5696",
+      "title": "CABOMETYX® VALUE UP MEETING",
+      "start": "2026-09-11(금) 19:00 ~ 22:10",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "18:06",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
       }
     }
   }
