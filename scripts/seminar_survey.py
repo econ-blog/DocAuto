@@ -220,6 +220,15 @@ MOBILE_POLL_MS = 500
 # 제출 직후에는 표시가 아직 안 바뀌었을 수 있어 한 번 더 열어 본다.
 DETAIL_RECHECK_WAIT_MS = 3000
 
+# 공지된 종료 시각을 넘겨 진행되는 세미나가 흔하다(2026-09-11 세미나 5639:
+# 18:30~20:00 공지였는데 21:00 넘어서도 방송 중이었고, 공지 기준 마감(21:00)에
+# 걸려 한 계정이 `closed`로 조용히 떨어졌다). 그래서 마감은 **세미나가 아직
+# 안 끝났음을 마지막으로 관측한 시각 + 1시간**으로 민다. 관측이 없으면 공지
+# 기준 그대로다 — 실제로 제때 끝난 세미나의 조용한 마감은 그대로 유지된다.
+SURVEY_CLOSE_GRACE = timedelta(hours=1)
+# 관측이 잘못 쌓여도 무한정 열려 있지 않도록 하는 상한(공지 종료 기준).
+SURVEY_RUNNING_EXTEND_CAP = timedelta(hours=6)
+
 
 # ---------------------------------------------------------------------------
 # 순수 함수 (테스트 대상)
@@ -234,7 +243,7 @@ def strip_spaces(text: str) -> str:
     return re.sub(r"\s+", "", text or "")
 
 
-def detect_survey_marker(texts) -> str:
+def detect_survey_marker(texts, allow_done: bool = True) -> str:
     """세미나 상세에서 읽은 문자열들로 설문 참여 여부를 판정한다.
 
     - ``done``     — '설문 참여 완료'가 있다. 설문을 실제로 마쳤다는 사이트의 표시.
@@ -244,8 +253,13 @@ def detect_survey_marker(texts) -> str:
 
     두 문구는 상호 배타가 아니다 — 참여 완료 화면에는 '설문 참여 완료'와
     '세미나 종료'가 나란히 뜬다. 그래서 완료 표시를 먼저 본다.
+
+    `allow_done=False`는 완료 판정을 쓰면 안 되는 근거(페이지 본문 전체 등)에
+    쓴다. 본문에는 다른 세미나의 '응답완료'나 안내 문구가 섞여 들어오는데,
+    거짓 `done`은 상태 파일에 done으로 굳어 다시 시도조차 안 되므로 거짓
+    `not_done`(재시도로 회복된다)보다 훨씬 비싸다.
     """
-    if matched_done_marker(texts):
+    if allow_done and matched_done_marker(texts):
         return "done"
     joined = " ".join(strip_spaces(t) for t in texts if t)
     if any(strip_spaces(m) in joined for m in SURVEY_PENDING_MARKERS):
@@ -643,40 +657,67 @@ def _resolve_choice(q, text, options, kind, banks, indexes, _miss):
     return step
 
 
-def get_survey_window(item: dict) -> tuple[datetime | None, datetime | None]:
-    """세미나 설문 가능 시간 창 (open_dt, close_dt) 반환.
+def parse_kst(value) -> datetime | None:
+    """ISO 문자열을 KST datetime으로. 못 읽으면 None."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+    return dt.replace(tzinfo=common.KST) if dt.tzinfo is None else dt
 
-    시작 시간 30분 후 ~ 끝나는 시간 1시간 후.
+
+def effective_end(item: dict, scheduled_end: datetime | None) -> datetime | None:
+    """마감 계산에 쓸 종료 시각.
+
+    `running_at`은 "이 시각에 세미나가 아직 안 끝나 있었다"는 관측이다. 공지된
+    종료보다 뒤면 공지가 틀린 것이므로 관측을 쓴다. 관측이 없으면 공지 그대로다.
+    상한을 두는 이유는 판정 마크업이 깨져 관측이 계속 갱신될 때 설문이 영원히
+    열린 것으로 남는 것을 막기 위해서다.
     """
+    running = parse_kst((item or {}).get("running_at"))
+    if running is None:
+        return scheduled_end
+    if scheduled_end is None:
+        return running
+    capped = min(running, scheduled_end + SURVEY_RUNNING_EXTEND_CAP)
+    return max(scheduled_end, capped)
+
+
+def scheduled_bounds(item: dict) -> tuple[datetime | None, datetime | None]:
+    """공지된 일정만으로 계산한 (설문 오픈, 세미나 종료). 관측은 섞지 않는다."""
     if not isinstance(item, dict):
         return None, None
     start_str = item.get("start")
     if start_str and isinstance(start_str, str):
         s_dt, e_dt = parse_dd_date(start_str)
         if s_dt:
-            open_dt = s_dt + timedelta(minutes=30)
-            end_dt = e_dt or (s_dt + timedelta(hours=1))
-            close_dt = end_dt + timedelta(hours=1)
-            return open_dt, close_dt
+            return s_dt + timedelta(minutes=30), e_dt or (s_dt + timedelta(hours=1))
         m = re.search(r"(\d{4}-\d{2}-\d{2})\s*\([^)]+\)\s*(\d{2}:\d{2})", start_str)
         if m:
             d_str, s_str = m.groups()
             try:
                 s_dt = datetime.strptime(f"{d_str} {s_str}", "%Y-%m-%d %H:%M").replace(tzinfo=common.KST)
-                return s_dt + timedelta(minutes=30), s_dt + timedelta(hours=2)
+                return s_dt + timedelta(minutes=30), s_dt + timedelta(hours=1)
             except ValueError:
                 pass
 
-    ent_str = item.get("entered_at")
-    if ent_str and isinstance(ent_str, str):
-        try:
-            ent_dt = datetime.fromisoformat(ent_str)
-            if ent_dt.tzinfo is None:
-                ent_dt = ent_dt.replace(tzinfo=common.KST)
-            return ent_dt + timedelta(minutes=30), ent_dt + timedelta(hours=2)
-        except (ValueError, TypeError):
-            pass
+    ent_dt = parse_kst(item.get("entered_at"))
+    if ent_dt is not None:
+        return ent_dt + timedelta(minutes=30), ent_dt + timedelta(hours=1)
     return None, None
+
+
+def get_survey_window(item: dict) -> tuple[datetime | None, datetime | None]:
+    """세미나 설문 가능 시간 창 (open_dt, close_dt) 반환.
+
+    시작 30분 후 ~ **실제 종료 관측 시각**(없으면 공지된 종료) 1시간 후.
+    """
+    open_dt, end_dt = scheduled_bounds(item)
+    if end_dt is None:
+        return open_dt, None
+    return open_dt, effective_end(item, end_dt) + SURVEY_CLOSE_GRACE
 
 
 def get_survey_cutoff(item: dict) -> datetime | None:
@@ -702,6 +743,25 @@ def evaluate_survey_cutoff(item: dict, now_dt: datetime = None) -> str:
     if close_dt is not None and now_dt > close_dt:
         return "closed"
     return "ready"
+
+
+def seminar_has_ended(item: dict, now_dt: datetime = None) -> bool:
+    """공지·관측 기준으로 세미나가 이미 끝났는가.
+
+    끝나지도 않은 세미나에 '설문 응답완료'가 뜰 수는 없다. 그 판정은 상세가
+    아니라 목록·안내 페이지를 읽은 것이다 — 2026-09-11 세미나 5696(19:00~22:10)이
+    21:05에 `already_done`으로 찍혔고, 같은 런의 다른 계정은 `unverified`였다.
+    일정을 못 읽으면 True를 돌려준다(판정을 막지 않는다).
+    """
+    if now_dt is None:
+        now_dt = datetime.now(common.KST)
+    elif now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=common.KST)
+    _, end_dt = scheduled_bounds(item)
+    end_dt = effective_end(item, end_dt)
+    if end_dt is None:
+        return True
+    return now_dt >= end_dt
 
 
 def unopened_status(item: dict, now_dt: datetime = None) -> str:
@@ -807,6 +867,34 @@ def mark_survey_status(state: dict, account: str, seminar_id: int | str, status_
     survey = acc.setdefault("survey", {})
     sid_str = str(seminar_id)
     survey[sid_str] = status_str
+    if path is not None:
+        seminar_live.save_state(state, path)
+
+
+def get_survey_meta(state: dict, account: str, seminar_id: int | str) -> dict:
+    """세미나별 설문 부가 상태(진행 중 관측 시각 등). 없으면 빈 dict."""
+    if not isinstance(state, dict):
+        return {}
+    acc = (state.get("accounts") or {}).get(account) or {}
+    meta = (acc.get("survey_meta") or {}).get(str(seminar_id))
+    return meta if isinstance(meta, dict) else {}
+
+
+def mark_survey_running(state: dict, account: str, seminar_id: int | str, at: str, path=None) -> None:
+    """"이 시각에 아직 안 끝나 있었다"를 기록한다. 마감을 그만큼 뒤로 민다.
+
+    공지된 종료 시각이 실제와 다른 세미나가 있어서(2026-09-11 5639), 공지만
+    보고 `closed`로 끊으면 아직 열려 있는 설문을 조용히 버린다.
+    """
+    if not isinstance(state, dict) or not account:
+        return
+    state = upgrade_to_v2(state)
+    acc = state.setdefault("accounts", {}).setdefault(account, {})
+    meta = acc.setdefault("survey_meta", {}).setdefault(str(seminar_id), {})
+    prev = meta.get("running_at")
+    if isinstance(prev, str) and prev >= at:
+        return
+    meta["running_at"] = at
     if path is not None:
         seminar_live.save_state(state, path)
 
@@ -1290,6 +1378,31 @@ DETAIL_BUTTON_JS = r"""
 """
 
 
+def detail_url_matches(url: str, seminar_id) -> bool:
+    """상세 조회가 **그 세미나 페이지**에 실제로 도달했는지 URL로 가른다.
+
+    2026-09-11 실측: 아직 끝나지 않은 세미나(5696 카보메틱스, 19:00~22:10)를
+    21:05에 조회했는데 `already_done`이 나왔다. 같은 런에서 다른 계정은
+    `unverified`였다 — 같은 페이지라면 나올 수 없는 차이다. m 상세
+    (`/cme/vod/{id}`)가 아직 없는 회차라 목록으로 떨어지고, 그 목록에 들어 있던
+    **다른 세미나의 '응답완료'**가 걸린 것으로 본다(목록 내용이 계정마다 다르니
+    계정별로 판정이 갈린 것도 설명된다). 세미나 id가 없는 주소의 판정은 버린다.
+
+    URL을 못 읽으면(테스트 mock 등) 판정 근거로 쓰지 않고 통과시킨다.
+    """
+    url = str(url or "")
+    if not url.lower().startswith("http"):
+        return True
+    sid = str(seminar_id)
+    m = re.search(r"seminarId=(\d+)", url)
+    if m:
+        return m.group(1) == sid
+    m = re.search(r"/(?:cme/)?vod/(\d+)", url)
+    if m:
+        return m.group(1) == sid
+    return False
+
+
 def read_detail_buttons(page) -> tuple[list[str], list[str]]:
     """세미나 상세의 버튼 텍스트를 (보이는 것, 숨은 것)으로 갈라 돌려준다.
 
@@ -1427,12 +1540,22 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
         "url": final_url,
         "visible": visible,
         "hidden": hidden,
+        "ended": bool(visible or hidden) and seminar_ended(visible or hidden),
     }
+
+    # 다른 세미나 페이지(목록·안내)로 떨어졌으면 여기서 읽은 것은 전부 남의
+    # 상태다. 버튼도 본문도 쓰지 않는다.
+    if not detail_url_matches(final_url, seminar_id):
+        host = "m" if mobile else "www"
+        return "unknown", [], f"{host} 상세: 세미나 {seminar_id} 페이지가 아님({final_url})"
 
     verdict = detect_survey_marker(buttons)
     if verdict == "unknown":
-        # 버튼 셀렉터가 안 맞을 수도 있으니 본문 전체로 한 번 더 본다.
-        verdict = detect_survey_marker([body])
+        # 버튼 셀렉터가 안 맞을 수도 있으니 본문 전체로 한 번 더 본다. 단
+        # 본문에는 다른 세미나의 완료 표시와 안내 문구가 섞이므로 여기서
+        # `done`은 만들지 않는다 — 놓친 완료는 다음 런이 회복하지만, 거짓
+        # 완료는 상태에 굳어 영원히 재시도되지 않는다.
+        verdict = detect_survey_marker([body], allow_done=False)
 
     if mobile:
         if not is_mobile_session(page, buttons + [body]):
@@ -1442,6 +1565,26 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
         if verdict == "not_done" and not has_login_evidence(buttons + [body]):
             return "unknown", buttons, "m 상세: 로그인 증거 없이 미참여로 보임 — 판정 보류"
     return verdict, buttons, ""
+
+
+def seminar_ended(texts) -> bool:
+    """상세에 '세미나 종료'가 떠 있는가 — 방송이 끝났다는 사이트의 표시."""
+    joined = " ".join(strip_spaces(t) for t in texts if t)
+    return strip_spaces(SEMINAR_END_MARKER) in joined
+
+
+def probe_saw_running_seminar() -> bool:
+    """마지막 상세 조회에서 "아직 안 끝났다"를 관측했는가.
+
+    버튼을 읽긴 했는데 '세미나 종료'가 없다 = 방송 전이거나 방송 중이다. 이
+    관측이 있어야 공지된 종료 시각을 밀 수 있다(effective_end).
+    """
+    for rec in LAST_DETAIL_PROBE.values():
+        if not isinstance(rec, dict):
+            continue
+        if (rec.get("visible") or rec.get("hidden")) and not rec.get("ended"):
+            return True
+    return False
 
 
 def has_login_evidence(texts) -> bool:
@@ -1558,6 +1701,11 @@ def run_survey(
     if title:
         result["title"] = title
 
+    # 이전 런에서 "아직 안 끝났다"를 봤으면 마감 계산에 반영한다.
+    running_at = get_survey_meta(state, account, sid_val).get("running_at")
+    if running_at and not item.get("running_at"):
+        item = {**item, "running_at": running_at}
+
     timing = evaluate_survey_cutoff(item, now_dt)
     if timing != "ready":
         result["status"] = timing
@@ -1585,6 +1733,24 @@ def run_survey(
         # 팝업만 봐서는 구분이 안 됐다. 상세의 '설문 참여 완료'가 그걸 가른다 —
         # 이력 파일이 날아갔거나 사용자가 손으로 응답한 경우가 여기로 온다.
         verdict, detail_buttons = confirm_survey_done(page, seminar_id)
+
+        # 상세를 읽었는데 '세미나 종료'가 없다 = 아직 안 끝났다. 마감을 민다.
+        if probe_saw_running_seminar():
+            now_iso = (now_dt or datetime.now(common.KST)).isoformat()
+            mark_survey_running(state, account, sid_val, now_iso, state_file)
+            item = {**item, "running_at": now_iso}
+
+        # 아직 끝나지도 않은 세미나에 '응답완료'가 뜰 수는 없다. 그런 done은
+        # 남의 페이지를 읽은 것이다(2026-09-11 5696·5694). 판정을 버린다.
+        if verdict == "done" and not seminar_has_ended(item, now_dt):
+            result["detail_buttons"] = detail_buttons
+            result["detail_probe"] = copy_probe()
+            result["status"] = "unverified"
+            result["message"] = (
+                f"{prefix}세미나가 아직 안 끝났는데 상세가 완료로 보임 — 판정 폐기."
+            )
+            return result
+
         if verdict == "done":
             marker = matched_done_marker(detail_buttons) or SURVEY_DONE_MARKER
             result["status"] = "already_done"
