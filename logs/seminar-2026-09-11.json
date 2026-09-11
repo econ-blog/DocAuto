@@ -40,7 +40,7 @@
     },
     "5668": {
       "id": "5668",
-      "title": "일반 개원의가 바라보는 펙수클루",
+      "title": "일반 개원의가 바라보는 팩수클루",
       "start": "2026-09-11(금) 13:00 ~ 14:00",
       "apply": {
         "bjh7790": "already_done",
@@ -83,6 +83,66 @@
         "bjh7790": "unverified",
         "wonju": "already_done"
       }
+    },
+    "5725": {
+      "id": "5725",
+      "title": "DKSH 아타칸 D-Day Webinar",
+      "start": "2026-09-15(화) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:05"
+    },
+    "5730": {
+      "id": "5730",
+      "title": "간질환에 실리마린의 의의",
+      "start": "2026-10-07(수) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:05"
+    },
+    "5726": {
+      "id": "5726",
+      "title": "SWITCHING 임상으로 확인된 제미다파® 치료 전환의 가치",
+      "start": "2026-10-13(화) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:06"
+    },
+    "5727": {
+      "id": "5727",
+      "title": "제미다파정을 활용한 새로운 병용 치료의 제안",
+      "start": "2026-10-21(수) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:06"
+    },
+    "5728": {
+      "id": "5728",
+      "title": "No.1 Collaboration Symposium",
+      "start": "2026-10-22(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:06"
+    },
+    "5729": {
+      "id": "5729",
+      "title": "스토보클로X엔블로 Web symposium",
+      "start": "2026-10-28(수) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:06"
     }
   }
 }
