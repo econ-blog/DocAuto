@@ -9,7 +9,7 @@
 페이지(목록 등)를 읽었다는 뜻이다.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 from common import KST
@@ -67,32 +67,21 @@ def test_body_text_can_never_produce_done():
 
 
 # ---------------------------------------------------------------------------
-# ③ 안 끝난 세미나는 완료일 수 없다
+# ③ 진행 중인 세미나는 완료일 수 없다
 # ---------------------------------------------------------------------------
 
-def test_seminar_has_ended_uses_the_schedule():
-    item = {"start": "2026-09-11(금) 19:00 ~ 22:10"}
-    assert not seminar_survey.seminar_has_ended(item, datetime(2026, 9, 11, 21, 5, tzinfo=KST))
-    assert seminar_survey.seminar_has_ended(item, datetime(2026, 9, 11, 22, 10, tzinfo=KST))
+def test_already_done_is_discarded_while_the_seminar_runs(monkeypatch):
+    """5696 재현 — 완료 화면에는 '세미나 종료'가 나란히 뜬다.
 
-
-def test_seminar_has_ended_respects_a_running_observation():
-    """공지가 22:10이어도 22:40에 진행 중이었으면 아직 안 끝난 것이다."""
-    item = {
-        "start": "2026-09-11(금) 19:00 ~ 22:10",
-        "running_at": "2026-09-11T22:40:00+09:00",
-    }
-    assert not seminar_survey.seminar_has_ended(item, datetime(2026, 9, 11, 22, 30, tzinfo=KST))
-
-
-def test_already_done_is_discarded_before_the_seminar_ends(monkeypatch):
-    """5696 재현 — 21:05의 done은 상세가 아니라 남의 페이지를 읽은 것이다."""
+    상세를 읽었는데 '세미나 종료'가 없다면 그 '응답완료'는 남의 페이지 것이다.
+    """
     monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (None, "팝업 안 열림"))
     monkeypatch.setattr(
         seminar_survey, "confirm_survey_done",
         lambda page, sid, retries=0: ("done", ["응답완료", "목록"]),
     )
-    monkeypatch.setattr(seminar_survey, "probe_saw_running_seminar", lambda: False)
+    monkeypatch.setattr(seminar_survey, "probe_saw_running_seminar", lambda: True)
+    monkeypatch.setattr(seminar_survey, "probe_saw_ended_seminar", lambda: False)
     state = {}
     result = seminar_survey.run_survey(
         MagicMock(),
@@ -103,19 +92,19 @@ def test_already_done_is_discarded_before_the_seminar_ends(monkeypatch):
     )
 
     assert result["status"] == "unverified"
-    assert "아직 안 끝났" in result["message"]
-    # 상태에 done으로 굳어 다음 런이 건너뛰는 일이 없어야 한다.
-    assert seminar_survey.get_survey_meta(state, "wonju", 5696).get("status") != "done"
+    assert "진행 중" in result["message"]
+    assert seminar_survey.get_survey_meta(state, "wonju", 5696).get("ended_at") is None
 
 
-def test_already_done_still_works_after_the_seminar_ends(monkeypatch):
+def test_already_done_is_kept_when_the_detail_shows_the_seminar_ended(monkeypatch):
     """끝난 뒤의 '응답완료'는 사용자가 손으로 제출한 경우다 — 그대로 믿는다."""
     monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (None, "팝업 안 열림"))
     monkeypatch.setattr(
         seminar_survey, "confirm_survey_done",
-        lambda page, sid, retries=0: ("done", ["응답완료", "목록"]),
+        lambda page, sid, retries=0: ("done", ["응답완료", "세미나 종료"]),
     )
     monkeypatch.setattr(seminar_survey, "probe_saw_running_seminar", lambda: False)
+    monkeypatch.setattr(seminar_survey, "probe_saw_ended_seminar", lambda: True)
     result = seminar_survey.run_survey(
         MagicMock(),
         {"id": 5642, "title": "골다공증", "start": "2026-09-10(목) 13:00 ~ 14:00"},
@@ -126,68 +115,124 @@ def test_already_done_still_works_after_the_seminar_ends(monkeypatch):
     assert result["verified_by"] == "detail_button: 응답완료"
 
 
-# ---------------------------------------------------------------------------
-# ④ 마감은 공지가 아니라 실제 종료 기준
-# ---------------------------------------------------------------------------
-
-def test_running_observation_pushes_the_deadline():
-    """5639 재현 — 21:00에 아직 방송 중이었으면 21:00 마감은 틀렸다."""
-    item = {"start": "2026-09-11(금) 18:30 ~ 20:00"}
-    at_2106 = datetime(2026, 9, 11, 21, 6, tzinfo=KST)
-    assert seminar_survey.evaluate_survey_cutoff(item, at_2106) == "closed"
-
-    observed = {**item, "running_at": "2026-09-11T21:00:00+09:00"}
-    assert seminar_survey.evaluate_survey_cutoff(observed, at_2106) == "ready"
-    assert seminar_survey.get_survey_cutoff(observed) == datetime(2026, 9, 11, 22, 0, tzinfo=KST)
-
-
-def test_running_observation_cannot_extend_forever():
-    """판정 마크업이 깨져 관측이 계속 갱신돼도 상한을 넘지 못한다."""
-    item = {
-        "start": "2026-09-11(금) 18:30 ~ 20:00",
-        "running_at": "2026-09-13T09:00:00+09:00",
-    }
-    cap = datetime(2026, 9, 11, 20, 0, tzinfo=KST) + seminar_survey.SURVEY_RUNNING_EXTEND_CAP
-    assert seminar_survey.get_survey_cutoff(item) == cap + seminar_survey.SURVEY_CLOSE_GRACE
-
-
-def test_scheduled_deadline_is_unchanged_without_an_observation():
-    """제때 끝난 세미나의 조용한 마감은 그대로다 — 알림이 늘어나면 안 된다."""
-    item = {"start": "2026-09-10(목) 13:00 ~ 14:00"}
-    assert seminar_survey.get_survey_cutoff(item) == datetime(2026, 9, 10, 15, 0, tzinfo=KST)
-    assert seminar_survey.evaluate_survey_cutoff(
-        item, datetime(2026, 9, 10, 15, 30, tzinfo=KST)
-    ) == "closed"
-
-
-def test_running_observation_is_recorded_in_state(monkeypatch):
-    """상세를 읽었는데 '세미나 종료'가 없으면 진행 중으로 기록한다."""
+def test_unopened_is_quiet_while_the_seminar_is_still_running(monkeypatch):
+    """설문은 세미나가 끝나야 열린다 — 진행 중에 못 여는 건 실패가 아니다."""
     monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (None, "팝업 안 열림"))
     monkeypatch.setattr(
         seminar_survey, "confirm_survey_done",
-        lambda page, sid, retries=0: ("unknown", ["입장하기", "목록"]),
+        lambda page, sid, retries=0: ("unknown", ["입장하기"]),
     )
     monkeypatch.setattr(seminar_survey, "probe_saw_running_seminar", lambda: True)
+    monkeypatch.setattr(seminar_survey, "probe_saw_ended_seminar", lambda: False)
+    result = seminar_survey.run_survey(
+        MagicMock(),
+        {"id": 5696, "start": "2026-09-11(금) 19:00 ~ 22:10"},
+        now_dt=datetime(2026, 9, 11, 21, 5, tzinfo=KST),
+    )
+    assert result["status"] == "not_ready"
+
+
+def test_unopened_after_the_end_is_still_an_alert(monkeypatch):
+    """끝났는데 창이 안 열리면 그건 놓친 것이다 — 조용히 넘기지 않는다."""
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (None, "팝업 안 열림"))
+    monkeypatch.setattr(
+        seminar_survey, "confirm_survey_done",
+        lambda page, sid, retries=0: ("unknown", ["목록"]),
+    )
+    monkeypatch.setattr(seminar_survey, "probe_saw_running_seminar", lambda: False)
+    monkeypatch.setattr(seminar_survey, "probe_saw_ended_seminar", lambda: False)
+    result = seminar_survey.run_survey(
+        MagicMock(),
+        {"id": 5639, "start": "2026-09-11(금) 18:30 ~ 20:00"},
+        now_dt=datetime(2026, 9, 11, 21, 6, tzinfo=KST),
+    )
+    assert result["status"] == "unverified"
+
+
+# ---------------------------------------------------------------------------
+# ④ 창은 공지가 아니라 실제 종료 기준
+# ---------------------------------------------------------------------------
+
+def test_window_is_anchored_on_the_observed_end():
+    """설문은 실제 종료에 열리고 1시간 뒤 닫힌다. 공지는 쓰지 않는다."""
+    item = {"start": "2026-09-11(금) 18:30 ~ 20:00", "ended_at": "2026-09-11T21:10:00+09:00"}
+    assert seminar_survey.get_survey_window(item) == (
+        datetime(2026, 9, 11, 21, 10, tzinfo=KST),
+        datetime(2026, 9, 11, 22, 10, tzinfo=KST),
+    )
+    assert seminar_survey.evaluate_survey_cutoff(
+        item, datetime(2026, 9, 11, 21, 0, tzinfo=KST)) == "not_ready"
+    assert seminar_survey.evaluate_survey_cutoff(
+        item, datetime(2026, 9, 11, 21, 40, tzinfo=KST)) == "ready"
+    assert seminar_survey.evaluate_survey_cutoff(
+        item, datetime(2026, 9, 11, 22, 30, tzinfo=KST)) == "closed"
+
+
+def test_announced_end_never_closes_the_window():
+    """5639 재현 — 공지 종료(20:00)만 보고 21:06에 닫으면 열려 있는 설문을 버린다."""
+    item = {"start": "2026-09-11(금) 18:30 ~ 20:00"}
+    assert seminar_survey.get_survey_cutoff(item) is None
+    assert seminar_survey.evaluate_survey_cutoff(
+        item, datetime(2026, 9, 11, 21, 6, tzinfo=KST)) == "ready"
+
+
+def test_probe_gate_keeps_the_request_count_unchanged():
+    """종료를 관측하려면 열어 봐야 하지만, 시작 30분 전까지는 건드리지 않는다."""
+    item = {"start": "2026-09-11(금) 18:30 ~ 20:00"}
+    assert seminar_survey.evaluate_survey_cutoff(
+        item, datetime(2026, 9, 11, 18, 45, tzinfo=KST)) == "not_ready"
+    assert seminar_survey.evaluate_survey_cutoff(
+        item, datetime(2026, 9, 11, 19, 5, tzinfo=KST)) == "ready"
+
+
+def test_unobserved_seminars_stop_being_retried_eventually():
+    """끝내 종료를 못 봐도 영원히 재시도하지는 않는다."""
+    item = {"start": "2026-09-11(금) 18:30 ~ 20:00"}
+    stale = datetime(2026, 9, 11, 18, 30, tzinfo=KST) + seminar_survey.SURVEY_STALE_AFTER
+    assert seminar_survey.evaluate_survey_cutoff(item, stale + timedelta(minutes=1)) == "closed"
+
+
+def test_opening_the_survey_records_the_actual_end(monkeypatch):
+    """설문 창이 열렸다 = 세미나가 끝났다. 공지보다 이른 종료도 이걸로 잡힌다."""
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (MagicMock(), ""))
+    monkeypatch.setattr(seminar_survey, "read_questions", lambda p: [])
+    monkeypatch.setattr(seminar_survey, "dismiss_alerts", lambda p, **k: [])
+    monkeypatch.setattr(seminar_survey, "tick_consents", lambda p: [])
+    monkeypatch.setattr(
+        seminar_survey, "unopened_status", lambda item, now=None, running=False: "unverified"
+    )
     state = {}
     seminar_survey.run_survey(
         MagicMock(),
-        {"id": 5639, "title": "Libre", "start": "2026-09-11(금) 18:30 ~ 20:00"},
-        now_dt=datetime(2026, 9, 11, 21, 0, tzinfo=KST),
+        {"id": 5694, "start": "2026-09-10(목) 20:00 ~ 22:00"},
+        now_dt=datetime(2026, 9, 10, 21, 5, tzinfo=KST),
         state=state,
         account="bjh7790",
     )
 
-    running = seminar_survey.get_survey_meta(state, "bjh7790", 5639).get("running_at")
-    assert running and running.startswith("2026-09-11T21:00")
+    ended = seminar_survey.get_survey_meta(state, "bjh7790", 5694).get("ended_at")
+    assert ended and ended.startswith("2026-09-10T21:05")
 
 
-def test_probe_saw_running_seminar_reads_the_last_probe():
+def test_ended_at_keeps_the_earliest_observation():
+    """관측은 실제 종료보다 뒤다 — 나중 관측으로 덮으면 창이 통째로 밀린다."""
+    state = {}
+    seminar_survey.mark_survey_ended(state, "bjh7790", 5694, "2026-09-10T21:05:00+09:00")
+    seminar_survey.mark_survey_ended(state, "bjh7790", 5694, "2026-09-10T21:35:00+09:00")
+    assert seminar_survey.get_survey_meta(state, "bjh7790", 5694)["ended_at"].startswith(
+        "2026-09-10T21:05"
+    )
+
+
+def test_probe_helpers_read_the_last_probe():
     seminar_survey.LAST_DETAIL_PROBE.clear()
     seminar_survey.LAST_DETAIL_PROBE["m"] = {"visible": ["입장하기"], "hidden": [], "ended": False}
     assert seminar_survey.probe_saw_running_seminar()
+    assert not seminar_survey.probe_saw_ended_seminar()
 
     seminar_survey.LAST_DETAIL_PROBE["m"] = {"visible": ["세미나 종료"], "hidden": [], "ended": True}
     assert not seminar_survey.probe_saw_running_seminar()
+    assert seminar_survey.probe_saw_ended_seminar()
 
     seminar_survey.LAST_DETAIL_PROBE["m"] = {"visible": [], "hidden": [], "ended": False}
     assert not seminar_survey.probe_saw_running_seminar()

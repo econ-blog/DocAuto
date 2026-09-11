@@ -43,57 +43,62 @@ def test_evaluate_survey_cutoff_after_deadline():
         "start": "2026-08-10(월) 13:00 ~ 14:00",
         "entered_at": "2026-08-10T13:05:00+09:00",
     }
-    # 15:30 KST > 15:00 KST cutoff -> closed
+    # 마감은 **공지된 종료**가 아니라 관측된 실제 종료 + 1시간이다
+    # (2026-09-11 사용자 지시). 관측이 없으면 15:30은 아직 확인하러 갈 시간대다.
     now_kst = datetime(2026, 8, 10, 15, 30, tzinfo=KST)
-    res = evaluate_survey_cutoff(item, now_kst)
-    assert res == "closed"
+    assert evaluate_survey_cutoff(item, now_kst) == "ready"
+
+    ended = {**item, "ended_at": "2026-08-10T14:20:00+09:00"}
+    assert evaluate_survey_cutoff(ended, now_kst) == "closed"
+    assert evaluate_survey_cutoff(
+        ended, datetime(2026, 8, 10, 15, 10, tzinfo=KST)
+    ) == "ready"
 
 
-def test_get_survey_cutoff_start_end():
+def test_get_survey_cutoff_needs_an_observed_end():
+    """공지만으로는 마감을 못 정한다 — 공지가 양쪽으로 틀리는 것이 확인됐다."""
     item = {
         "start": "2026-08-10(월) 13:00 ~ 14:00",
     }
-    cutoff = get_survey_cutoff(item)
-    assert cutoff == datetime(2026, 8, 10, 15, 0, tzinfo=KST)
+    assert get_survey_cutoff(item) is None
+
+    ended = {**item, "ended_at": "2026-08-10T14:20:00+09:00"}
+    assert get_survey_cutoff(ended) == datetime(2026, 8, 10, 15, 20, tzinfo=KST)
 
 
 def test_fallback_cutoff_start_only():
+    """종료 시각이 없는 항목도 사전 게이트(시작 30분 후)는 그대로 쓴다."""
     item = {
         "start": "2026-08-10(월) 13:00",
     }
-    # start + 2h = 15:00 KST
-    cutoff = get_survey_cutoff(item)
-    assert cutoff == datetime(2026, 8, 10, 15, 0, tzinfo=KST)
-
     before_now = datetime(2026, 8, 10, 13, 15, tzinfo=KST)
     in_now = datetime(2026, 8, 10, 13, 45, tzinfo=KST)
-    after_now = datetime(2026, 8, 10, 15, 30, tzinfo=KST)
     assert evaluate_survey_cutoff(item, before_now) == "not_ready"
     assert evaluate_survey_cutoff(item, in_now) == "ready"
-    assert evaluate_survey_cutoff(item, after_now) == "closed"
+
+    ended = {**item, "ended_at": "2026-08-10T14:00:00+09:00"}
+    assert evaluate_survey_cutoff(ended, datetime(2026, 8, 10, 15, 30, tzinfo=KST)) == "closed"
 
 
 def test_fallback_cutoff_entered_at_only():
     item = {
         "entered_at": "2026-08-10T13:00:00+09:00",
     }
-    # entered_at + 2h = 15:00 KST
-    cutoff = get_survey_cutoff(item)
-    assert cutoff == datetime(2026, 8, 10, 15, 0, tzinfo=KST)
-
     before_now = datetime(2026, 8, 10, 13, 15, tzinfo=KST)
     in_now = datetime(2026, 8, 10, 13, 45, tzinfo=KST)
-    after_now = datetime(2026, 8, 10, 15, 30, tzinfo=KST)
     assert evaluate_survey_cutoff(item, before_now) == "not_ready"
     assert evaluate_survey_cutoff(item, in_now) == "ready"
-    assert evaluate_survey_cutoff(item, after_now) == "closed"
+
+    ended = {**item, "ended_at": "2026-08-10T14:00:00+09:00"}
+    assert evaluate_survey_cutoff(ended, datetime(2026, 8, 10, 15, 30, tzinfo=KST)) == "closed"
 
 
 def test_naive_datetime_conversion():
     item = {
         "start": "2026-08-10(월) 13:00 ~ 14:00",
     }
-    # Window: 13:30 ~ 15:00 KST
+    item = {**item, "ended_at": "2026-08-10T14:00:00+09:00"}
+    # Window: 14:00 ~ 15:00 KST (실제 종료 기준)
     naive_before = datetime(2026, 8, 10, 13, 15)
     naive_in = datetime(2026, 8, 10, 14, 30)
     naive_after = datetime(2026, 8, 10, 15, 30)
@@ -116,6 +121,8 @@ def test_run_survey_cutoff_closed_and_state_update(tmp_path):
                         "title": "호흡기 심포지엄",
                         "start": "2026-08-10(월) 13:00 ~ 14:00",
                         "entered_at": "2026-08-10T13:05:00+09:00",
+                        # 실제 종료 관측 — 마감(15:00)의 근거는 이것이지 공지가 아니다.
+                        "ended_at": "2026-08-10T14:00:00+09:00",
                     }
                 ],
                 "survey": {},
