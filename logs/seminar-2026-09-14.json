@@ -4,7 +4,7 @@
   "seminars": {
     "5629": {
       "id": "5629",
-      "title": "[Libre Week] A New Paradigm in Obesity Management",
+      "title": "A New paradigm in Obesity Manag ement",
       "start": "2026-09-14(월) 13:00 ~ 14:00",
       "apply": {
         "bjh7790": "already_done",
@@ -87,6 +87,46 @@
         "bjh7790": "success",
         "wonju": "success"
       }
+    },
+    "5733": {
+      "id": "5733",
+      "title": "CABOMETYX® VALUE UP MEETING",
+      "start": "2026-09-16(수) 19:30 ~ 22:40",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "22:41"
+    },
+    "5734": {
+      "id": "5734",
+      "title": "CABOMETYX® VALUE UP MEETING",
+      "start": "2026-09-17(목) 07:30 ~ 08:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "22:41"
+    },
+    "5735": {
+      "id": "5735",
+      "title": "True Atherosclerosis Regression with a 20-year Legacy, CRESTOR",
+      "start": "2026-09-18(금) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "22:42"
+    },
+    "5732": {
+      "id": "5732",
+      "title": "심장내과에서 바라보는 펙수클루",
+      "start": "2026-10-13(화) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "22:42"
     }
   }
 }
