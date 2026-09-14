@@ -17,9 +17,53 @@
 import argparse
 import json
 import sys
+import types
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+
+def _stub_playwright_if_missing() -> bool:
+    """playwright가 없으면 최소 스텁을 끼운다. 끼웠으면 True.
+
+    이 스크립트는 JSON만 읽는다. 그런데 판정을 런타임과 똑같이 하려고
+    `common`·`doctorville`·`seminar_survey`를 그대로 임포트하고, 세 모듈은
+    최상단에서 playwright를 가져온다. 그래서 브라우저 라이브러리가 없으면
+    임포트 단계에서 죽었다 — CLAUDE.md가 안내하는 `python3 scripts/bank_pending.py`
+    (venv 없이 시스템 파이썬)가 실패한 원인이다.
+
+    판정 함수를 여기서 다시 구현하는 대신 스텁을 끼운다. 규칙을 복제하면
+    이 스크립트만 "다 찼다"고 하고 런은 계속 막히는 어긋남이 생긴다.
+
+    스텁은 **진짜로 없을 때만** 들어간다. CI·로컬 venv처럼 playwright가 깔린
+    환경에서는 아무것도 하지 않으므로 실제 자동화 동작은 바뀌지 않는다.
+    """
+    try:
+        import playwright.sync_api  # noqa: F401
+        return False
+    except ModuleNotFoundError:
+        pass
+
+    def _unavailable(*_args, **_kwargs):
+        raise ModuleNotFoundError(
+            "playwright가 없어 브라우저를 띄울 수 없습니다. "
+            "브라우저가 필요한 작업은 venv에서 실행하세요."
+        )
+
+    pkg = types.ModuleType("playwright")
+    api = types.ModuleType("playwright.sync_api")
+    # 진짜 예외 클래스로 둬야 `except (PlaywrightTimeoutError, PlaywrightError)`가
+    # 그대로 성립한다. 브라우저를 안 띄우니 잡힐 일은 없다.
+    api.TimeoutError = type("PlaywrightTimeoutError", (Exception,), {})
+    api.Error = type("PlaywrightError", (Exception,), {})
+    api.sync_playwright = _unavailable
+    pkg.sync_api = api
+    sys.modules["playwright"] = pkg
+    sys.modules["playwright.sync_api"] = api
+    return True
+
+
+_stub_playwright_if_missing()
 
 import common  # noqa: E402
 import doctorville  # noqa: E402
