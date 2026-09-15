@@ -35,9 +35,21 @@ jobs:
           fc-cache -f
 
       - name: 단위 테스트 실행
+        id: tests
+        continue-on-error: true
         run: |
+          set -o pipefail
           pip install -r requirements-dev.txt
-          python3 -m pytest
+          python3 -m pytest -q 2>&1 | tee pytest-out.txt
+
+      - name: 테스트 실패 경고 전송
+        if: steps.tests.outcome == 'failure'
+        continue-on-error: true
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: python3 scripts/warn_tests.py --output pytest-out.txt --workflow "daily"
 
       - name: credentials.json 생성
         env:
