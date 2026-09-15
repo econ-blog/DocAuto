@@ -5,7 +5,7 @@
     "5632": {
       "id": "5632",
       "title": "O.M.T Web Symposium",
-      "start": "2026-09-15(화) 19:00 ~ 20:30",
+      "start": "2026-09-15(화) 18:30 ~ 20:00",
       "apply": {
         "bjh7790": "already_done",
         "wonju": "already_done"
@@ -83,6 +83,86 @@
         "bjh7790": "success",
         "wonju": "success"
       }
+    },
+    "5740": {
+      "id": "5740",
+      "title": "진심(心), Symposium",
+      "start": "2026-09-17(목) 17:00 ~ 18:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:32"
+    },
+    "5739": {
+      "id": "5739",
+      "title": "Approaches to Medical Management of Resistant Hypertension",
+      "start": "2026-09-17(목) 17:00 ~ 18:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:32"
+    },
+    "5742": {
+      "id": "5742",
+      "title": "ENVLO WEB SYMPOSIUM",
+      "start": "2026-09-18(금) 17:00 ~ 18:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:32"
+    },
+    "5736": {
+      "id": "5736",
+      "title": "시작은 크레스토 웹심포지엄",
+      "start": "2026-10-06(화) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:32"
+    },
+    "5738": {
+      "id": "5738",
+      "title": "Best Combination for Liver Health(가제_미정)",
+      "start": "2026-10-12(월) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:33"
+    },
+    "5741": {
+      "id": "5741",
+      "title": "CNS WEEK",
+      "start": "2026-10-22(목) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:33"
+    },
+    "5737": {
+      "id": "5737",
+      "title": "[고혈압 WEEK] Overcoming Therapeutic Inertia in Elderly Hypertension_What SPOIILER Tells Us",
+      "start": "2026-10-26(월) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:33"
+    },
+    "5743": {
+      "id": "5743",
+      "title": "고혈압 WEEK",
+      "start": "2026-10-29(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:33"
     }
   }
 }
