@@ -61,6 +61,20 @@
         "bjh7790": "closed",
         "wonju": "closed"
       }
+    },
+    "5683": {
+      "id": "5683",
+      "title": "펙수클루 Triple Symposium",
+      "start": "2026-09-15(화) 18:30 ~ 20:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:36",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     }
   }
 }
