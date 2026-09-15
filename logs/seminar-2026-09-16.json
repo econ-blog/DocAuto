@@ -1,0 +1,36 @@
+{
+  "kind": "seminar",
+  "date": "2026-09-16",
+  "seminars": {
+    "5665": {
+      "id": "5665",
+      "title": "소화기내과에서 바라보는 펙수클루",
+      "start": "2026-09-16(수) 19:00 ~ 20:30",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "07:38"
+    },
+    "5672": {
+      "id": "5672",
+      "title": "[대한내분비학회] 제4회 ENstagram Webinar",
+      "start": "2026-09-16(수) 19:00 ~ 20:30",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "07:38"
+    },
+    "5733": {
+      "id": "5733",
+      "title": "CABOMETYX® VALUE UP MEETING",
+      "start": "2026-09-16(수) 19:30 ~ 22:40",
+      "apply": {
+        "bjh7790": "already_done",
+        "wonju": "already_done"
+      },
+      "updated_at": "07:38"
+    }
+  }
+}
