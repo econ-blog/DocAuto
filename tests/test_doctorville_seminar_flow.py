@@ -369,14 +369,17 @@ def test_task_seminar_no_target_writes_nothing(tmp_path, monkeypatch):
 
     mock_page = MagicMock()
     mock_page.evaluate.side_effect = [
-        # 이미 신청해서 ico_apply 배지가 없다 → 신청 대상 0건
-        [{"id": "5597", "title": "ALL 4 ONE WEB Symposium", "applicable": False}],
+        # 이미 신청해서 ico_apply 배지가 없다 → 신청 대상 0건.
+        # raw의 일시는 읽히므로 목록 스캔 자체는 정상이다(list_blind=False).
+        [{"id": "5597", "title": "ALL 4 ONE WEB Symposium", "applicable": False,
+          "raw": "ALL 4 ONE WEB Symposium 2026-09-09(수) 18:00 ~ 19:30"}],
     ]
     monkeypatch.setattr(doctorville.common, "goto_with_retry", lambda *a, **k: None)
 
     res = doctorville.task_seminar(mock_page, {}, account="bjh7790", applied_path=applied_file)
 
     assert res["status"] == "no_target"
+    assert res["list_blind"] is False
     saved = json.loads(applied_file.read_text(encoding="utf-8"))["bjh7790"]
     assert saved["5597"]["title"] == "엠서클 통합회원"
 

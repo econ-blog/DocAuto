@@ -1346,6 +1346,53 @@ def parse_list_datetime(raw: str, now: datetime = None) -> str:
     return f"{stamp} ~ {times[1]}" if len(times) > 1 else stamp
 
 
+# 목록이 SPA로 늦게 채워진다. 고정 sleep은 러너가 느린 날 껍데기를 긁는다 —
+# 2026-09-15 00:15 런은 `a.list_detail` 63개를 잡고도 `span.ico_apply` 0개,
+# 일시 파싱 0건(list_unparsed 63)으로 끝났다. 신청 대상 0건이라 `no_target`(quiet)이
+# 되어 알림도 없었다. 같은 페이지를 읽는 seminar_live는 1500ms를 쓴다.
+#
+# 항목 하나라도 **내용**(시각 표기)이 들어올 때까지 기다린다. 배지 클래스는 사이트가
+# 바꿀 수 있어 판정 기준으로 쓰지 않는다. **r-문자열 필수**(\d가 파이썬 단계에서 깨진다).
+LIST_READY_JS = r"""
+    () => Array.from(document.querySelectorAll('a.list_detail'))
+        .some(el => /\d{1,2}:\d{2}/.test(el.innerText || ''))
+"""
+LIST_READY_TIMEOUT_MS = 8000
+
+
+def wait_for_seminar_list(page, timeout_ms: int = LIST_READY_TIMEOUT_MS) -> bool:
+    """목록 항목에 내용이 렌더될 때까지 기다린다. 준비되면 True.
+
+    실패해도 예외를 던지지 않는다 — 진짜로 오늘 항목이 하나도 없는 날과
+    렌더 레이스를 여기서는 못 가른다. 호출부가 스캔 결과로 판정한다.
+    """
+    try:
+        page.wait_for_function(LIST_READY_JS, timeout=timeout_ms)
+        return True
+    except Exception:
+        return False
+
+
+def unparsed_raw_samples(listed: list, now: datetime = None, limit: int = 3) -> list[str]:
+    """일시 파싱에 실패한 목록 항목의 원문 샘플. 정규식이 왜 안 맞는지 사후 진단용.
+
+    항목 innerText는 결과 JSON에 안 남아, 지금까지는 실패할 때마다 `--headed`로
+    다시 떠 봐야 했다.
+    """
+    now = now or datetime.now(common.KST)
+    out = []
+    for item in listed or []:
+        if len(out) >= limit:
+            break
+        if not isinstance(item, dict):
+            continue
+        raw = (item.get("raw") or "").strip()
+        if not raw or parse_list_datetime(raw, now):
+            continue
+        out.append(raw[:120])
+    return out
+
+
 def list_rows_for_today(listed: list, now: datetime = None) -> tuple[list[dict], int]:
     """목록 스캔 결과에서 **오늘 방송분 전부**를 (신청 여부와 무관하게) 뽑는다.
 
@@ -1412,7 +1459,9 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
     result = {"status": "failed", "applied": [], "count": 0}
 
     common.goto_with_retry(page, SEMINAR_MAIN_URL, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS)
-    page.wait_for_timeout(1000)
+    list_ready = wait_for_seminar_list(page)
+    if not list_ready:
+        page.wait_for_timeout(1500)  # 판정 실패 시 최소한의 폴백(seminar_live와 같은 값)
 
     # 신청 가능 세미나 추출 (CLAUDE.md DOM 패턴).
     # 제목도 여기서 같이 긁는다. 상세 페이지의 _seminar_detail_meta는 document
@@ -1488,6 +1537,15 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
     today_rows, unparsed = list_rows_for_today(listed)
     result["listed_today"] = len(today_rows)
     result["list_unparsed"] = unparsed
+    result["list_items"] = len(listed or [])
+    result["list_ready"] = list_ready
+    # 목록 항목은 있는데 **전부** 일시를 못 읽었다 = 껍데기를 긁었다는 신호다.
+    # 이 상태에서는 신청 대상 0건도 "오늘 신청할 게 없다"가 아니라 "못 봤다"다.
+    dict_items = [i for i in (listed or []) if isinstance(i, dict)]
+    blind = bool(dict_items) and unparsed >= len(dict_items) and not seminar_ids
+    result["list_blind"] = blind
+    if unparsed:
+        result["list_raw_samples"] = unparsed_raw_samples(listed)
     list_starts = {}
     for row in today_rows:
         list_starts[row["id"]] = row["start"]
@@ -1508,9 +1566,18 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
                          list_starts.get(sid) or record.get("start", ""))
 
     if not seminar_ids:
-        result["status"] = "no_target"
-        result["message"] = "신청 가능한 세미나 없음"
         result["count"] = 0
+        if blind:
+            # quiet한 no_target으로 넘기면 며칠씩 신청 0건인 걸 아무도 모른다
+            # (2026-09-13~15 실측). 증거가 없으니 성공이 아니라 unverified(alert)다.
+            result["status"] = "unverified"
+            result["message"] = (
+                f"목록 스캔 실패 의심 — 항목 {result['list_items']}건 중 일시 파싱 "
+                f"{unparsed}건 실패, 신청 가능 배지 0건. 목록이 렌더되기 전에 긁었을 수 있다."
+            )
+        else:
+            result["status"] = "no_target"
+            result["message"] = "신청 가능한 세미나 없음"
         return result
 
     for sid in targets:
@@ -1649,6 +1716,12 @@ def task_seminar(page, creds: dict, account: str = None, applied_path: Path = No
         # cache: 접두사로 서버 증거와 구분되게 남긴다.
         result["verified_by"] = "cache: seminar_applied.json skipped_known"
         result["message"] = f"신규 신청 대상 없음{suffix}."
+    elif blind:
+        result["status"] = "unverified"
+        result["message"] = (
+            f"목록 스캔 실패 의심 — 항목 {result['list_items']}건 중 일시 파싱 "
+            f"{unparsed}건 실패{suffix}."
+        )
     else:
         result["status"] = "skipped"
         result["message"] = f"신청 가능한 세미나 없음{suffix}."
