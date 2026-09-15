@@ -20,8 +20,17 @@ NOW = datetime(2026, 9, 15, 0, 18, tzinfo=KST)
 
 
 def _listed(n, raw_ok=False, applicable=False):
-    """목록 스캔 결과 n건. raw_ok=False면 껍데기(일시 없음)."""
-    raw = "2026-09-15(화) 18:30 ~ 20:00 펙수클루 Triple Symposium" if raw_ok else "펙수클루 Triple Symposium"
+    """목록 스캔 결과 n건. raw_ok=False면 껍데기(일시 없음).
+
+    일시는 **실행 시점의 KST 오늘**로 만든다. task_seminar 안의
+    list_rows_for_today는 now를 주입받지 않고 실제 시계를 읽으므로,
+    날짜를 하드코딩하면 그 날짜가 지난 뒤 listed_today가 0이 되어
+    테스트가 터진다(2026-09-16 00:15 daily 런 전체가 이 테스트 하나로
+    중단됐다).
+    """
+    today = datetime.now(KST)
+    stamp = today.strftime("%Y-%m-%d") + f"({'월화수목금토일'[today.weekday()]})"
+    raw = f"{stamp} 18:30 ~ 20:00 펙수클루 Triple Symposium" if raw_ok else "펙수클루 Triple Symposium"
     return [{"id": str(5680 + i), "title": "", "raw": raw, "applicable": applicable} for i in range(n)]
 
 

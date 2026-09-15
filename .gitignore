@@ -7,4 +7,4 @@ scripts/logs/
 .DS_Store
 scripts/state/*.json
 *.tmp
-
+pytest-out.txt
