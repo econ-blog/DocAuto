@@ -5,12 +5,20 @@
     "5632": {
       "id": "5632",
       "title": "O.M.T Web Symposium",
-      "start": "2026-09-15(화) 18:30 ~ 20:00",
+      "start": "2026-09-15(화) 19:00 ~ 20:30",
       "apply": {
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "00:20"
+      "updated_at": "18:06",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     },
     "5671": {
       "id": "5671",
@@ -70,7 +78,7 @@
         "bjh7790": "success",
         "wonju": "success"
       },
-      "updated_at": "17:36",
+      "updated_at": "18:06",
       "survey": {
         "bjh7790": "not_ready",
         "wonju": "not_ready"
