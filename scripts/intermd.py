@@ -114,14 +114,7 @@ def load_answer(path: Path | str) -> str:
 
 
 def load_credentials(path: Path, account: str) -> dict:
-    data = common.read_credentials(path)
-    if account not in data:
-        raise KeyError(f"credentials.json에 '{account}' 계정이 없습니다.")
-    im = data[account].get("intermd")
-    if not im or "password" not in im:
-        raise KeyError(f"credentials.json의 '{account}' 계정에 intermd.password가 없습니다.")
-    # HMP와 동일 규칙: id가 없으면 계정 키 자체를 로그인 id로 사용한다.
-    return {"id": im.get("id") or account, "password": im["password"]}
+    return common.load_credentials(path, account, "intermd")
 
 
 def read_quiz(page) -> dict:

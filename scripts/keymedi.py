@@ -50,17 +50,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def load_credentials(path: Path, account: str) -> dict:
-    data = common.read_credentials(path)
-    if account not in data:
-        raise KeyError(f"credentials.json에 '{account}' 계정이 없습니다.")
-    if "keymedi" not in data[account]:
-        raise KeyError(f"credentials.json의 '{account}' 계정에 keymedi 항목이 없습니다.")
-    km = data[account]["keymedi"]
-    if "id" not in km or "password" not in km:
-        raise KeyError(
-            f"credentials.json의 '{account}'.keymedi 에 id/password가 모두 있어야 합니다."
-        )
-    return km
+    return common.load_credentials(path, account, "keymedi")
 
 
 def run(account: str, credentials_path: Path, headless: bool) -> dict:

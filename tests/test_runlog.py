@@ -456,3 +456,40 @@ def test_daily_table_hides_seminar_columns_from_old_logs(tmp_path):
     headers, rows = runlog.daily_table("2026-08-29", log_dir=tmp_path)
     assert headers == ["", "출석\nbjh7790"]
     assert rows == [["run1\n09:12", "✅"]]
+
+
+def test_log_seminar_records_entry(tmp_path):
+    runlog.log_seminar(
+        seminar_id="1234",
+        phase="apply",
+        status="success",
+        account="acct1",
+        title="테스트 세미나",
+        start="2026-09-16 19:00",
+        module_tag="test_mod",
+        log_dir=tmp_path,
+    )
+    # verify entry written
+    data = runlog.load(runlog.KIND_SEMINAR, log_dir=tmp_path)
+    assert "1234" in data["seminars"]
+    assert data["seminars"]["1234"]["apply"]["acct1"] == "success"
+    assert data["seminars"]["1234"]["title"] == "테스트 세미나"
+
+
+def test_log_seminar_catches_exception_safely(capsys, monkeypatch):
+    def _failing_update(*args, **kwargs):
+        raise RuntimeError("Disk full / permission error")
+
+    monkeypatch.setattr(runlog, "update_seminar", _failing_update)
+
+    # Should not raise exception
+    runlog.log_seminar(
+        seminar_id="5678",
+        phase="live",
+        status="failed",
+        module_tag="test_fail",
+    )
+
+    captured = capsys.readouterr()
+    assert "[test_fail] 세미나 로그 기록 실패(5678): Disk full / permission error" in captured.err
+

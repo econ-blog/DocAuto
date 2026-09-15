@@ -13,6 +13,7 @@ daily와 seminar_block은 실행 단위가 다르므로 로그도 두 종류로 
 """
 
 import os
+import sys
 import unicodedata
 from datetime import datetime
 from pathlib import Path
@@ -325,6 +326,31 @@ def update_seminar(seminar_id, phase: str = None, status: str = "", account: str
 
     save(data, log_dir)
     return data
+
+
+def log_seminar(
+    seminar_id,
+    phase: str,
+    status: str,
+    account: str = "_",
+    title: str = "",
+    start: str = "",
+    module_tag: str = "runlog",
+    log_dir: Path | str = None,
+) -> None:
+    """세미나 표의 신청/입장/설문 칸을 채운다. 로깅 실패가 본 흐름을 죽이면 안 된다."""
+    try:
+        update_seminar(
+            seminar_id,
+            phase=phase,
+            status=status,
+            account=account or "_",
+            title=title or "",
+            start=start or "",
+            log_dir=log_dir,
+        )
+    except Exception as e:
+        print(f"[{module_tag}] 세미나 로그 기록 실패({seminar_id}): {e}", file=sys.stderr)
 
 
 def split_times(raw: str) -> tuple[str, str]:

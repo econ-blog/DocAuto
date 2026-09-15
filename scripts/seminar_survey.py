@@ -2075,13 +2075,15 @@ run_survey_for_item = run_survey
 def _log_seminar(seminar_id, status: str, account: str, item: dict = None) -> None:
     """세미나 표의 '설문' 칸을 채운다. 로깅 실패가 설문 자체를 죽이면 안 된다."""
     item = item or {}
-    try:
-        runlog.update_seminar(
-            seminar_id, phase="survey", status=status, account=account or "_",
-            title=item.get("title") or "", start=item.get("start") or "",
-        )
-    except Exception as e:
-        print(f"[seminar_survey] 세미나 로그 기록 실패({seminar_id}): {e}", file=sys.stderr)
+    runlog.log_seminar(
+        seminar_id,
+        phase="survey",
+        status=status,
+        account=account or "_",
+        title=item.get("title") or "",
+        start=item.get("start") or "",
+        module_tag="seminar_survey",
+    )
 
 
 def summarize_account(output: dict) -> dict:

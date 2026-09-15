@@ -69,6 +69,57 @@ def read_credentials(path: Path | str) -> dict:
     return read_json(path, default={})
 
 
+def load_credentials(path: Path | str, account: str, site: str) -> dict:
+    """사이트별 자격증명을 읽고 검증하여 반환한다.
+
+    사이트별 규칙:
+    - doctorville: account.email 및 account.doctorville.password 필수 -> {"email": email, "password": pw}
+    - keymedi: account.keymedi.id 및 account.keymedi.password 필수 -> {"id": id, "password": pw}
+    - hmp: account.hmp.password 필수. id 없으면 account 키 사용 -> {"id": id, "password": pw}
+    - intermd: account.intermd.password 필수. id 없으면 account 키 사용 -> {"id": id, "password": pw}
+    """
+    data = read_credentials(path)
+    if account not in data:
+        raise KeyError(f"credentials.json에 '{account}' 계정이 없습니다.")
+    acc_data = data[account]
+
+    if site == "doctorville":
+        if "doctorville" not in acc_data or "password" not in acc_data["doctorville"]:
+            raise KeyError(f"credentials.json의 '{account}.doctorville.password'가 없습니다.")
+        email = acc_data.get("email", "")
+        if not email:
+            raise KeyError(f"credentials.json의 '{account}.email'이 없습니다.")
+        return {"email": email, "password": acc_data["doctorville"]["password"]}
+
+    elif site == "keymedi":
+        if "keymedi" not in acc_data:
+            raise KeyError(f"credentials.json의 '{account}' 계정에 keymedi 항목이 없습니다.")
+        km = acc_data["keymedi"]
+        if "id" not in km or "password" not in km:
+            raise KeyError(
+                f"credentials.json의 '{account}'.keymedi 에 id/password가 모두 있어야 합니다."
+            )
+        return km
+
+    elif site == "hmp":
+        if "hmp" not in acc_data:
+            raise KeyError(f"credentials.json의 '{account}' 계정에 hmp 항목이 없습니다.")
+        hmp_block = acc_data["hmp"]
+        if "password" not in hmp_block:
+            raise KeyError(f"credentials.json의 '{account}'.hmp 에 password가 있어야 합니다.")
+        login_id = hmp_block.get("id", account)
+        return {"id": login_id, "password": hmp_block["password"]}
+
+    elif site == "intermd":
+        im = acc_data.get("intermd")
+        if not im or "password" not in im:
+            raise KeyError(f"credentials.json의 '{account}' 계정에 intermd.password가 없습니다.")
+        return {"id": im.get("id") or account, "password": im["password"]}
+
+    else:
+        raise ValueError(f"지원하지 않는 사이트입니다: {site}")
+
+
 def read_json(path: Path | str, default=None) -> dict | list:
     """JSON 파일을 안전하게 읽어 dict/list로 반환. 후행 쉼표(trailing comma) 등 허용."""
     p = Path(path)

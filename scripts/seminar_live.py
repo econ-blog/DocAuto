@@ -351,13 +351,7 @@ def _state_start(state: dict, account: str, seminar_id: int) -> str:
 
 def _log_seminar(seminar_id, status: str, account: str, title: str = "", start: str = "") -> None:
     """세미나 표의 '입장' 칸을 채운다. 로깅 실패가 입장 자체를 죽이면 안 된다."""
-    try:
-        runlog.update_seminar(
-            seminar_id, phase="live", status=status, account=account or "_",
-            title=title or "", start=start or "",
-        )
-    except Exception as e:
-        print(f"[seminar_live] 세미나 로그 기록 실패({seminar_id}): {e}", file=sys.stderr)
+    runlog.log_seminar(seminar_id, phase="live", status=status, account=account, title=title, start=start, module_tag="seminar_live")
 
 
 def task_live_seminar(

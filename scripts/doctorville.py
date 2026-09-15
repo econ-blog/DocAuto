@@ -227,16 +227,7 @@ def parse_calendar_cell(cell_html: str) -> dict:
 
 
 def load_credentials(path: Path, account: str) -> dict:
-    data = common.read_credentials(path)
-    if account not in data:
-        raise KeyError(f"credentials.json에 '{account}' 계정이 없습니다.")
-    acc = data[account]
-    if "doctorville" not in acc or "password" not in acc["doctorville"]:
-        raise KeyError(f"credentials.json의 '{account}.doctorville.password'가 없습니다.")
-    email = acc.get("email", "")
-    if not email:
-        raise KeyError(f"credentials.json의 '{account}.email'이 없습니다.")
-    return {"email": email, "password": acc["doctorville"]["password"]}
+    return common.load_credentials(path, account, "doctorville")
 
 
 def load_quiz_answers() -> dict:
@@ -1465,13 +1456,7 @@ def _seminar_detail_meta(page) -> tuple[str, str]:
 
 def _log_seminar(sid, status: str, account: str, title: str = "", start: str = "") -> None:
     """세미나 표의 '신청' 칸을 채운다. 로깅 실패가 신청 자체를 죽이면 안 된다."""
-    try:
-        runlog.update_seminar(
-            sid, phase="apply", status=status, account=account or "_",
-            title=title, start=start,
-        )
-    except Exception as e:
-        print(f"[doctorville] 세미나 로그 기록 실패({sid}): {e}", file=sys.stderr)
+    runlog.log_seminar(sid, phase="apply", status=status, account=account, title=title, start=start, module_tag="doctorville")
 
 
 def task_seminar(page, creds: dict, account: str = None, applied_path: Path = None) -> dict:
