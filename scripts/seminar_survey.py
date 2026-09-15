@@ -11,7 +11,6 @@ seminar_live.py로 입장에 성공한 세미나는 방송 팝업에서 설문�
     python3 seminar_survey.py --account bjh7790
     python3 seminar_survey.py --seminar-id 5473   # 상태 무시하고 특정 세미나만
     python3 seminar_survey.py --headed
-    python3 seminar_survey.py --no-telegram
 
 문항 3분류 (classify_question):
     - quiz    — 화면 텍스트가 `[퀴즈]`로 시작하는 선택형. 정답이 존재하므로
@@ -121,7 +120,6 @@ from common import KST as kst, parse_dd_date, write_json_atomic
 import doctorville
 import seminar_live
 from seminar_live import upgrade_to_v2
-import notify
 import runlog
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -2236,7 +2234,6 @@ def main():
     parser.add_argument("--state-file", default=str(DEFAULT_STATE_FILE), help="seminar_entered.json 경로")
     parser.add_argument("--seminar-id", action="append", help="상태 무시하고 특정 세미나만 처리(반복 지정 가능)")
     parser.add_argument("--headed", action="store_true")
-    parser.add_argument("--no-telegram", action="store_true")
     args = parser.parse_args()
 
     date_str = datetime.now(common.KST).strftime("%Y-%m-%d")
@@ -2281,14 +2278,6 @@ def main():
 
     print("\n=== 최종 결과 ===")
     print(json.dumps(results, ensure_ascii=False, indent=2))
-
-    if not args.no_telegram and any(r.get("surveys") for r in results.values()):
-        notify_level = notify.resolve_level(os.environ.get("NOTIFY_LEVEL"))
-        if notify.should_send(results, notify_level):
-            msg = notify.build_message(results, notify_level, date_str)
-            if msg:
-                ok = notify.send_telegram(msg, credentials_path=args.credentials)
-                print(f"[telegram] {'성공' if ok else '실패'}")
 
     failed = any(
         r.get("status") in {"failed", "unverified", "blocked"}

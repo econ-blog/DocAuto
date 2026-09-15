@@ -49,7 +49,6 @@ from playwright.sync_api import (
 )
 
 import common
-import notify
 import runlog
 
 DOCTORVILLE_BASE    = "https://www.doctorville.co.kr"
@@ -1888,14 +1887,6 @@ def main():
         print(json.dumps(all_results[accounts[0]], ensure_ascii=False, indent=2))
     else:
         print(json.dumps(all_results, ensure_ascii=False, indent=2))
-
-    if args.task == "seminar":
-        notify_level = os.environ.get("NOTIFY_LEVEL", "all")
-        date_str = datetime.now(common.KST).strftime("%Y-%m-%d")
-        if notify.should_send(all_results, notify_level):
-            msg = notify.build_message(all_results, notify_level, date_str)
-            if msg:
-                notify.send_telegram(msg, credentials_path=credentials_path)
 
     failed = any(
         acc_res.get(t, {}).get("status") in {"failed", "unverified", "blocked"}

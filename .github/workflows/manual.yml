@@ -37,9 +37,6 @@ concurrency:
   group: seminar-block
   cancel-in-progress: false
 
-env:
-  NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
-
 jobs:
   manual-run:
     runs-on: ubuntu-latest
@@ -82,26 +79,14 @@ jobs:
 
       - name: 닥터빌 퀴즈
         if: inputs.task == '닥터빌 퀴즈'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: xvfb-run -a python3 scripts/doctorville.py --account all --task quiz --headed
 
       - name: 세미나 신청
         if: inputs.task == '세미나 신청'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: xvfb-run -a python3 scripts/doctorville.py --account all --task seminar --headed
 
       - name: 세미나 입장
         if: inputs.task == '세미나 입장'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: |
           xvfb-run -a python3 scripts/seminar_live.py --account all \
             --stay-seconds ${{ inputs.stay_seconds || '20' }} \
@@ -112,10 +97,6 @@ jobs:
 
       - name: 세미나 설문
         if: inputs.task == '세미나 설문'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: |
           xvfb-run -a python3 scripts/seminar_survey.py --account all \
             --state-file scripts/state/seminar_entered.json \

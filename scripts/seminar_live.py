@@ -11,12 +11,10 @@ daily 루틴(daily_runner.py)과 무관한 **수동/자동 루틴** 스크립트
     python3 seminar_live.py --account bjh7790        # 단일 계정만
     python3 seminar_live.py --stay-seconds 30        # 체류 시간 변경
     python3 seminar_live.py --headed                 # 브라우저 창 표시 (디버깅용)
-    python3 seminar_live.py --no-telegram            # 텔레그램 전송 생략
     python3 seminar_live.py --credentials PATH       # credentials.json 경로 직접 지정
     python3 seminar_live.py --state-file PATH        # 상태 저장 경로 지정
     python3 seminar_live.py --block {lunch,evening,manual,auto}
     python3 seminar_live.py --ignore-state           # 상태 무시 재입장
-    python3 seminar_live.py --always-notify          # 변화가 없어도 텔레그램 전송
 """
 
 import argparse
@@ -32,7 +30,6 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 import common
 from common import KST as kst, parse_dd_date
 import doctorville
-import notify
 import runlog
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -525,49 +522,6 @@ def run_account(
 
 
 # ---------------------------------------------------------------------------
-# 텔레그램 요약 (notify의 emoji/축약 헬퍼 재사용)
-# ---------------------------------------------------------------------------
-
-ACCOUNT_LABELS = {"bjh7790": "승진(bjh7790)", "wonju": "원주(wonju)"}
-BLOCK_LABELS = {"lunch": "점심", "evening": "저녁", "manual": "수동"}
-
-
-def format_telegram_message(
-    results: dict, date_str: str, stay_seconds: int, block_name: str = ""
-) -> str:
-    header = f"🎥 *라이브 세미나 입장 결과* ({date_str})"
-    if block_name:
-        b_label = BLOCK_LABELS.get(block_name, block_name)
-        header += f" [{b_label}]"
-    lines = [header, ""]
-
-    for acc, r in results.items():
-        label = ACCOUNT_LABELS.get(acc, acc)
-        ls = r.get("live_seminar", {})
-        e = notify.format_status_emoji(ls.get("status", "failed"))
-        entered = ls.get("entered", [])
-        already_entered = ls.get("already_entered", [])
-        skipped = ls.get("skipped", [])
-        failed = ls.get("failed", [])
-
-        lines.append(f"{label} {e}")
-        lines.append(
-            f"  입장 {len(entered)}건(각 {stay_seconds}초) / 이미입장 {len(already_entered)}건 / 스킵 {len(skipped)}건 / 실패 {len(failed)}건"
-        )
-        if entered:
-            lines.append(f"  └ 신규 입장 seminarId: {entered}")
-        if already_entered:
-            lines.append(f"  └ 이미 입장 seminarId: {already_entered}")
-        for f in failed[:3]:
-            lines.append(f"  └ 실패 {f['seminarId']}: {notify.shorten(f.get('message', ''))}")
-        if r.get("error"):
-            lines.append(f"  └ 스크립트 예외: {notify.shorten(r['error'])}")
-        lines.append("")
-
-    return "\n".join(lines).rstrip()
-
-
-# ---------------------------------------------------------------------------
 # 메인
 # ---------------------------------------------------------------------------
 
@@ -600,20 +554,12 @@ def main():
         help="상태 무시하고 전체 세미나 재입장"
     )
     parser.add_argument(
-        "--always-notify", action="store_true",
-        help="변화가 없어도 텔레그램 전송"
-    )
-    parser.add_argument(
         "--dry-run", action="store_true",
         help="라이브 세미나 목록만 확인하고 입장은 클릭하지 않음"
     )
     parser.add_argument(
         "--headed", action="store_true",
         help="브라우저 창을 띄워서 실행 (기본: headless)"
-    )
-    parser.add_argument(
-        "--no-telegram", action="store_true",
-        help="텔레그램 전송 건너뜀"
     )
     args = parser.parse_args()
 
@@ -656,27 +602,7 @@ def main():
         for r in results.values()
     )
 
-    if not args.no_telegram:
-        notify_level = get_notify_level(args.always_notify)
-        if notify.should_send(results, notify_level):
-            date_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M")
-            msg = format_telegram_message(results, date_str, args.stay_seconds, block_name=block_name)
-            print("\n[telegram] 전송 중...")
-            ok = notify.send_telegram(msg, credentials_path=str(credentials_path))
-            print(f"[telegram] {'성공' if ok else '실패'}")
-        else:
-            print("\n[telegram] 전송 조건 미충족. 건너뜀.")
-    else:
-        print("\n[telegram] 건너뜀 (--no-telegram)")
-
     sys.exit(1 if failed else 0)
-
-
-def get_notify_level(always_notify: bool = False) -> str:
-    if always_notify:
-        return "all"
-    return notify.resolve_level(os.environ.get("NOTIFY_LEVEL"))
-
 
 
 if __name__ == "__main__":

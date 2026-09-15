@@ -1,5 +1,4 @@
 from daily_runner import build_execution_plan, evaluate_exit_code
-from notify import should_send
 
 
 def test_build_execution_plan():
@@ -52,18 +51,4 @@ def test_exit_code_evaluation():
     # blocked status returns 1
     blocked_results = {"hmp": {"status": "success", "roulette": [{"status": "blocked", "message": "captchas"}]}}
     assert evaluate_exit_code(blocked_results) == 1
-
-
-def test_should_send_actionable_zero_calls():
-    quiet_results = {
-        "keymedi": {"status": "already_done", "verified_by": "evidence"},
-        "hmp": {
-            "status": "already_done",
-            "verified_by": "evidence",
-            "roulette": [{"status": "already_done", "verified_by": "evidence"}],
-        },
-        "doctorville_bjh7790": {"attend": {"status": "already_done", "verified_by": "evidence"}, "quiz": {"status": "already_done", "verified_by": "evidence"}},
-        "precheck_quiz": {"status": "already_done", "verified_by": "evidence"},
-    }
-    assert should_send(quiet_results, "actionable") is False
 

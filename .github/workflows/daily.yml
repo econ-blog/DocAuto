@@ -8,9 +8,6 @@ on:
 permissions:
   contents: write
 
-env:
-  NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
-
 jobs:
   daily-routine:
     runs-on: ubuntu-latest
@@ -88,7 +85,6 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: xvfb-run -a python3 scripts/daily_runner.py --headed
 
       # seminar_applied.json은 여기서 두 가지로 바뀐다: 세미나 신청 기록(task_seminar)과

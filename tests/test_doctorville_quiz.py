@@ -281,31 +281,4 @@ def test_task_quiz_no_answer_payload(monkeypatch, tmp_path):
     assert "\n" not in res["message"]
 
 
-def test_main_seminar_task_notifications(monkeypatch):
-    mock_run = MagicMock(return_value={
-        "site": "doctorville",
-        "account": "bjh7790",
-        "seminar": {"status": "success", "applied": [101], "count": 1}
-    })
-    mock_should_send = MagicMock(return_value=True)
-    mock_build_msg = MagicMock(return_value="[Seminar Alert] Applied 1 seminar")
-    mock_send_tg = MagicMock(return_value=True)
-
-    monkeypatch.setattr("doctorville.run", mock_run)
-    monkeypatch.setattr("notify.should_send", mock_should_send)
-    monkeypatch.setattr("notify.build_message", mock_build_msg)
-    monkeypatch.setattr("notify.send_telegram", mock_send_tg)
-
-    test_args = ["doctorville.py", "--account", "bjh7790", "--task", "seminar"]
-    monkeypatch.setattr(sys, "argv", test_args)
-
-    with patch("sys.exit") as mock_exit:
-        doctorville.main()
-        mock_exit.assert_called_with(0)
-
-    assert mock_should_send.called
-    assert mock_build_msg.called
-    assert mock_send_tg.called
-    assert mock_send_tg.call_args[0][0] == "[Seminar Alert] Applied 1 seminar"
-
 

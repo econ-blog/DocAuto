@@ -8,13 +8,12 @@
   3. HMP (캡슐+룰렛+댓글+글쓰기)
   4. 내일 닥터빌 퀴즈 사전 점검
   5. 세미나 신청 이력(seminar_applied.json)에서 날짜 지난 항목 정리
-  6. 결과를 notify 게이트를 거쳐 텔레그램 bot으로 전송
+  6. 결과를 일일 자동화 표(텔레그램)로 전송
 
 용법:
     python3 scripts/daily_runner.py
     python3 scripts/daily_runner.py --headed
     python3 scripts/daily_runner.py --no-telegram
-    python3 scripts/daily_runner.py --notify-level actionable
 """
 
 import argparse
@@ -28,7 +27,6 @@ from pathlib import Path
 
 import common
 import doctorville
-import notify
 import runlog
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -176,15 +174,7 @@ def main():
         default=str(SCRIPT_DIR.parent / "credentials.json"),
         help="credentials.json 경로",
     )
-    parser.add_argument(
-        "--notify-level",
-        choices=["all", "actionable"],
-        default=None,
-        help="텔레그램 알림 레벨 (all, actionable)",
-    )
     args = parser.parse_args()
-
-    notify_level = notify.resolve_level(args.notify_level or os.environ.get("NOTIFY_LEVEL"))
 
     credentials_path = Path(args.credentials)
     creds = {}
@@ -231,16 +221,6 @@ def main():
         print(f"[daily_runner] 실행 로그 적재 실패: {e}", file=sys.stderr)
 
     if not args.no_telegram:
-        if notify.should_send(results, notify_level):
-            msg = notify.build_message(results, notify_level, date_str)
-            print(f"\n[telegram] 전송 중... (mode: {notify_level})")
-            ok = notify.send_telegram(msg, credentials_path=str(credentials_path))
-            print(f"[telegram] {'성공' if ok else '실패'}")
-        else:
-            print(f"\n[telegram] 메시지 억제됨 ({notify_level} 모드)")
-
-        # 표는 NOTIFY_LEVEL과 무관하게 항상 보낸다. 하루 실행 현황 전체를 한 장으로
-        # 보여주는 게 목적이라, 조용한 런이라고 빼면 표가 비어 보인다.
         table_result = send_daily_table(date_str, credentials_path)
         print(f"[telegram] 표: {table_result.get('status')}")
     else:
