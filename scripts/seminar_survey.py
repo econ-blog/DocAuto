@@ -138,6 +138,12 @@ MAX_PAGES = 10  # 무한 루프 방지 (실측 설문은 1~2페이지)
 # 30분마다 재시도되므로, 이 대기가 설문 스텝 247초 중 180초를 먹고 있었다
 # (실측: 세미나 3건 × 계정 2개 × 30초).
 SURVEY_POPUP_TIMEOUT_MS = 8000
+# 팝업 열기는 한 번 실패해도 다음 런에서는 대개 열린다(2026-09-15 5671·5681).
+# 한 런 안에서 다시 시도한다 — 창은 실제 종료 후 1시간만 열려 있어서, 30분 뒤
+# 블록을 기다리면 그 사이에 마감될 수 있다.
+SURVEY_OPEN_ATTEMPTS = 2
+SURVEY_OPEN_RETRY_WAIT_MS = 3000
+SURVEY_POPUP_TIMEOUT_REASON = "설문 창(팝업)이 열리지 않음 — 이미 참여했거나 마감되었을 수 있음."
 
 # 문항이 통째로 빈 값으로 읽혔을 때 렌더를 한 번 더 기다리는 시간.
 BLANK_RETRY_WAIT_MS = 5000
@@ -188,6 +194,15 @@ SURVEY_PENDING_MARKERS = (
     SEMINAR_END_MARKER,
     "설문하기",
 )
+
+# 방송 전·중이라는 **양성** 표식. 종전에는 "'세미나 종료'가 없다"는 부재로 진행
+# 중을 판정했는데, 로그아웃된 m 상세나 목록 페이지처럼 판정을 이미 버린 화면까지
+# 전부 '진행 중'이 됐다(2026-09-15 세미나 5671·5681 — 끝난 세미나의 팝업 실패가
+# quiet `not_ready`로 묻혔다). 부재가 아니라 표식으로 본다.
+SEMINAR_RUNNING_MARKERS = ("입장하기", "방송중", "라이브")
+# 공지된 종료가 이만큼 지나면 '진행 중' 관측을 믿지 않는다. 공지는 양쪽으로
+# 틀리지만(5639는 공지보다 1시간 넘게 갔다) 무한정 틀리지는 않는다.
+SURVEY_RUNNING_GRACE = timedelta(minutes=30)
 
 # 판정은 **모바일 상세를 먼저** 본다(2026-08-31 사용자 지시). www(데스크톱)는
 # 완료 표시가 '응답완료' 한 단어뿐이고 숨은 템플릿 버튼과 섞여 있어 사람이
@@ -752,6 +767,18 @@ def evaluate_survey_cutoff(item: dict, now_dt: datetime = None) -> str:
     return "ready"
 
 
+def scheduled_end_passed(item: dict, now_dt: datetime = None) -> bool:
+    """공지된 종료 + 여유가 지났는가. 일정을 모르면 False(판정에 쓰지 않는다)."""
+    _, end_dt = scheduled_bounds(item)
+    if end_dt is None:
+        return False
+    if now_dt is None:
+        now_dt = datetime.now(common.KST)
+    elif now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=common.KST)
+    return now_dt > end_dt + SURVEY_RUNNING_GRACE
+
+
 def unopened_status(item: dict, now_dt: datetime = None, running: bool = False) -> str:
     """설문에 손도 못 댔을 때의 상태.
 
@@ -767,13 +794,18 @@ def unopened_status(item: dict, now_dt: datetime = None, running: bool = False) 
 
     `running=True`는 상세에서 "아직 안 끝났다"를 본 경우다. 설문은 세미나가
     끝나야 열리므로 이때 못 여는 것은 실패가 아니다 — quiet `not_ready`.
+    **단 공지된 종료가 `SURVEY_RUNNING_GRACE`만큼 지났으면 그 관측을 믿지 않는다.**
+    2026-09-15 세미나 5671(13:00~14:00)을 14:39에 '진행 중'으로 읽고 조용히
+    넘겼다. 공지는 양쪽으로 틀리지만 40분씩 틀리지는 않는다 — 관측 쪽이 틀렸다.
     """
     st = evaluate_survey_cutoff(item, now_dt)
     if st in ("not_ready", "closed"):
         return st
-    if running:
+    if running and not scheduled_end_passed(item, now_dt):
         # 세미나가 아직 안 끝났다 — 설문은 원래 이때 안 열린다. 정상이므로 quiet.
         return "not_ready"
+    # 공지된 종료가 한참 지났는데도 '진행 중'으로 보인다면 관측 쪽이 틀렸다고
+    # 본다. 13:00~14:00 세미나가 14:39에 진행 중일 수는 없다(2026-09-15 5671).
     return "unverified"
 
 
@@ -865,6 +897,23 @@ def mark_survey_status(state: dict, account: str, seminar_id: int | str, status_
     survey[sid_str] = status_str
     if path is not None:
         seminar_live.save_state(state, path)
+
+
+def clear_survey_status(state: dict, account: str, seminar_id: int | str, path=None) -> bool:
+    """설문 이력 표시를 지운다 — 다음 런이 이 세미나를 다시 집게 된다.
+
+    잘못 박힌 `closed`를 그대로 두면 `pending_seminar_ids`가 영영 건너뛴다.
+    """
+    if not isinstance(state, dict):
+        return False
+    acc = (state.get("accounts") or {}).get(account) or {}
+    survey = acc.get("survey")
+    if not isinstance(survey, dict) or str(seminar_id) not in survey:
+        return False
+    survey.pop(str(seminar_id))
+    if path is not None:
+        seminar_live.save_state(state, path)
+    return True
 
 
 def get_survey_meta(state: dict, account: str, seminar_id: int | str) -> dict:
@@ -1532,12 +1581,18 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
         final_url = str(page.url or "")
     except Exception:
         final_url = ""
-    LAST_DETAIL_PROBE["m" if mobile else "www"] = {
+    read_texts = visible or hidden
+    # `usable`은 아래 검증을 다 통과한 뒤에야 참이 된다. 버린 조회는 진단으로만
+    # 남고 진행 중·종료 판정에는 쓰이지 않는다.
+    rec = {
         "url": final_url,
         "visible": visible,
         "hidden": hidden,
-        "ended": bool(visible or hidden) and seminar_ended(visible or hidden),
+        "ended": bool(read_texts) and seminar_ended(read_texts),
+        "running": bool(read_texts) and seminar_running(read_texts),
+        "usable": False,
     }
+    LAST_DETAIL_PROBE["m" if mobile else "www"] = rec
 
     # 다른 세미나 페이지(목록·안내)로 떨어졌으면 여기서 읽은 것은 전부 남의
     # 상태다. 버튼도 본문도 쓰지 않는다.
@@ -1560,6 +1615,7 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
         # 보이므로(로그인 증거가 없으면 '설문하기'만 뜬다) 채택하지 않는다.
         if verdict == "not_done" and not has_login_evidence(buttons + [body]):
             return "unknown", buttons, "m 상세: 로그인 증거 없이 미참여로 보임 — 판정 보류"
+    rec["usable"] = True
     return verdict, buttons, ""
 
 
@@ -1569,25 +1625,42 @@ def seminar_ended(texts) -> bool:
     return strip_spaces(SEMINAR_END_MARKER) in joined
 
 
+def seminar_running(texts) -> bool:
+    """상세에 방송 전·중 표식이 떠 있는가. '세미나 종료'가 같이 있으면 아니다."""
+    if seminar_ended(texts):
+        return False
+    joined = " ".join(strip_spaces(t) for t in texts if t)
+    return any(strip_spaces(m) in joined for m in SEMINAR_RUNNING_MARKERS)
+
+
+def usable_probes() -> list:
+    """판정 근거로 써도 되는 상세 조회 기록만.
+
+    `read_detail_verdict`가 URL 불일치·로그아웃 등으로 **이미 버린** 조회도
+    진단용으로 `LAST_DETAIL_PROBE`에 남는다. 버린 기록을 진행 중 판정에 쓰면
+    남의 페이지가 "아직 안 끝났다"가 된다 — 2026-09-15 세미나 5671·5681.
+    """
+    return [
+        rec for rec in LAST_DETAIL_PROBE.values()
+        if isinstance(rec, dict) and rec.get("usable")
+    ]
+
+
 def probe_saw_running_seminar() -> bool:
     """마지막 상세 조회에서 "아직 안 끝났다"를 관측했는가.
 
-    버튼을 읽긴 했는데 '세미나 종료'가 없다 = 방송 전이거나 방송 중이다.
-    설문은 세미나가 끝나야 열리므로, 이때 창이 안 열리는 것은 정상이다.
+    쓸 수 있는 조회에서 방송 전·중 표식을 봤을 때만 참이다. 같은 조회에서
+    '세미나 종료'를 봤으면 종료가 이긴다 — 설문은 세미나가 끝나야 열린다.
     """
-    for rec in LAST_DETAIL_PROBE.values():
-        if not isinstance(rec, dict):
-            continue
-        if (rec.get("visible") or rec.get("hidden")) and not rec.get("ended"):
-            return True
-    return False
+    probes = usable_probes()
+    if any(rec.get("ended") for rec in probes):
+        return False
+    return any(rec.get("running") for rec in probes)
 
 
 def probe_saw_ended_seminar() -> bool:
     """마지막 상세 조회에서 '세미나 종료'를 봤는가 — 실제 종료의 관측이다."""
-    return any(
-        isinstance(rec, dict) and rec.get("ended") for rec in LAST_DETAIL_PROBE.values()
-    )
+    return any(rec.get("ended") for rec in usable_probes())
 
 
 def has_login_evidence(texts) -> bool:
@@ -1641,7 +1714,28 @@ def finalize_after_submit(page, seminar_id, pages_done: int, title: str = "") ->
 
 
 def open_survey(page, seminar_id) -> tuple[object, str]:
-    """방송 팝업에서 설문 창을 연다. (설문 페이지, 실패 사유) 중 하나를 반환."""
+    """방송 팝업에서 설문 창을 연다. (설문 페이지, 실패 사유) 중 하나를 반환.
+
+    팝업이 안 열리는 것은 한 번 실패해도 재시도로 붙는 경우가 있다(2026-09-15
+    세미나 5671·5681: 같은 런에서 한 계정은 열리고 다른 계정은 못 열었고, 다음
+    런에서 그 짝이 뒤집혔다). 창이 실제 종료 후 1시간뿐이라 다음 블록까지
+    미루면 마감될 수 있어, 팝업 타임아웃만 이 자리에서 다시 시도한다.
+    """
+    last_err = ""
+    for attempt in range(SURVEY_OPEN_ATTEMPTS):
+        if attempt:
+            page.wait_for_timeout(SURVEY_OPEN_RETRY_WAIT_MS)
+        survey_page, err = _open_survey_once(page, seminar_id)
+        if survey_page is not None:
+            return survey_page, err
+        last_err = err
+        if err != SURVEY_POPUP_TIMEOUT_REASON:
+            # 설문 자체가 없거나 레이어 구조가 다른 것이다 — 다시 눌러도 같다.
+            return None, err
+    return None, f"{last_err} ({SURVEY_OPEN_ATTEMPTS}회 시도)"
+
+
+def _open_survey_once(page, seminar_id) -> tuple[object, str]:
     common.goto_with_retry(
         page, BROADCAST_URL.format(sid=seminar_id), wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS
     )
@@ -1662,7 +1756,7 @@ def open_survey(page, seminar_id) -> tuple[object, str]:
             start.first.click()
         survey_page = popup_info.value
     except PlaywrightTimeoutError:
-        return None, "설문 창(팝업)이 열리지 않음 — 이미 참여했거나 마감되었을 수 있음."
+        return None, SURVEY_POPUP_TIMEOUT_REASON
 
     # 제출 confirm이 뜨는 경우 Playwright 기본값은 자동 취소(dismiss)라 제출이
     # 조용히 무산된다(intermd.py에서 실측된 문제). 설문은 항상 수락한다.
@@ -1992,6 +2086,82 @@ def _log_seminar(seminar_id, status: str, account: str, item: dict = None) -> No
         print(f"[seminar_survey] 세미나 로그 기록 실패({seminar_id}): {e}", file=sys.stderr)
 
 
+def summarize_account(output: dict) -> dict:
+    """설문 결과 목록에서 계정 레벨 상태·증거·요약 문구를 (다시) 만든다.
+
+    설문 결과가 나중에 바뀔 수 있어(계정 간 엇갈림 승격) 재호출 가능해야 한다.
+    """
+    surveys = output.get("surveys") or []
+    statuses = [r.get("status") for r in surveys]
+    output["status"] = rollup_account_status(statuses)
+    verified = rollup_verified_by(surveys)
+    if output["status"] == "success" and verified:
+        output["verified_by"] = verified
+    else:
+        output.pop("verified_by", None)
+    output["message"] = (
+        f"성공 {statuses.count('success')}건, 이미완료 {statuses.count('already_done')}건, "
+        f"미등록 {statuses.count('incomplete_bank')}건, "
+        f"마감 {statuses.count('closed')}건, 미오픈 {statuses.count('not_ready')}건, "
+        f"미확인 {statuses.count('unverified')}건, "
+        f"실패 {statuses.count('failed')}건."
+    )
+    return output
+
+
+# 설문 창이 그 시각에 열려 있었다는 증거가 되는 상태 — 둘 다 설문 팝업이 실제로
+# 열려야만 나올 수 있다.
+SURVEY_WINDOW_PROOF = frozenset({"success", "incomplete_bank"})
+# 조용히 넘어가는 미완료 상태. 같은 런에 위 증거가 있으면 이 판정은 틀린 것이다.
+SURVEY_QUIET_MISS = frozenset({"not_ready", "closed"})
+
+
+def escalate_divergent_surveys(results: dict, state: dict = None, state_file: Path = None) -> list:
+    """같은 런에서 계정끼리 엇갈린 설문 판정을 바로잡는다.
+
+    한 계정이 설문 창을 실제로 열었다면 그 시각에 창은 열려 있었다. 그런데도
+    다른 계정이 `not_ready`(아직 안 열림)·`closed`(마감)로 조용히 넘어갔다면
+    그 판정은 틀렸다 — 못 연 것이지 없는 게 아니다. `unverified`(alert)로 올려
+    사람이 보게 하고, 이력에 박힌 표시를 지워 다음 런이 다시 집게 한다.
+
+    2026-09-15 세미나 5671·5681: 두 계정이 서로 반대로 엇갈렸고, 조용한 쪽은
+    알림에 안 떠서 두 설문 다 그대로 마감됐다.
+    """
+    proof: dict[str, list] = {}
+    for account, out in (results or {}).items():
+        for r in out.get("surveys") or []:
+            if r.get("status") in SURVEY_WINDOW_PROOF:
+                proof.setdefault(str(r.get("seminarId")), []).append(account)
+
+    changed = []
+    for account, out in (results or {}).items():
+        touched = False
+        for r in out.get("surveys") or []:
+            sid = str(r.get("seminarId"))
+            if r.get("status") not in SURVEY_QUIET_MISS:
+                continue
+            others = [a for a in proof.get(sid, []) if a != account]
+            if not others:
+                continue
+            prev = r["status"]
+            r["status"] = "unverified"
+            r["diverged_from"] = prev
+            r["message"] = (
+                f"{r.get('message', '')} / 같은 런에서 {', '.join(others)}는 설문 창을 열었다"
+                f" — 창은 열려 있었으므로 '{prev}'가 아니라 못 연 것이다."
+            ).strip()
+            if state is not None:
+                clear_survey_status(state, account, sid, state_file)
+            _log_seminar(sid, "unverified", account, {
+                "title": r.get("title") or "", "start": r.get("start") or "",
+            })
+            changed.append((account, sid, prev))
+            touched = True
+        if touched:
+            summarize_account(out)
+    return changed
+
+
 def run_account(
     account: str,
     credentials_path: Path,
@@ -2041,17 +2211,7 @@ def run_account(
                 elif r["status"] == "closed" and state is not None:
                     mark_survey_status(state, account, sid, "closed", state_file)
 
-            statuses = [r["status"] for r in output["surveys"]]
-            output["status"] = rollup_account_status(statuses)
-            verified = rollup_verified_by(output["surveys"])
-            if output["status"] == "success" and verified:
-                output["verified_by"] = verified
-            output["message"] = (
-                f"성공 {statuses.count('success')}건, 이미완료 {statuses.count('already_done')}건, "
-                f"미등록 {statuses.count('incomplete_bank')}건, "
-                f"마감 {statuses.count('closed')}건, 미오픈 {statuses.count('not_ready')}건, "
-                f"실패 {statuses.count('failed')}건."
-            )
+            summarize_account(output)
         except Exception as e:
             output["status"] = "failed"
             output["message"] = f"예외 발생: {e}"
@@ -2111,6 +2271,12 @@ def main():
             state=state,
             state_file=state_file,
         )
+
+    # 계정 간 엇갈림은 계정을 다 돌려야 보인다. 출력·알림은 그 뒤에 한다.
+    for account, sid, prev in escalate_divergent_surveys(results, state, state_file):
+        print(f"[seminar_survey] {account} 세미나 {sid}: {prev} → unverified (계정 간 엇갈림)", file=sys.stderr)
+
+    for account in accounts:
         print(json.dumps(results[account], ensure_ascii=False))
 
     print("\n=== 최종 결과 ===")
