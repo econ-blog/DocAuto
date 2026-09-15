@@ -417,6 +417,11 @@ seminar_live 17 / seminar_survey 6+1 / doctorville 4 — 전부 같은 로그인
 - 설문은 페이지 순차 제출형이라 전체 사전 검증 불가. **페이지 단위 검증이 도달 가능한 최대 안전선**이라 미등록 1건이면 그 페이지를 제출하지 않고 `incomplete_bank`로 중단한다.
 - **응답 컨트롤이 없는 `<p>` 기반 항목(2026-08-24, 미확정):** → 아래 "설문 `<p>` 기반 항목" 절 참고. 그 항목이 무엇인지 아직 모른다.
 - **1페이지에서 진행이 막힘(2026-09-07 세미나 5616, 원인 미확정):** → 아래 "설문 1페이지 진행 막힘" 절 참고.
+- **계정 간 엇갈린 판정 — 한쪽 `incomplete_bank`, 다른 쪽 `not_ready` (2026-09-15 세미나 5671·5681, 수정함):** 같은 런에서 두 계정이 서로 반대로 갈렸고 다음 런에서 짝이 뒤집혔다(14:08 5671 bjh `incomplete_bank`/wonju `not_ready` → 14:39 정반대). 두 설문 모두 손도 못 댄 채 17:05에 `closed`. 결함 셋:
+  - **`probe_saw_running_seminar`가 버린 조회를 읽었다.** `read_detail_verdict`는 URL 불일치·로그아웃 m 세션의 판정을 버리는데, `LAST_DETAIL_PROBE` 기록은 그 검사 **전에** 쓰여서 남의 페이지가 "아직 안 끝났다"가 됐다. 게다가 진행 중을 `'세미나 종료'의 부재`로 판정해 로그아웃 화면이면 무조건 참이었다. → 기록에 `usable`·`running`을 달고, 통과한 조회만 판정에 쓴다. 진행 중은 양성 표식(`SEMINAR_RUNNING_MARKERS`)으로만 본다. 같은 조회에 종료가 있으면 종료가 이긴다.
+  - **quiet `not_ready`로 강등돼 알림이 안 갔다.** 13:00~14:00 세미나를 14:39에 '진행 중'으로 보고 조용히 넘겼다. → `unopened_status`는 공지된 종료 + `SURVEY_RUNNING_GRACE`(30분)가 지나면 '진행 중' 관측을 믿지 않고 `unverified`(alert)를 낸다.
+  - **팝업 열기가 단발이었다.** 실패하면 그 런은 끝이고, 창은 실제 종료 후 1시간뿐이라 다음 블록(30분 뒤)에는 마감될 수 있다. → `SURVEY_OPEN_ATTEMPTS=2`. 팝업 타임아웃만 재시도한다(설문 미제공은 다시 눌러도 같다).
+  - **엇갈림 자체를 잡는 그물:** `escalate_divergent_surveys`가 계정을 다 돌린 뒤, 한 계정이 설문 창을 실제로 연 세미나(`success`·`incomplete_bank`)에서 다른 계정이 `not_ready`·`closed`로 조용히 넘어갔으면 `unverified`로 올리고 이력 표시를 지운다(다음 런이 다시 집는다). `already_done`은 증거로 치지 않는다 — 상세 표식으로 나오는 값이라 창이 열렸다는 뜻이 아니다.
 
 ### seminar_live.py (2026-07-20 신규)
 - 로컬 sandbox에서 Playwright 시스템 라이브러리 설치 불가(sudo 필요)해 DOM 조사는 Claude in Chrome MCP로 실제 로그인 세션에 붙어 수행했다.

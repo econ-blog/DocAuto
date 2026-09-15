@@ -224,16 +224,54 @@ def test_ended_at_keeps_the_earliest_observation():
     )
 
 
+def _probe(visible, ended=False, running=False, usable=True):
+    return {
+        "visible": visible, "hidden": [], "url": "",
+        "ended": ended, "running": running, "usable": usable,
+    }
+
+
 def test_probe_helpers_read_the_last_probe():
     seminar_survey.LAST_DETAIL_PROBE.clear()
-    seminar_survey.LAST_DETAIL_PROBE["m"] = {"visible": ["입장하기"], "hidden": [], "ended": False}
+    seminar_survey.LAST_DETAIL_PROBE["m"] = _probe(["입장하기"], running=True)
     assert seminar_survey.probe_saw_running_seminar()
     assert not seminar_survey.probe_saw_ended_seminar()
 
-    seminar_survey.LAST_DETAIL_PROBE["m"] = {"visible": ["세미나 종료"], "hidden": [], "ended": True}
+    seminar_survey.LAST_DETAIL_PROBE["m"] = _probe(["세미나 종료"], ended=True)
     assert not seminar_survey.probe_saw_running_seminar()
     assert seminar_survey.probe_saw_ended_seminar()
 
-    seminar_survey.LAST_DETAIL_PROBE["m"] = {"visible": [], "hidden": [], "ended": False}
+    seminar_survey.LAST_DETAIL_PROBE["m"] = _probe([])
     assert not seminar_survey.probe_saw_running_seminar()
     seminar_survey.LAST_DETAIL_PROBE.clear()
+
+
+def test_discarded_probe_never_means_running():
+    """판정을 버린 조회(URL 불일치·로그아웃)는 진행 중 근거가 될 수 없다.
+
+    2026-09-15 세미나 5671·5681: 버린 조회가 '진행 중'으로 읽혀 끝난 세미나의
+    팝업 실패가 quiet not_ready로 묻혔다.
+    """
+    seminar_survey.LAST_DETAIL_PROBE.clear()
+    seminar_survey.LAST_DETAIL_PROBE["m"] = _probe(["입장하기"], running=True, usable=False)
+    seminar_survey.LAST_DETAIL_PROBE["www"] = _probe(["설문하기"], usable=False)
+    assert not seminar_survey.probe_saw_running_seminar()
+    assert not seminar_survey.probe_saw_ended_seminar()
+    seminar_survey.LAST_DETAIL_PROBE.clear()
+
+
+def test_ended_probe_beats_running_probe():
+    seminar_survey.LAST_DETAIL_PROBE.clear()
+    seminar_survey.LAST_DETAIL_PROBE["m"] = _probe(["세미나 종료"], ended=True)
+    seminar_survey.LAST_DETAIL_PROBE["www"] = _probe(["입장하기"], running=True)
+    assert not seminar_survey.probe_saw_running_seminar()
+    assert seminar_survey.probe_saw_ended_seminar()
+    seminar_survey.LAST_DETAIL_PROBE.clear()
+
+
+def test_seminar_running_needs_a_positive_marker():
+    # 버튼을 읽긴 했으나 표식이 없다 = 모르는 것이지 진행 중이 아니다.
+    assert not seminar_survey.seminar_running(["설문하기", "목록"])
+    assert seminar_survey.seminar_running(["입장하기"])
+    # 종료 표식이 같이 있으면 종료가 이긴다.
+    assert not seminar_survey.seminar_running(["입장하기", "세미나 종료"])
