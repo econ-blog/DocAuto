@@ -212,6 +212,11 @@ def main():
     print("\n=== 최종 결과 ===")
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
+    try:
+        common.write_json_atomic(SCRIPT_DIR / "logs" / "results-daily_runner.json", results)
+    except Exception as e:
+        print(f"[daily_runner] 결과 파일 저장 실패: {e}", file=sys.stderr)
+
     # 실행 로그 적재 — 이 런을 run{N} 행으로 append 하고, 오래된 로그를 지운다.
     # 텔레그램 전송보다 먼저 해야 전송이 실패해도 기록은 남는다.
     try:

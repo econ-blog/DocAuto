@@ -143,6 +143,17 @@ jobs:
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python3 scripts/seminar_report.py
 
+      - name: Claude 클라우드 루틴 트리거
+        if: always()
+        continue-on-error: true
+        env:
+          CLAUDE_ROUTINE_URL: ${{ secrets.CLAUDE_ROUTINE_URL }}
+          CLAUDE_ROUTINE_TOKEN: ${{ secrets.CLAUDE_ROUTINE_TOKEN }}
+        run: |
+          python3 scripts/claude_trigger.py \
+            --results scripts/logs/results-seminar_live.json scripts/logs/results-seminar_survey.json \
+            --outcome live=${{ steps.live.outcome }} survey=${{ steps.survey.outcome }}
+
       # legacy는 승격(legacy → quiz/text)으로 줄어들기만 한다. 세 파일이 같은
       # 커밋에 들어가야 승격이 런 사이에 유실되지 않는다.
       # 이 블록은 신청을 하지 않으므로 seminar_applied.json은 보통 그대로다. 그래도

@@ -13,7 +13,14 @@ import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
+try:
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
+except ImportError:
+    class PlaywrightTimeoutError(Exception):
+        pass
+
+    class PlaywrightError(Exception):
+        pass
 
 KST = timezone(timedelta(hours=9))
 RESERVED_KEYS = {"telegram"}

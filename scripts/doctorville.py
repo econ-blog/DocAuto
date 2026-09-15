@@ -1888,6 +1888,11 @@ def main():
     else:
         print(json.dumps(all_results, ensure_ascii=False, indent=2))
 
+    try:
+        common.write_json_atomic(SCRIPT_DIR / "logs" / "results-doctorville.json", all_results)
+    except Exception as e:
+        print(f"[doctorville] 결과 파일 저장 실패: {e}", file=sys.stderr)
+
     failed = any(
         acc_res.get(t, {}).get("status") in {"failed", "unverified", "blocked"}
         for acc_res in all_results.values()

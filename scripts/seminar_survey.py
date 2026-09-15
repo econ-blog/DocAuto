@@ -2279,6 +2279,11 @@ def main():
     print("\n=== 최종 결과 ===")
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
+    try:
+        common.write_json_atomic(SCRIPT_DIR / "logs" / "results-seminar_survey.json", results)
+    except Exception as e:
+        print(f"[seminar_survey] 결과 파일 저장 실패: {e}", file=sys.stderr)
+
     failed = any(
         r.get("status") in {"failed", "unverified", "blocked"}
         for r in results.values()
