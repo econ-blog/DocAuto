@@ -51,7 +51,7 @@ def upgrade_to_v2(state: dict) -> dict:
     """
     if not isinstance(state, dict):
         return {"version": 2, "accounts": {}}
-    if state.get("version") == 2:
+    if state.get("version") == 2 and "survey_done" not in str(state):
         return state
     state["version"] = 2
     accounts = state.setdefault("accounts", {})

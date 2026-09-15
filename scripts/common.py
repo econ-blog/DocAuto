@@ -147,7 +147,21 @@ def parse_dd_date(date_str: str | None) -> tuple[datetime | None, datetime | Non
         return None, None
 
 
-ERROR_LOG_DIR = Path(os.environ.get("DOCAUTO_LOG_DIR") or (SCRIPT_DIR.parent / "logs"))
+DEFAULT_ERROR_LOG_DIR = SCRIPT_DIR.parent / "logs"
+ERROR_LOG_DIR = DEFAULT_ERROR_LOG_DIR
+
+
+def get_error_log_dir() -> Path:
+    """오류 로그 디렉토리를 반환한다.
+
+    테스트나 환경변수(DOCAUTO_LOG_DIR)로 격리된 경우 호출 시점에 동적으로 반영한다.
+    """
+    if ERROR_LOG_DIR != DEFAULT_ERROR_LOG_DIR:
+        return Path(ERROR_LOG_DIR)
+    env_dir = os.environ.get("DOCAUTO_LOG_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path(ERROR_LOG_DIR)
 
 
 def log_error(
@@ -195,7 +209,8 @@ def log_error(
             "gh_workflow": os.environ.get("GITHUB_WORKFLOW", ""),
             "extra": extra or {},
         }
-        path = ERROR_LOG_DIR / f"errors-{datetime.now(KST):%Y-%m}.jsonl"
+        target_dir = get_error_log_dir()
+        path = target_dir / f"errors-{datetime.now(KST):%Y-%m}.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
