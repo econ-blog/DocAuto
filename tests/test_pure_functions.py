@@ -38,7 +38,7 @@ def test_parse_inbox_line():
 def test_merge_state():
     old_state = {
         "date": "2026-07-24",
-        "accounts": {"bjh7790": {"entered": [123], "blocks": {"lunch": [123], "evening": [], "manual": []}}}
+        "accounts": {"bjh7790": {"entered": [{"id": 123, "title": None, "start": None, "entered_at": None}], "blocks": {"lunch": [123], "evening": [], "manual": []}}}
     }
     # Date mismatch resets state
     merged = merge_state(old_state, "2026-07-25")
@@ -46,5 +46,6 @@ def test_merge_state():
     assert merged["accounts"]["bjh7790"]["entered"] == []
 
     # Same date retains state
-    same_date = merge_state({"date": "2026-07-25", "accounts": {"bjh7790": {"entered": [123], "blocks": {"lunch": [123], "evening": [], "manual": []}}}}, "2026-07-25")
+    same_date = merge_state({"date": "2026-07-25", "accounts": {"bjh7790": {
+        "entered": [{"id": 123, "title": None, "start": None, "entered_at": None}], "blocks": {"lunch": [123], "evening": [], "manual": []}}}}, "2026-07-25")
     assert same_date["accounts"]["bjh7790"]["entered"] == [{"id": 123, "title": None, "start": None, "entered_at": None}]

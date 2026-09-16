@@ -2,7 +2,8 @@ from seminar_live import load_state, save_state, update_entered_state, determine
 
 def test_load_and_save_state(tmp_path):
     state_file = tmp_path / "seminar_entered.json"
-    initial = {"date": "2026-07-25", "accounts": {"bjh7790": {"entered": [5457], "blocks": {"lunch": [5457], "evening": [], "manual": []}}}}
+    initial = {"date": "2026-07-25", "accounts": {"bjh7790": {
+        "entered": [{"id": 5457, "title": None, "start": None, "entered_at": None}], "blocks": {"lunch": [5457], "evening": [], "manual": []}}}}
     save_state(initial, state_file)
     
     loaded = load_state(state_file, "2026-07-25")

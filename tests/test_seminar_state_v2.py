@@ -12,7 +12,8 @@ def test_parse_dd_date_invalid():
     assert parse_dd_date(None) == (None, None)
     assert parse_dd_date("invalid") == (None, None)
 
-def test_upgrade_to_v2():
+def test_upgrade_to_v2_discards_v1_state():
+    """v1 상태는 변환하지 않고 버린다 — CI 캐시가 날짜 단위라 v1은 복원될 수 없다."""
     v1_dict = {
         "date": "2026-07-31",
         "accounts": {
@@ -23,14 +24,12 @@ def test_upgrade_to_v2():
             }
         }
     }
-    v2 = upgrade_to_v2(v1_dict)
-    assert v2["version"] == 2
-    assert v2["accounts"]["bjh7790"]["entered"] == [
-        {"id": 5473, "title": None, "start": None, "entered_at": None}
-    ]
-    assert v2["accounts"]["bjh7790"]["survey"] == {"5473": "done"}
+    assert upgrade_to_v2(v1_dict) == {"version": 2, "accounts": {}}
+    v2 = {"version": 2, "date": "2026-07-31", "accounts": {"bjh7790": {"entered": []}}}
+    assert upgrade_to_v2(v2) is v2
 
 def test_load_state_v1_file(tmp_path):
+    """v1 파일을 만나면 그날치 빈 상태로 시작한다(입장은 목록 배지로 재판단)."""
     tmp_file = tmp_path / "seminar_entered.json"
     v1_data = {
         "date": "2026-08-01",
@@ -44,10 +43,8 @@ def test_load_state_v1_file(tmp_path):
     tmp_file.write_text(json.dumps(v1_data), encoding="utf-8")
     loaded = load_state(tmp_file, "2026-08-01")
     assert loaded["version"] == 2
-    assert loaded["accounts"]["bjh7790"]["entered"] == [
-        {"id": 100, "title": None, "start": None, "entered_at": None}
-    ]
-    assert loaded["accounts"]["bjh7790"]["survey"] == {"100": "done"}
+    assert loaded["accounts"]["bjh7790"]["entered"] == []
+    assert loaded["accounts"]["bjh7790"]["survey"] == {}
 
 def test_update_entered_state_with_metadata(tmp_path):
     state_file = tmp_path / "seminar_entered.json"

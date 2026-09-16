@@ -11,48 +11,34 @@ from pathlib import Path
 import common
 
 
-def upgrade_to_v2(state: dict) -> dict:
-    """Upgrades state dict from schema v1 to schema v2 in-place and returns it.
+def _is_v1(state: dict) -> bool:
+    """v1 표식이 있는가 — 계정에 `survey_done`이 있거나 `entered`가 id 목록이다."""
+    for acc in (state.get("accounts") or {}).values():
+        if not isinstance(acc, dict):
+            continue
+        if "survey_done" in acc:
+            return True
+        if any(not isinstance(x, dict) for x in acc.get("entered") or []):
+            return True
+    return False
 
-    In v2:
-    - version is set to 2.
-    - entered list items are upgraded from int N to {"id": N, "title": None, "start": None, "entered_at": None}.
-    - survey_done list is replaced by survey dict {"N": "done"}.
+
+def upgrade_to_v2(state: dict) -> dict:
+    """v1 상태는 변환하지 않고 버린다. v2 형식은 표식만 채워 그대로 쓴다.
+
+    상태 파일은 Actions 캐시에 KST 날짜 키(`seminar-state-<날짜>-`)로만 남아 하루가
+    지나면 사라진다. v2 도입(2026-08-01) 이후로 CI에 v1이 복원될 길이 없고, 로컬에
+    남은 v1은 그날치 입장 이력일 뿐이라 되살릴 가치가 없다. 변환기를 유지하면 다시
+    실행될 일 없는 분기를 계속 테스트·유지하게 된다.
+
+    빈 상태로 돌아가도 그날 입장 이력만 잊는다. 입장 대상은 목록의 `입장하기`
+    배지로 다시 판단하므로 중복 입장이 아니라 재시도로 끝난다.
     """
     if not isinstance(state, dict):
         return {"version": 2, "accounts": {}}
-    if state.get("version") == 2 and "survey_done" not in str(state):
-        return state
+    if _is_v1(state):
+        return {"version": 2, "accounts": {}}
     state["version"] = 2
-    accounts = state.setdefault("accounts", {})
-    if isinstance(accounts, dict):
-        for acc, acc_data in accounts.items():
-            if not isinstance(acc_data, dict):
-                continue
-            entered_raw = acc_data.get("entered", [])
-            new_entered = []
-            for item in entered_raw:
-                if isinstance(item, int):
-                    new_entered.append({"id": item, "title": None, "start": None, "entered_at": None})
-                elif isinstance(item, str) and item.isdigit():
-                    new_entered.append({"id": int(item), "title": None, "start": None, "entered_at": None})
-                elif isinstance(item, dict):
-                    entry = {
-                        "id": item.get("id"),
-                        "title": item.get("title"),
-                        "start": item.get("start"),
-                        "entered_at": item.get("entered_at"),
-                    }
-                    new_entered.append(entry)
-                else:
-                    new_entered.append(item)
-            acc_data["entered"] = new_entered
-
-            survey_done = acc_data.pop("survey_done", [])
-            survey_dict = acc_data.setdefault("survey", {})
-            if isinstance(survey_done, list):
-                for sid in survey_done:
-                    survey_dict[str(sid)] = "done"
     return state
 
 

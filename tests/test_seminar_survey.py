@@ -385,13 +385,14 @@ def test_placeholder_trimmed_to_single_option_becomes_answer():
 
 
 def test_pending_seminar_ids_excludes_done():
-    state = {"accounts": {"bjh7790": {"entered": [1, 2, 3], "survey_done": [2]}}}
+    state = {"version": 2, "accounts": {"bjh7790": {
+        "entered": [{"id": 1}, {"id": 2}, {"id": 3}], "survey": {"2": "done"}}}}
     assert pending_seminar_ids(state, "bjh7790") == [1, 3]
     assert pending_seminar_ids(state, "wonju") == []
 
 
 def test_mark_survey_done_is_idempotent():
-    state = {"accounts": {"bjh7790": {"entered": [1]}}}
+    state = {"version": 2, "accounts": {"bjh7790": {"entered": [{"id": 1}]}}}
     mark_survey_done(state, "bjh7790", 1)
     mark_survey_done(state, "bjh7790", "1")
     assert state["accounts"]["bjh7790"]["survey"] == {"1": "done"}
