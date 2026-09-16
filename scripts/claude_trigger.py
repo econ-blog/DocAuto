@@ -26,6 +26,30 @@ DEFAULT_LOGS_DIR = REPO_ROOT / "logs"
 MAX_FIRES_PER_DAY = 4
 MAX_PAYLOAD_CHARS = 65536
 
+# 지문에 넣지 않는 키. status는 노드 자신, 나머지는 payload의 node에 이미 들어간다.
+SKIP_KEYS = ("status", "verified_by", "questions", "options")
+DOCTORVILLE_PREFIX = "doctorville_"
+
+# 보류 사유 중 파일에 남기는 것. 재시도성 1회차만 남긴다 — 그 기록이 "두 번째부터
+# 발사" 규칙의 1회차 표식이기 때문이다. 나머지(이미 발사·상한)는 매 런 쌓이기만 한다.
+PERSISTED_DEFERRALS = ("retryable_first_occurrence",)
+
+
+def _account_of(key: str, value) -> str:
+    """이 경로 세그먼트가 계정이면 계정명, 아니면 빈 문자열.
+
+    per-account 결과 dict은 자기 안에 `account` 필드를 들고 있다(닥터빌·HMP·키메디·
+    설문 공통). 키 이름과 그 필드를 대조하면 credentials.json 없이도 계정 세그먼트를
+    가려낼 수 있다 — CI에서만 존재하는 파일에 지문 안정성을 걸지 않기 위해서다.
+    `keymedi`처럼 모듈 이름이 키인 노드는 account가 키와 다르므로 task에 그대로 남는다.
+    """
+    name = key[len(DOCTORVILLE_PREFIX):] if key.startswith(DOCTORVILLE_PREFIX) else key
+    if isinstance(value, dict) and value.get("account") == name:
+        return name
+    if key.startswith(DOCTORVILLE_PREFIX):
+        return name
+    return ""
+
 
 def _extract_target(node: dict) -> str:
     """Extract semantic target identifier (seminarId, product, exception, etc.)."""
@@ -52,7 +76,16 @@ def compute_fingerprint(kst_date: str, script: str, task: str, status: str, targ
 
 
 def collect_actionable_items(results_paths: list[Path]) -> list[dict]:
-    """Traverse result JSONs and extract items with severity >= action."""
+    """결과 JSON에서 severity가 action 이상인 노드를 항목으로 뽑는다.
+
+    판정은 **그 노드 자신의 status**로만 한다(`notify._node_sev`). `severity_of`는
+    하위 트리의 최대값이라, 자식 하나가 incomplete_bank면 정상(success)인 부모까지
+    항목이 되어 payload에 같은 내용이 두 번 실리고 status=success짜리 지문이 생긴다.
+
+    지문에 쓰는 task는 **계정 세그먼트와 리스트 인덱스를 뺀** 경로다. 인덱스를
+    넣으면 같은 세미나가 다음 런에서 다른 자리에 오는 것만으로 지문이 바뀌어
+    같은 문제로 세션이 또 뜬다. 사람이 읽을 위치는 path에 그대로 남긴다.
+    """
     items = []
     for p in results_paths:
         if not p.exists():
@@ -66,38 +99,36 @@ def collect_actionable_items(results_paths: list[Path]) -> list[dict]:
 
         script_guess = p.stem.replace("results-", "")
 
-        def _walk(obj, prefix: str, current_acc: str):
+        def _walk(obj, path_parts: list, task_parts: list, account: str):
             if isinstance(obj, dict):
-                # Status node check
                 if "status" in obj:
-                    sev = notify.severity_of(obj)
+                    sev = notify._node_sev(obj)
                     if notify.SEVERITY_ORDER.get(sev, 0) >= notify.SEVERITY_ORDER["action"]:
-                        account = obj.get("account") or current_acc or ""
-                        task_name = prefix.split(" > ")[-1] if prefix else ""
-                        target = _extract_target(obj)
                         items.append({
                             "script": script_guess,
-                            "account": account,
-                            "task": task_name,
-                            "path": prefix,
+                            "account": obj.get("account") or account or "",
+                            "task": ".".join(task_parts) or "_",
+                            "path": " > ".join(path_parts),
                             "status": obj.get("status", ""),
-                            "target": target,
+                            "target": _extract_target(obj),
                             "node": obj,
                         })
                 for k, v in obj.items():
-                    if k in ("status", "verified_by", "questions", "options"):
+                    if k in SKIP_KEYS:
                         continue
-                    new_acc = current_acc
-                    if k in ("bjh7790", "wonju") or k.startswith("doctorville_"):
-                        new_acc = k.replace("doctorville_", "")
-                    sub_prefix = f"{prefix} > {k}" if prefix else k
-                    _walk(v, sub_prefix, new_acc)
+                    acc = _account_of(k, v)
+                    _walk(
+                        v,
+                        path_parts + [k],
+                        task_parts if acc else task_parts + [k],
+                        acc or account,
+                    )
             elif isinstance(obj, list):
                 for idx, elem in enumerate(obj):
-                    sub_prefix = f"{prefix}[{idx}]"
-                    _walk(elem, sub_prefix, current_acc)
+                    head = path_parts[:-1] + [f"{path_parts[-1]}[{idx}]"] if path_parts else [f"[{idx}]"]
+                    _walk(elem, head, task_parts, account)
 
-        _walk(data, prefix=script_guess, current_acc="")
+        _walk(data, [script_guess], [], "")
     return items
 
 
@@ -150,35 +181,33 @@ def read_trigger_history(log_dir: Path, kst_now: datetime) -> list[dict]:
     return history
 
 
+def _fire_key(entry: dict) -> str:
+    """한 번의 발사(=세션 1개)를 식별하는 값."""
+    return str(entry.get("fire_id") or entry.get("run_id") or entry.get("ts") or "")
+
+
 def evaluate_items(
     items: list[dict],
     history: list[dict],
     kst_date: str,
 ) -> tuple[list[dict], list[dict]]:
-    """Determine which items should fire vs be deferred based on deduplication rules.
+    """발사할 항목과 보류 항목을 가른다.
 
-    Returns: (items_to_fire, items_deferred)
+    상한은 **발사 횟수(세션 수)**로 센다. 한 번 발사에 새 지문을 모두 묶어 싣기
+    때문에, 항목 수로 세면 항목 4개짜리 런 한 번에 그날 상한이 차 버린다.
+
+    Returns: (발사 항목, 보류 항목)
     """
-    today_fired_count = sum(
-        1 for h in history
-        if str(h.get("ts", "")).startswith(kst_date) and h.get("outcome") == "fired"
-    )
+    today = [h for h in history if str(h.get("ts", "")).startswith(kst_date)]
+    fired_today = [h for h in today if h.get("outcome") == "fired"]
+    fires_today = len({_fire_key(h) for h in fired_today})
+    fired_fps_today = {h.get("fp") for h in fired_today}
+    seen_fps_today = {h.get("fp") for h in today}
 
-    fired_fps_today = {
-        h.get("fp") for h in history
-        if str(h.get("ts", "")).startswith(kst_date) and h.get("outcome") == "fired"
-    }
-
-    seen_fps_today = {
-        h.get("fp") for h in history
-        if str(h.get("ts", "")).startswith(kst_date)
-    }
-
-    to_fire = []
-    deferred = []
-
-    # Track fingerprints already chosen in this evaluation run to avoid internal duplicates
+    to_fire: list[dict] = []
+    deferred: list[dict] = []
     chosen_fps_this_run = set()
+    cap_reached = fires_today >= MAX_FIRES_PER_DAY
 
     for it in items:
         fp = compute_fingerprint(kst_date, it["script"], it["task"], it["status"], it["target"])
@@ -187,20 +216,17 @@ def evaluate_items(
         if fp in chosen_fps_this_run:
             continue
 
-        # Rule 1: Already fired today -> defer
         if fp in fired_fps_today:
             deferred.append({**it, "reason": "already_fired_today"})
             continue
 
-        # Rule 2: Daily cap reached -> defer
-        if today_fired_count + len(to_fire) >= MAX_FIRES_PER_DAY:
+        if cap_reached:
             deferred.append({**it, "reason": "daily_cap_reached"})
             continue
 
-        # Rule 3: Retryable error check -> defer on first occurrence today
+        # 재시도성(네트워크·타임아웃) 실패는 같은 날 재발했을 때만 세션을 띄운다.
         msg = str(it.get("node", {}).get("message", ""))
-        is_retryable = common.is_retryable_error(msg)
-        if it.get("status") == "failed" and is_retryable:
+        if it.get("status") == "failed" and common.is_retryable_error(msg):
             if fp not in seen_fps_today:
                 deferred.append({**it, "reason": "retryable_first_occurrence"})
                 continue
@@ -266,10 +292,12 @@ def build_payload(
     if len(text) <= MAX_PAYLOAD_CHARS:
         return text
 
-    # Truncation step 3: Limit counts
+    # Truncation step 3: 건수를 줄인다. 문자열을 그대로 자르면 JSON이 깨져
+    # 세션이 payload를 파싱하지 못하므로, 자르는 것은 내용이지 결과 문자열이 아니다.
     payload["errors"] = payload["errors"][-3:]
     payload["items"] = payload["items"][:10]
-    return json.dumps(payload, ensure_ascii=False)[:MAX_PAYLOAD_CHARS]
+    payload["truncated"] = True
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def fire_routine(url: str, token: str, payload_text: str) -> tuple[bool, str]:
@@ -310,6 +338,7 @@ def record_trigger_event(
     outcome: str,
     session_url: str = "",
     reason: str = "",
+    fire_id: str = "",
 ) -> None:
     """Append trigger event to logs/claude-triggers-YYYY-MM.jsonl."""
     try:
@@ -322,6 +351,8 @@ def record_trigger_event(
             "outcome": outcome,
             "session_url": session_url,
         }
+        if fire_id:
+            entry["fire_id"] = fire_id
         if reason:
             entry["reason"] = reason
         with open(hist_file, "a", encoding="utf-8") as f:
@@ -371,13 +402,13 @@ def main():
     if failed_steps and not items:
         for s in failed_steps:
             items.append({
-                "script": s,
+                "script": "workflow",
                 "account": "",
-                "task": s,
-                "path": s,
+                "task": f"step.{s}",
+                "path": f"step:{s}",
                 "status": "failed",
                 "target": "step_failure",
-                "node": {"status": "failed", "message": f"Step '{s}' failed in workflow"},
+                "node": {"status": "failed", "message": f"워크플로우 스텝 '{s}' 실패 (결과 JSON 없음)"},
             })
 
     if not items and not errors and not failed_steps:
@@ -387,21 +418,24 @@ def main():
     history = read_trigger_history(log_dir, kst_now)
     to_fire, deferred = evaluate_items(items, history, kst_date)
 
-    # Record deferred items
+    # 보류 기록 — 재시도성 1회차만 파일에 남긴다(PERSISTED_DEFERRALS 주석 참조).
     for it in deferred:
-        record_trigger_event(
-            log_dir, kst_now, it.get("fp", ""), args.run_id, "deferred", reason=it.get("reason", "")
-        )
-        print(f"[claude_trigger] 항목 보류 ({it.get('reason')}): {it.get('fp')}")
+        reason = it.get("reason", "")
+        if reason in PERSISTED_DEFERRALS:
+            record_trigger_event(
+                log_dir, kst_now, it.get("fp", ""), args.run_id, "deferred", reason=reason
+            )
+        print(f"[claude_trigger] 항목 보류 ({reason}): {it.get('fp')}")
 
     if not to_fire:
         print("[claude_trigger] 발사할 신규 항목 없음.")
         return
 
-    # Find screenshots
-    screenshots = []
-    for p in (SCRIPT_DIR / "logs").glob("*.png"):
-        screenshots.append(p.name)
+    # 실패 스크린샷만 싣는다. 표 PNG(daily-table-*, seminar-table-*)는 진단과 무관하다.
+    screenshots = [
+        p.name for p in sorted((SCRIPT_DIR / "logs").glob("*.png"))
+        if not p.name.startswith(("daily-table-", "seminar-table-"))
+    ]
 
     run_url = f"{args.server_url}/{args.repository}/actions/runs/{args.run_id}" if args.run_id else ""
     payload_text = build_payload(
@@ -417,16 +451,27 @@ def main():
 
     routine_url = os.environ.get("CLAUDE_ROUTINE_URL", "")
     routine_token = os.environ.get("CLAUDE_ROUTINE_TOKEN", "")
+    if not routine_url or not routine_token:
+        # routine을 아직 안 만든 상태다. 설정 부재는 발사 실패가 아니므로 이력에
+        # 남기지 않는다 — 남기면 설정 전까지 커밋되는 로그에 매 런 쌓이기만 한다.
+        print(f"[claude_trigger] routine 미설정(secrets 없음) — 발사 생략. "
+              f"대상 지문 {len(to_fire)}개: {[it['fp'] for it in to_fire]}")
+        return
+
+    # 이번 발사(=세션 1개)의 식별자. 상한은 이 값의 개수로 센다.
+    fire_id = f"{args.run_id or 'local'}:{kst_now:%H%M%S}"
 
     ok, res = fire_routine(routine_url, routine_token, payload_text)
     if ok:
         print(f"[claude_trigger] 클라우드 루틴 발사 성공: {res}")
         for it in to_fire:
-            record_trigger_event(log_dir, kst_now, it["fp"], args.run_id, "fired", session_url=res)
+            record_trigger_event(log_dir, kst_now, it["fp"], args.run_id, "fired",
+                                 session_url=res, fire_id=fire_id)
     else:
         print(f"[claude_trigger] 클라우드 루틴 발사 실패: {res}", file=sys.stderr)
         for it in to_fire:
-            record_trigger_event(log_dir, kst_now, it["fp"], args.run_id, "http_error", reason=res)
+            record_trigger_event(log_dir, kst_now, it["fp"], args.run_id, "http_error",
+                                 reason=res, fire_id=fire_id)
 
 
 if __name__ == "__main__":
