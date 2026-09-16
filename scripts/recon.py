@@ -410,6 +410,20 @@ def recon_r5(page) -> dict:
     data = page.evaluate(LIST_DOM_JS)
     data["list_ready"] = ready
     data["today"] = datetime.now(common.KST).strftime("%Y-%m-%d")
+
+    # 운영 스캐너를 그대로 돌려 본다. 읽기만 하므로 부작용이 없다 —
+    # 날짜 헤더 픽스를 다음 daily 런을 기다리지 않고 여기서 확인하는 유일한 길이다.
+    listed = page.evaluate(doctorville.SEMINAR_LIST_JS)
+    rows, unparsed = doctorville.list_rows_for_today(listed)
+    data["scan"] = {
+        "items": len(listed),
+        "unparsed": unparsed,
+        "today_rows": len(rows),
+        "applicable": sum(1 for i in listed if i.get("applicable")),
+        "with_list_date": sum(1 for i in listed if i.get("listDate")),
+        "sample_raw": [(i.get("raw") or "")[:120] for i in listed[:3]],
+        "sample_rows": rows[:5],
+    }
     return data
 
 
@@ -426,6 +440,17 @@ def summarize_r5(data: dict) -> str:
         lines.append("(없음 — 페이지 어디에도 날짜 표기가 없다)")
     for n in nodes[:12]:
         lines.append(f"  {n['sel']}  (부모 {n['parent']})  = {n['text']}")
+
+    scan = data.get("scan")
+    if scan:
+        lines += ["", "-- 운영 스캐너(SEMINAR_LIST_JS) 결과 --",
+                  f"  items={scan['items']} unparsed={scan['unparsed']} "
+                  f"today_rows={scan['today_rows']} applicable={scan['applicable']} "
+                  f"with_list_date={scan['with_list_date']}"]
+        for r in scan.get("sample_raw", []):
+            lines.append(f"    raw: {r}")
+        for r in scan.get("sample_rows", []):
+            lines.append(f"    row: {r.get('start')} | {r.get('title')}")
 
     lines += ["", "-- 앵커 → 날짜 헤더 연결 --"]
     for d in (data.get("dayLink") or [])[:10]:

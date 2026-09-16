@@ -60,3 +60,18 @@ def test_summarize_r5_says_so_when_no_date_anywhere():
     out = recon.summarize_r5({"list_ready": True, "anchorCount": 66, "anchorsWithApply": 0,
                               "anchorsWithDate": 0, "dateNodes": [], "items": []})
     assert "없음" in out
+
+
+def test_summarize_r5_reports_operational_scan():
+    """픽스 검증의 핵심 숫자(unparsed / today_rows)가 요약에 없으면 정찰 의미가 없다."""
+    import recon
+    out = recon.summarize_r5({
+        "list_ready": True, "anchorCount": 67, "anchorsWithApply": 3, "anchorsWithDate": 0,
+        "dateNodes": [], "items": [], "dayLink": [], "headerContext": None,
+        "scan": {"items": 67, "unparsed": 0, "today_rows": 4, "applicable": 3,
+                 "with_list_date": 67, "sample_raw": ["9/16 수요일 18:30 ~20:00"],
+                 "sample_rows": [{"start": "2026-09-16(수) 18:30 ~ 20:00", "title": "Breathe Well"}]},
+    })
+    assert "unparsed=0" in out
+    assert "today_rows=4" in out
+    assert "Breathe Well" in out
