@@ -1085,14 +1085,14 @@ main(`3dad022`) 위에 별도 작업본의 8커밋을 cherry-pick하고 후속 �
 - 항목 판정은 노드 **자신의** status(`notify._node_sev`)로 한다. 하위 트리 최대값(`severity_of`)을 쓰면 정상인 부모까지 항목이 되어 payload가 중복되고 `success` 지문이 생긴다.
 - 지문은 `KST날짜/script/task/status/대상`이고 **task에서 계정과 리스트 인덱스를 뺀다.** 인덱스가 들어가면 같은 세미나가 다음 런에서 다른 자리에 올 때 지문이 바뀌어 30분 블록에서 세션이 중복으로 뜬다. 계정 판별은 결과 노드의 `account` 필드로 한다 — CI에만 있는 credentials.json에 지문 안정성을 걸지 않는다.
 - 일일 상한은 항목 수가 아니라 발사 횟수(`fire_id`)로 센다.
-- secrets 미설정이면 이력을 남기지 않고 건너뛴다 → routine 생성 전에 머지해도 안전하다.
+- secrets 미설정이면 발사를 건너뛰고 기록하지 않는다. 단, 재시도성 실패의 당일 1회차 `deferred`는 secrets와 무관하게 `logs/claude-triggers-*.jsonl`에 남는다(지문당 하루 1줄, 2회차 발사 표식) → routine 생성 전에 머지해도 부작용이 없다.
 
 **브랜치에서 검증된 것 / 안 된 것**
 - 검증됨: `manual.yml` 2회(퀴즈·세미나 신청) — 텍스트 알림 0건, 표 PNG 전송(`telegram_sendPhoto`), `results-*.json` 기록, 트리거 "대상 없음" 판정, 신규 신청 5건과 계정별 로그·이력 커밋.
 - 미검증: 퀴즈 정답 제출 경로(그날 이미 완료), 세미나 입장·설문, 트리거 실제 발사(routine 미생성).
 
 **다음 할 일**
-1. **main 머지 후 검증** — KST 01:00~10:30에 머지하고, 그날 첫 블록 표와 다음 daily 표로 입장·설문·퀴즈 제출 경로를 확인한다.
+1. **main 머지 후 검증** — 2026-09-16 22:13 KST 머지 완료(`6ce9b82`, 머지 트리 pytest 525 통과). 첫 실전 런은 09-17 00:15 daily, 이어서 11:00 블록이다. daily 표로 출석·퀴즈 제출 경로를, 블록 표로 입장·설문·트리거 지문을 확인하고 결과를 이 섹션에 남긴다.
 2. **Claude Cloud Routine 연결** — 생성(레포 DocAuto, 커넥터 제거, setup script로 Python 3.11 + requirements) → API 트리거 토큰 → secrets `CLAUDE_ROUTINE_URL`·`CLAUDE_ROUTINE_TOKEN` → Run now로 스킬 동작과 `main` 직접 push 가부 실측 → 거부되면 `claude/**` 족보 PR 자동 머지 워크플로우를 붙인다.
 3. 보류: 수동 신청 건이 표에 `·`로 뜨는 문제(5685). 목록의 "이미 신청" 표식을 정찰하거나, 이력·배지가 없는 오늘 방송분만 상세를 열어 버튼으로 확인한다.
 
