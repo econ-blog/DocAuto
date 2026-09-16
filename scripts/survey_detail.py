@@ -6,7 +6,6 @@
 """
 
 import re
-import sys
 from pathlib import Path
 
 import common
@@ -163,26 +162,6 @@ def read_detail_buttons(page) -> tuple[list[str], list[str]]:
     return visible, hidden
 
 
-_ORIGINAL_READ_DETAIL_BUTTONS = read_detail_buttons
-_ORIGINAL_BODY_TEXT = body_text
-
-
-def _current_read_detail_buttons(page):
-    mod = sys.modules.get("seminar_survey")
-    fn = getattr(mod, "read_detail_buttons", None)
-    if fn is not None and fn is not read_detail_buttons and fn is not _ORIGINAL_READ_DETAIL_BUTTONS:
-        return fn(page)
-    return read_detail_buttons(page)
-
-
-def _current_body_text(page):
-    mod = sys.modules.get("seminar_survey")
-    fn = getattr(mod, "body_text", None)
-    if fn is not None and fn is not body_text and fn is not _ORIGINAL_BODY_TEXT:
-        return fn(page)
-    return body_text(page)
-
-
 def seminar_ended(texts) -> bool:
     """상세에 '세미나 종료'가 떠 있는가 — 방송이 끝났다는 사이트의 표시."""
     joined = " ".join(strip_spaces(t) for t in (texts or []) if t)
@@ -277,8 +256,8 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
     except Exception as e:
         return "unknown", [], f"{'m' if mobile else 'www'} 상세 재접속 실패: {e}"
 
-    visible, hidden = _current_read_detail_buttons(page)
-    body = _current_body_text(page)
+    visible, hidden = read_detail_buttons(page)
+    body = body_text(page)
     if mobile:
         # 버튼이 아직 안 그려졌을 수 있다. 표식이 잡히거나 시간이 다 될 때까지만.
         waited = 0
@@ -288,8 +267,8 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
         ):
             page.wait_for_timeout(MOBILE_POLL_MS)
             waited += MOBILE_POLL_MS
-            visible, hidden = _current_read_detail_buttons(page)
-            body = _current_body_text(page)
+            visible, hidden = read_detail_buttons(page)
+            body = body_text(page)
 
     # 보이는 버튼이 하나도 없으면 읽기 자체가 실패한 것이다. 그때만 숨은 것까지
     # 본다 — 평소에 숨은 템플릿을 섞으면 '응답완료'가 늘 걸려 오판이 된다.

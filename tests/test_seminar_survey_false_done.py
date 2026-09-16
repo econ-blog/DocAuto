@@ -14,6 +14,7 @@ from unittest.mock import MagicMock
 
 from common import KST
 import seminar_survey
+import survey_detail
 
 
 # ---------------------------------------------------------------------------
@@ -43,8 +44,8 @@ def test_read_detail_verdict_discards_other_pages(monkeypatch):
     page = MagicMock()
     page.url = "https://m.doctorville.co.kr/cme/vod"
     monkeypatch.setattr(seminar_survey.common, "goto_with_retry", lambda *a, **k: None)
-    monkeypatch.setattr(seminar_survey, "read_detail_buttons", lambda p: (["응답완료", "목록"], []))
-    monkeypatch.setattr(seminar_survey, "body_text", lambda p: "")
+    monkeypatch.setattr(survey_detail, "read_detail_buttons", lambda p: (["응답완료", "목록"], []))
+    monkeypatch.setattr(survey_detail, "body_text", lambda p: "")
 
     verdict, buttons, err = seminar_survey.read_detail_verdict(page, 5696, mobile=True)
 

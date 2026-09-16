@@ -2,6 +2,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 import seminar_survey
+import survey_detail
 from notify import severity_of
 
 
@@ -334,8 +335,8 @@ def test_read_detail_buttons_survives_evaluate_failure():
 
 def _patch_detail_read(monkeypatch, visible, hidden):
     monkeypatch.setattr(seminar_survey.common, "goto_with_retry", lambda *a, **k: None)
-    monkeypatch.setattr(seminar_survey, "read_detail_buttons", lambda page: (visible, hidden))
-    monkeypatch.setattr(seminar_survey, "body_text", lambda page: "")
+    monkeypatch.setattr(survey_detail, "read_detail_buttons", lambda page: (visible, hidden))
+    monkeypatch.setattr(survey_detail, "body_text", lambda page: "")
 
 
 def test_confirm_survey_done_judges_by_visible_buttons_only(monkeypatch):
@@ -369,6 +370,8 @@ def test_finalize_after_submit_keeps_hidden_buttons_for_diagnosis(monkeypatch):
         seminar_survey, "confirm_survey_done",
         lambda page, sid, retries=0: ("unknown", ["목록"]),
     )
+    # finalize_after_submit은 seminar_survey에 남아 있으므로 그 모듈의 이름을 patch한다
+    # (같은 함수라도 호출부가 survey_detail이면 survey_detail을 patch해야 걸린다).
     monkeypatch.setattr(seminar_survey, "read_detail_buttons", lambda page: (["목록"], ["숨은버튼"]))
     monkeypatch.setattr(seminar_survey.common, "save_screenshot", lambda page, name: "shot.png")
     out = seminar_survey.finalize_after_submit(MagicMock(), 5633, 1)
@@ -415,9 +418,9 @@ def _patch_detail_transport(monkeypatch):
         lambda page, url, **kw: page.goto(url),
     )
     monkeypatch.setattr(
-        seminar_survey, "read_detail_buttons", lambda page: (page.buttons(), []),
+        survey_detail, "read_detail_buttons", lambda page: (page.buttons(), []),
     )
-    monkeypatch.setattr(seminar_survey, "body_text", lambda page: "")
+    monkeypatch.setattr(survey_detail, "body_text", lambda page: "")
 
 
 def test_confirm_survey_done_reads_the_mobile_detail_first(monkeypatch):
@@ -518,7 +521,7 @@ def test_mobile_detail_waits_for_the_marker_to_render(monkeypatch):
             return ["설문 참여 완료", "세미나 종료"], []
         return ["뒤로 가기"], []
 
-    monkeypatch.setattr(seminar_survey, "read_detail_buttons", late_buttons)
+    monkeypatch.setattr(survey_detail, "read_detail_buttons", late_buttons)
 
     assert seminar_survey.confirm_survey_done(page, 5602)[0] == "done"
 
