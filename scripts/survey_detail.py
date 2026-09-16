@@ -72,6 +72,14 @@ def detect_survey_marker(texts, allow_done: bool = True) -> str:
     - ``not_done`` — '세미나 종료'만 있다. 입장을 못 했거나 제한 시간 내에
                      답을 못 낸 경우로, 설문에 참여하지 못한 상태다(실측 화면).
     - ``unknown``  — 둘 다 없다. 방송 전·중이거나 마크업이 바뀐 것.
+
+    두 문구는 상호 배타가 아니다 — 참여 완료 화면에는 '설문 참여 완료'와
+    '세미나 종료'가 나란히 뜬다. 그래서 완료 표시를 먼저 본다.
+
+    `allow_done=False`는 완료 판정을 쓰면 안 되는 근거(페이지 본문 전체 등)에
+    쓴다. 본문에는 다른 세미나의 '응답완료'나 안내 문구가 섞여 들어오는데,
+    거짓 `done`은 상태 파일에 done으로 굳어 다시 시도조차 안 되므로 거짓
+    `not_done`(재시도로 회복된다)보다 훨씬 비싸다.
     """
     if allow_done and matched_done_marker(texts):
         return "done"
@@ -82,7 +90,11 @@ def detect_survey_marker(texts, allow_done: bool = True) -> str:
 
 
 def matched_done_marker(texts) -> str:
-    """완료 표시 중 실제로 걸린 문구. 없으면 빈 문자열."""
+    """완료 표시 중 실제로 걸린 문구. 없으면 빈 문자열.
+
+    `verified_by`에 무엇을 보고 성공으로 판정했는지 그대로 싣기 위해 따로 둔다 —
+    도메인마다 문구가 달라서 '설문 참여 완료'로 뭉뚱그리면 증거가 사실과 어긋난다.
+    """
     joined = " ".join(strip_spaces(t) for t in (texts or []) if t)
     for marker in SURVEY_DONE_MARKERS:
         if strip_spaces(marker) in joined:
@@ -100,7 +112,17 @@ def body_text(page) -> str:
 
 
 def detail_url_matches(url: str, seminar_id) -> bool:
-    """상세 조회가 그 세미나 페이지에 실제로 도달했는지 URL로 가른다."""
+    """상세 조회가 **그 세미나 페이지**에 실제로 도달했는지 URL로 가른다.
+
+    2026-09-11 실측: 아직 끝나지 않은 세미나(5696 카보메틱스, 19:00~22:10)를
+    21:05에 조회했는데 `already_done`이 나왔다. 같은 런에서 다른 계정은
+    `unverified`였다 — 같은 페이지라면 나올 수 없는 차이다. m 상세
+    (`/cme/vod/{id}`)가 아직 없는 회차라 목록으로 떨어지고, 그 목록에 들어 있던
+    **다른 세미나의 '응답완료'**가 걸린 것으로 본다(목록 내용이 계정마다 다르니
+    계정별로 판정이 갈린 것도 설명된다). 세미나 id가 없는 주소의 판정은 버린다.
+
+    URL을 못 읽으면(테스트 mock 등) 판정 근거로 쓰지 않고 통과시킨다.
+    """
     url = str(url or "")
     if not url.lower().startswith("http"):
         return True
@@ -115,10 +137,18 @@ def detail_url_matches(url: str, seminar_id) -> bool:
 
 
 def read_detail_buttons(page) -> tuple[list[str], list[str]]:
-    """세미나 상세의 버튼 텍스트를 (보이는 것, 숨은 것)으로 갈라 돌려준다."""
+    """세미나 상세의 버튼 텍스트를 (보이는 것, 숨은 것)으로 갈라 돌려준다.
+
+    상세 페이지에는 안 보이는 팝업·템플릿 버튼이 잔뜩 들어 있다(실측: 로그아웃,
+    '동의합니다.', '세미나 제안 제출' …). 그 안에 '설문하기'와 '응답완료'가 같이
+    있어서 전부 뭉쳐 보면 상태를 가릴 수 없다. 그래서 판정은 보이는 것만 쓴다.
+
+    읽기에 실패하면 두 목록 모두 빈 목록이다 — 여기서 죽으면 설문 전체가 죽는다.
+    """
     seen, visible, hidden = set(), [], []
     try:
         for entry in page.evaluate(DETAIL_BUTTON_JS) or []:
+            # 예전 형식(문자열 목록)도 받아 준다 — 판정 불가로 버리는 것보다 낫다.
             if isinstance(entry, dict):
                 t, is_visible = normalize(entry.get("t")), bool(entry.get("v"))
             else:
@@ -168,7 +198,12 @@ def seminar_running(texts) -> bool:
 
 
 def usable_probes() -> list:
-    """판정 근거로 써도 되는 상세 조회 기록만."""
+    """판정 근거로 써도 되는 상세 조회 기록만.
+
+    `read_detail_verdict`가 URL 불일치·로그아웃 등으로 **이미 버린** 조회도
+    진단용으로 `LAST_DETAIL_PROBE`에 남는다. 버린 기록을 진행 중 판정에 쓰면
+    남의 페이지가 "아직 안 끝났다"가 된다 — 2026-09-15 세미나 5671·5681.
+    """
     return [
         rec for rec in LAST_DETAIL_PROBE.values()
         if isinstance(rec, dict) and rec.get("usable")
@@ -176,7 +211,11 @@ def usable_probes() -> list:
 
 
 def probe_saw_running_seminar() -> bool:
-    """마지막 상세 조회에서 '아직 안 끝났다'를 관측했는가."""
+    """마지막 상세 조회에서 "아직 안 끝났다"를 관측했는가.
+
+    쓸 수 있는 조회에서 방송 전·중 표식을 봤을 때만 참이다. 같은 조회에서
+    '세미나 종료'를 봤으면 종료가 이긴다 — 설문은 세미나가 끝나야 열린다.
+    """
     probes = usable_probes()
     if any(rec.get("ended") for rec in probes):
         return False
@@ -241,6 +280,7 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
     visible, hidden = _current_read_detail_buttons(page)
     body = _current_body_text(page)
     if mobile:
+        # 버튼이 아직 안 그려졌을 수 있다. 표식이 잡히거나 시간이 다 될 때까지만.
         waited = 0
         while (
             waited < MOBILE_RENDER_TIMEOUT_MS
@@ -251,6 +291,8 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
             visible, hidden = _current_read_detail_buttons(page)
             body = _current_body_text(page)
 
+    # 보이는 버튼이 하나도 없으면 읽기 자체가 실패한 것이다. 그때만 숨은 것까지
+    # 본다 — 평소에 숨은 템플릿을 섞으면 '응답완료'가 늘 걸려 오판이 된다.
     buttons = visible or hidden
 
     try:
@@ -258,6 +300,8 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
     except Exception:
         final_url = ""
     read_texts = visible or hidden
+    # `usable`은 아래 검증을 다 통과한 뒤에야 참이 된다. 버린 조회는 진단으로만
+    # 남고 진행 중·종료 판정에는 쓰이지 않는다.
     rec = {
         "url": final_url,
         "visible": visible,
@@ -268,17 +312,25 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
     }
     LAST_DETAIL_PROBE["m" if mobile else "www"] = rec
 
+    # 다른 세미나 페이지(목록·안내)로 떨어졌으면 여기서 읽은 것은 전부 남의
+    # 상태다. 버튼도 본문도 쓰지 않는다.
     if not detail_url_matches(final_url, seminar_id):
         host = "m" if mobile else "www"
         return "unknown", [], f"{host} 상세: 세미나 {seminar_id} 페이지가 아님({final_url})"
 
     verdict = detect_survey_marker(buttons)
     if verdict == "unknown":
+        # 버튼 셀렉터가 안 맞을 수도 있으니 본문 전체로 한 번 더 본다. 단
+        # 본문에는 다른 세미나의 완료 표시와 안내 문구가 섞이므로 여기서
+        # `done`은 만들지 않는다 — 놓친 완료는 다음 런이 회복하지만, 거짓
+        # 완료는 상태에 굳어 영원히 재시도되지 않는다.
         verdict = detect_survey_marker([body], allow_done=False)
 
     if mobile:
         if not is_mobile_session(page, buttons + [body]):
             return "unknown", [], "m 상세: www로 리다이렉트됐거나 안내 페이지"
+        # 완료 표시는 그대로 믿는다. 반대로 '미참여'는 로그아웃 화면에서도 똑같이
+        # 보이므로(로그인 증거가 없으면 '설문하기'만 뜬다) 채택하지 않는다.
         if verdict == "not_done" and not has_login_evidence(buttons + [body]):
             return "unknown", buttons, "m 상세: 로그인 증거 없이 미참여로 보임 — 판정 보류"
     rec["usable"] = True
@@ -286,7 +338,21 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
 
 
 def confirm_survey_done(page, seminar_id, retries: int = 0) -> tuple[str, list[str]]:
-    """세미나 상세에 재접속해 완료 표시로 설문 완료 여부를 판정한다."""
+    """세미나 상세에 재접속해 완료 표시로 설문 완료 여부를 판정한다.
+
+    **모바일(m) 상세를 먼저 보고, 판정이 안 서면 www로 폴백한다**(2026-08-31).
+    m은 사용자가 눈으로 확인하는 화면 그대로 '설문 참여 완료'/'세미나 종료'가
+    떠서 판정도 검증도 쉽다. m이 로그아웃 상태로 열리거나 www로 튕기면 그
+    판정은 통째로 버린다 — 로그아웃 화면의 '설문하기'를 미참여로 읽으면
+    실제로 마친 설문을 놓친다.
+
+    반환: (판정, 상세에서 읽은 버튼 텍스트들). 판정은 done / not_done / unknown.
+    버튼 텍스트를 함께 돌려주는 이유는, 사이트가 문구를 바꿨을 때 결과 JSON만
+    보고도 무엇이 있었는지 알 수 있어야 하기 때문이다.
+
+    retries는 판정이 done이 아닐 때 다시 열어 보는 횟수다. 제출 직후에는 표시가
+    아직 안 바뀌었을 수 있어 1회를 준다.
+    """
     errors: list[str] = []
     buttons: list[str] = []
     verdict = "unknown"
@@ -295,12 +361,15 @@ def confirm_survey_done(page, seminar_id, retries: int = 0) -> tuple[str, list[s
         if attempt:
             page.wait_for_timeout(DETAIL_RECHECK_WAIT_MS)
 
+        # ① 모바일 상세 — 문구가 사람이 보는 화면과 같아 우선한다.
         verdict, buttons, err = read_detail_verdict(page, seminar_id, mobile=True)
         if err:
             errors.append(err)
         if verdict == "done":
             return verdict, buttons
 
+        # ② www 상세 — 모바일이 판정 불가일 때만. 여기서 not_done을 덮어쓰지
+        #    않도록, 모바일이 낸 not_done은 www가 done일 때만 뒤집힌다.
         m_verdict, m_buttons = verdict, buttons
         verdict, buttons, err = read_detail_verdict(page, seminar_id, mobile=False)
         if err:
@@ -329,6 +398,7 @@ def finalize_after_submit(page, seminar_id, pages_done: int, title: str = "") ->
 
     out["status"] = "unverified"
     out["detail_buttons"] = buttons
+    # 사이트가 또 다른 문구를 쓰는지 다음 런에서 바로 보이도록 도메인별 원본을 남긴다.
     if LAST_DETAIL_PROBE:
         out["detail_probe"] = copy_probe()
     hidden = read_detail_buttons(page)[1]

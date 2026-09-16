@@ -134,12 +134,25 @@ def unopened_status(item: dict, now_dt: datetime = None, running: bool = False) 
     - 창이 아직 안 열렸으면 `not_ready`, 마감 후면 `closed` — 둘 다 정상이므로 quiet.
     - **창이 열려 있는데도 못 열었으면 `unverified`**(alert). 성공도 실패도 확인
       못 한 상태다.
-    - `running=True`는 상세에서 "아직 안 끝났다"를 본 경우: quiet `not_ready`.
-      단 공지 종료 후 SURVEY_RUNNING_GRACE가 지났으면 관측 오류로 판단하여 `unverified`.
+
+    2026-09-09 세미나 5627: 같은 런에서 bjh7790은 success, wonju만 `not_ready`로
+    떨어졌다. 창은 열려 있었으니 "아직 안 열림"이 아니라 그냥 못 연 것이었는데,
+    `not_ready`가 quiet이라 텔레그램에 뜨지 않았다. 손으로 재시도해서 붙였을 뿐,
+    안 봤으면 창이 닫힐 때까지 한 계정만 누락된 채로 끝났다. 창이 열린 동안의
+    실패는 조용히 넘기지 않는다.
+
+    `running=True`는 상세에서 "아직 안 끝났다"를 본 경우다. 설문은 세미나가
+    끝나야 열리므로 이때 못 여는 것은 실패가 아니다 — quiet `not_ready`.
+    **단 공지된 종료가 `SURVEY_RUNNING_GRACE`만큼 지났으면 그 관측을 믿지 않는다.**
+    2026-09-15 세미나 5671(13:00~14:00)을 14:39에 '진행 중'으로 읽고 조용히
+    넘겼다. 공지는 양쪽으로 틀리지만 40분씩 틀리지는 않는다 — 관측 쪽이 틀렸다.
     """
     st = evaluate_survey_cutoff(item, now_dt)
     if st in ("not_ready", "closed"):
         return st
     if running and not scheduled_end_passed(item, now_dt):
+        # 세미나가 아직 안 끝났다 — 설문은 원래 이때 안 열린다. 정상이므로 quiet.
         return "not_ready"
+    # 공지된 종료가 한참 지났는데도 '진행 중'으로 보인다면 관측 쪽이 틀렸다고
+    # 본다. 13:00~14:00 세미나가 14:39에 진행 중일 수는 없다(2026-09-15 5671).
     return "unverified"

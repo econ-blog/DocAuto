@@ -12,8 +12,11 @@ import common
 
 
 def upgrade_to_v2(state: dict) -> dict:
-    """Upgrade v1 state structure to v2 in-place:
-    - entered int IDs are converted to dicts {"id": int, "title": None, "start": None, "entered_at": None}.
+    """Upgrades state dict from schema v1 to schema v2 in-place and returns it.
+
+    In v2:
+    - version is set to 2.
+    - entered list items are upgraded from int N to {"id": N, "title": None, "start": None, "entered_at": None}.
     - survey_done list is replaced by survey dict {"N": "done"}.
     """
     if not isinstance(state, dict):
