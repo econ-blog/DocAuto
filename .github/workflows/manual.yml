@@ -15,6 +15,7 @@ on:
           - "세미나 신청"
           - "세미나 입장"
           - "세미나 설문"
+          - "세미나 목록 정찰"
       stay_seconds:
         description: "세미나 팝업 체류 시간(초) — '세미나 입장'에만 적용"
         type: string
@@ -120,8 +121,14 @@ jobs:
             --state-file scripts/state/seminar_entered.json \
             --headed
 
+      # 정찰은 부작용이 없다(클릭·제출 없음). 산출물은 개인정보가 섞일 수 있어
+      # 커밋하지 않고 artifact로만 남긴다 — 요약만 잡 로그로 나온다.
+      - name: 세미나 목록 정찰 (R5)
+        if: inputs.task == '세미나 목록 정찰'
+        run: xvfb-run -a python3 scripts/recon.py --item R5 --account bjh7790 --headed
+
       - name: 세미나 결과 표 전송
-        if: always() && inputs.send_table && inputs.task != '닥터빌 퀴즈'
+        if: always() && inputs.send_table && inputs.task != '닥터빌 퀴즈' && inputs.task != '세미나 목록 정찰'
         continue-on-error: true
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
