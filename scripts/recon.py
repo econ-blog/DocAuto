@@ -343,9 +343,56 @@ LIST_DOM_JS = r"""
     if (dateNodes.length >= 40) break;
   }
 
+  // 앵커와 날짜 헤더(div.seminar_day)의 실제 관계.
+  // 1차 R5(2026-09-16)는 조상 6단 x 앞형제 3개만 봐서 관계를 못 잡았다.
+  // 하루치 세미나가 여러 건이면 헤더는 3개보다 훨씬 앞 형제다 — 무제한으로 훑는다.
+  const dayLink = anchors.slice(0, 10).map((a, i) => {
+    const ancestorHeader = a.closest('.seminar_day');
+    let node = a, hops = 0, found = null, foundFrom = null;
+    // 앵커 자신 → 조상 순으로 올라가며 각 단계의 앞 형제를 끝까지 훑는다.
+    outer: for (let d = 0; d < 8 && node && node.tagName !== 'BODY'; d++) {
+      let sib = node.previousElementSibling;
+      while (sib && hops < 300) {
+        hops++;
+        const hit = sib.matches && sib.matches('.seminar_day') ? sib : (sib.querySelector ? sib.querySelector('.seminar_day') : null);
+        if (hit) { found = hit; foundFrom = 'depth' + d + ' 앞형제 ' + hops + '번째'; break outer; }
+        sib = sib.previousElementSibling;
+      }
+      node = node.parentElement;
+    }
+    const hdr = ancestorHeader || found;
+    return {
+      index: i,
+      seminarId: (() => { try { return new URL(a.href).searchParams.get('seminarId'); } catch (e) { return null; } })(),
+      viaAncestor: !!ancestorHeader,
+      via: ancestorHeader ? 'closest(.seminar_day)' : foundFrom,
+      headerSel: desc(hdr),
+      headerText: flat(hdr && hdr.innerText, 40),
+      headerParent: desc(hdr && hdr.parentElement)
+    };
+  });
+
+  // 첫 날짜 헤더 주변 구조 — 그룹핑이 형제 나열인지 중첩인지 눈으로 확인한다.
+  const firstHeader = document.querySelector('.seminar_day');
+  const headerContext = firstHeader ? {
+    sel: desc(firstHeader),
+    parent: desc(firstHeader.parentElement),
+    parentHTML: flat(firstHeader.parentElement && firstHeader.parentElement.outerHTML, 1500),
+    nextSiblings: (() => {
+      const out = []; let sib = firstHeader.nextElementSibling;
+      for (let k = 0; k < 5 && sib; k++) {
+        out.push({ sel: desc(sib), anchors: sib.querySelectorAll ? sib.querySelectorAll('a.list_detail').length : 0, text: flat(sib.innerText, 50) });
+        sib = sib.nextElementSibling;
+      }
+      return out;
+    })()
+  } : null;
+
   return {
     url: location.href,
     anchorCount: anchors.length,
+    dayLink,
+    headerContext,
     anchorsWithApply: anchors.filter(a => !!a.querySelector('span.ico_apply')).length,
     anchorsWithDate: anchors.filter(a => DATE.test(flat(a.innerText, 200))).length,
     items,
@@ -379,6 +426,20 @@ def summarize_r5(data: dict) -> str:
         lines.append("(없음 — 페이지 어디에도 날짜 표기가 없다)")
     for n in nodes[:12]:
         lines.append(f"  {n['sel']}  (부모 {n['parent']})  = {n['text']}")
+
+    lines += ["", "-- 앵커 → 날짜 헤더 연결 --"]
+    for d in (data.get("dayLink") or [])[:10]:
+        lines.append(
+            f"  [{d['index']}] sid={d['seminarId']} via={d['via']} "
+            f"header={d['headerSel']} ({d['headerParent']}) = {d['headerText']!r}")
+
+    hc = data.get("headerContext")
+    if hc:
+        lines += ["", "-- 첫 날짜 헤더 주변 --",
+                  f"  {hc['sel']} (부모 {hc['parent']})"]
+        for n in hc.get("nextSiblings", []):
+            lines.append(f"    다음형제 {n['sel']} anchors={n['anchors']} = {n['text']}")
+        lines.append(f"  부모 HTML: {hc['parentHTML'][:600]}")
 
     lines += ["", "-- 앵커별 조상 체인에서 날짜가 걸린 지점 --"]
     for item in (data.get("items") or [])[:3]:
