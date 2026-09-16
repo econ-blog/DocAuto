@@ -116,7 +116,7 @@ ATTEND_JS = """
 
 def recon_r2(page) -> dict:
     """출석 페이지의 '오늘 출석됨' 표식 후보를 전수 덤프한다 (클릭하지 않음)."""
-    now = datetime.now(KST)
+    now = datetime.now(common.KST)
     today = {
         "iso": now.strftime("%Y-%m-%d"),
         "d": str(now.day),
