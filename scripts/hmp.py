@@ -73,18 +73,7 @@ def verify_comment_saved(page_content: str, nickname: str) -> bool:
 
 
 def load_credentials(path: Path, account: str) -> dict:
-    data = common.read_credentials(path)
-    if account not in data:
-        raise KeyError(f"credentials.json에 '{account}' 계정이 없습니다.")
-    if "hmp" not in data[account]:
-        raise KeyError(f"credentials.json의 '{account}' 계정에 hmp 항목이 없습니다.")
-    hmp = data[account]["hmp"]
-    if "password" not in hmp:
-        raise KeyError(f"credentials.json의 '{account}'.hmp 에 password가 있어야 합니다.")
-    # hmp 항목에 별도 id가 없으면 계정 키 자체를 로그인 id로 사용한다
-    # (keymedi와 동일 패턴 — 로그인 id가 이메일이 아니라 "bjh7790" 같은 plain id).
-    login_id = hmp.get("id", account)
-    return {"id": login_id, "password": hmp["password"]}
+    return common.load_credentials(path, account, "hmp")
 
 
 def _wait_for_dialogs(page, dialogs_seen: list, expected: int = 2, timeout_ms: int = 8000,

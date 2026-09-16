@@ -107,6 +107,56 @@
         "wonju": "success"
       },
       "updated_at": "21:28"
+    },
+    "5746": {
+      "id": "5746",
+      "title": "O.M.T Web Symposium",
+      "start": "2026-09-21(월) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "16:41"
+    },
+    "5749": {
+      "id": "5749",
+      "title": "CNS WEEK",
+      "start": "2026-10-20(화) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "16:41"
+    },
+    "5748": {
+      "id": "5748",
+      "title": "CNS WEEK",
+      "start": "2026-10-21(수) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "16:41"
+    },
+    "5744": {
+      "id": "5744",
+      "title": "대장암의 조기 진단부터 치료까지",
+      "start": "2026-10-28(수) 12:30 ~ 13:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "16:42"
+    },
+    "5745": {
+      "id": "5745",
+      "title": "고혈압 WEEK",
+      "start": "2026-10-28(수) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "16:42"
     }
   }
 }

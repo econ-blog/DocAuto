@@ -8,9 +8,6 @@ on:
 permissions:
   contents: write
 
-env:
-  NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
-
 jobs:
   daily-routine:
     runs-on: ubuntu-latest
@@ -85,11 +82,22 @@ jobs:
         run: python3 scripts/telegram_inbox.py --confirm-offset "${{ steps.inbox.outputs.next_offset }}"
 
       - name: 일일 자동화 실행
+        id: daily_runner
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: xvfb-run -a python3 scripts/daily_runner.py --headed
+
+      - name: Claude 클라우드 루틴 트리거
+        if: always()
+        continue-on-error: true
+        env:
+          CLAUDE_ROUTINE_URL: ${{ secrets.CLAUDE_ROUTINE_URL }}
+          CLAUDE_ROUTINE_TOKEN: ${{ secrets.CLAUDE_ROUTINE_TOKEN }}
+        run: |
+          python3 scripts/claude_trigger.py \
+            --results scripts/logs/results-daily_runner.json \
+            --outcome tests=${{ steps.tests.outcome }} daily_runner=${{ steps.daily_runner.outcome }}
 
       # seminar_applied.json은 여기서 두 가지로 바뀐다: 세미나 신청 기록(task_seminar)과
       # 날짜 지난 항목 정리(daily_runner의 prune_applied_file).

@@ -13,7 +13,14 @@ import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
+try:
+    from playwright.sync_api import TimeoutError as PlaywrightTimeoutError, Error as PlaywrightError
+except ImportError:
+    class PlaywrightTimeoutError(Exception):
+        pass
+
+    class PlaywrightError(Exception):
+        pass
 
 KST = timezone(timedelta(hours=9))
 RESERVED_KEYS = {"telegram"}
@@ -60,6 +67,57 @@ def is_recon_enabled() -> bool:
 def read_credentials(path: Path | str) -> dict:
     """credentials.json 전체를 dict로 읽어 반환한다."""
     return read_json(path, default={})
+
+
+def load_credentials(path: Path | str, account: str, site: str) -> dict:
+    """사이트별 자격증명을 읽고 검증하여 반환한다.
+
+    사이트별 규칙:
+    - doctorville: account.email 및 account.doctorville.password 필수 -> {"email": email, "password": pw}
+    - keymedi: account.keymedi.id 및 account.keymedi.password 필수 -> {"id": id, "password": pw}
+    - hmp: account.hmp.password 필수. id 없으면 account 키 사용 -> {"id": id, "password": pw}
+    - intermd: account.intermd.password 필수. id 없으면 account 키 사용 -> {"id": id, "password": pw}
+    """
+    data = read_credentials(path)
+    if account not in data:
+        raise KeyError(f"credentials.json에 '{account}' 계정이 없습니다.")
+    acc_data = data[account]
+
+    if site == "doctorville":
+        if "doctorville" not in acc_data or "password" not in acc_data["doctorville"]:
+            raise KeyError(f"credentials.json의 '{account}.doctorville.password'가 없습니다.")
+        email = acc_data.get("email", "")
+        if not email:
+            raise KeyError(f"credentials.json의 '{account}.email'이 없습니다.")
+        return {"email": email, "password": acc_data["doctorville"]["password"]}
+
+    elif site == "keymedi":
+        if "keymedi" not in acc_data:
+            raise KeyError(f"credentials.json의 '{account}' 계정에 keymedi 항목이 없습니다.")
+        km = acc_data["keymedi"]
+        if "id" not in km or "password" not in km:
+            raise KeyError(
+                f"credentials.json의 '{account}'.keymedi 에 id/password가 모두 있어야 합니다."
+            )
+        return km
+
+    elif site == "hmp":
+        if "hmp" not in acc_data:
+            raise KeyError(f"credentials.json의 '{account}' 계정에 hmp 항목이 없습니다.")
+        hmp_block = acc_data["hmp"]
+        if "password" not in hmp_block:
+            raise KeyError(f"credentials.json의 '{account}'.hmp 에 password가 있어야 합니다.")
+        login_id = hmp_block.get("id", account)
+        return {"id": login_id, "password": hmp_block["password"]}
+
+    elif site == "intermd":
+        im = acc_data.get("intermd")
+        if not im or "password" not in im:
+            raise KeyError(f"credentials.json의 '{account}' 계정에 intermd.password가 없습니다.")
+        return {"id": im.get("id") or account, "password": im["password"]}
+
+    else:
+        raise ValueError(f"지원하지 않는 사이트입니다: {site}")
 
 
 def read_json(path: Path | str, default=None) -> dict | list:
@@ -140,7 +198,21 @@ def parse_dd_date(date_str: str | None) -> tuple[datetime | None, datetime | Non
         return None, None
 
 
-ERROR_LOG_DIR = Path(os.environ.get("DOCAUTO_LOG_DIR") or (SCRIPT_DIR.parent / "logs"))
+DEFAULT_ERROR_LOG_DIR = SCRIPT_DIR.parent / "logs"
+ERROR_LOG_DIR = DEFAULT_ERROR_LOG_DIR
+
+
+def get_error_log_dir() -> Path:
+    """오류 로그 디렉토리를 반환한다.
+
+    테스트나 환경변수(DOCAUTO_LOG_DIR)로 격리된 경우 호출 시점에 동적으로 반영한다.
+    """
+    if ERROR_LOG_DIR != DEFAULT_ERROR_LOG_DIR:
+        return Path(ERROR_LOG_DIR)
+    env_dir = os.environ.get("DOCAUTO_LOG_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path(ERROR_LOG_DIR)
 
 
 def log_error(
@@ -188,7 +260,8 @@ def log_error(
             "gh_workflow": os.environ.get("GITHUB_WORKFLOW", ""),
             "extra": extra or {},
         }
-        path = ERROR_LOG_DIR / f"errors-{datetime.now(KST):%Y-%m}.jsonl"
+        target_dir = get_error_log_dir()
+        path = target_dir / f"errors-{datetime.now(KST):%Y-%m}.jsonl"
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")

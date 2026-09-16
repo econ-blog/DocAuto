@@ -11,12 +11,10 @@ daily 루틴(daily_runner.py)과 무관한 **수동/자동 루틴** 스크립트
     python3 seminar_live.py --account bjh7790        # 단일 계정만
     python3 seminar_live.py --stay-seconds 30        # 체류 시간 변경
     python3 seminar_live.py --headed                 # 브라우저 창 표시 (디버깅용)
-    python3 seminar_live.py --no-telegram            # 텔레그램 전송 생략
     python3 seminar_live.py --credentials PATH       # credentials.json 경로 직접 지정
     python3 seminar_live.py --state-file PATH        # 상태 저장 경로 지정
     python3 seminar_live.py --block {lunch,evening,manual,auto}
     python3 seminar_live.py --ignore-state           # 상태 무시 재입장
-    python3 seminar_live.py --always-notify          # 변화가 없어도 텔레그램 전송
 """
 
 import argparse
@@ -32,7 +30,6 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 import common
 from common import KST as kst, parse_dd_date
 import doctorville
-import notify
 import runlog
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -44,131 +41,14 @@ def save_screenshot(page, tag: str) -> str:
     return common.save_screenshot(page, f"seminar_live_{tag}")
 
 
-def upgrade_to_v2(state: dict) -> dict:
-    """Upgrades state dict from schema v1 to schema v2 in-place and returns it.
-
-    In v2:
-    - version is set to 2.
-    - entered list items are upgraded from int N to {"id": N, "title": None, "start": None, "entered_at": None}.
-    - survey_done list is replaced by survey dict {"N": "done"}.
-    """
-    if not isinstance(state, dict):
-        return {"version": 2, "accounts": {}}
-    if state.get("version") == 2:
-        return state
-    state["version"] = 2
-    accounts = state.setdefault("accounts", {})
-    if isinstance(accounts, dict):
-        for acc, acc_data in accounts.items():
-            if not isinstance(acc_data, dict):
-                continue
-            entered_raw = acc_data.get("entered", [])
-            new_entered = []
-            for item in entered_raw:
-                if isinstance(item, int):
-                    new_entered.append({"id": item, "title": None, "start": None, "entered_at": None})
-                elif isinstance(item, str) and item.isdigit():
-                    new_entered.append({"id": int(item), "title": None, "start": None, "entered_at": None})
-                elif isinstance(item, dict):
-                    entry = {
-                        "id": item.get("id"),
-                        "title": item.get("title"),
-                        "start": item.get("start"),
-                        "entered_at": item.get("entered_at"),
-                    }
-                    new_entered.append(entry)
-                else:
-                    new_entered.append(item)
-            acc_data["entered"] = new_entered
-
-            survey_done = acc_data.pop("survey_done", [])
-            survey_dict = acc_data.setdefault("survey", {})
-            if isinstance(survey_done, list):
-                for sid in survey_done:
-                    survey_dict[str(sid)] = "done"
-    return state
-
-
-def _default_account_state() -> dict:
-    return {"entered": [], "blocks": {"lunch": [], "evening": [], "manual": []}, "survey": {}}
-
-
-def merge_state(state: dict, today_str: str, accounts: list[str] = None) -> dict:
-    if accounts is None:
-        accounts = ["bjh7790", "wonju"]
-    if not isinstance(state, dict):
-        state = {}
-    state = upgrade_to_v2(state)
-    if state.get("date") != today_str:
-        return {
-            "version": 2,
-            "date": today_str,
-            "accounts": {acc: _default_account_state() for acc in accounts},
-        }
-    state["version"] = 2
-    acc_map = state.setdefault("accounts", {})
-    for acc in accounts:
-        acc_data = acc_map.setdefault(acc, _default_account_state())
-        acc_data.setdefault("entered", [])
-        acc_data.setdefault("blocks", {"lunch": [], "evening": [], "manual": []})
-        acc_data.setdefault("survey", {})
-    return state
-
-
-def load_state(path: Path | str, today_str: str = None) -> dict:
-    if today_str is None:
-        today_str = datetime.now(common.KST).strftime("%Y-%m-%d")
-    data = common.read_json(path, default={})
-    if isinstance(data, dict) and data:
-        data = upgrade_to_v2(data)
-    return merge_state(data, today_str)
-
-
-def save_state(state: dict, path: Path | str) -> None:
-    common.write_json_atomic(path, state)
-
-
-def update_entered_state(
-    state: dict,
-    account: str,
-    seminar_id: int | str,
-    block_name: str,
-    path: Path | str = None,
-    title: str = None,
-    start: str = None,
-    entered_at: str = None,
-) -> None:
-    state = upgrade_to_v2(state)
-    sid = int(seminar_id)
-    acc_map = state.setdefault("accounts", {})
-    acc_data = acc_map.setdefault(
-        account, {"entered": [], "blocks": {"lunch": [], "evening": [], "manual": []}, "survey": {}}
-    )
-    entered_list = acc_data.setdefault("entered", [])
-    found = False
-    for item in entered_list:
-        if isinstance(item, dict) and item.get("id") == sid:
-            found = True
-            if title is not None:
-                item["title"] = title
-            if start is not None:
-                item["start"] = start
-            if entered_at is not None:
-                item["entered_at"] = entered_at
-            break
-    if not found:
-        entered_list.append({
-            "id": sid,
-            "title": title,
-            "start": start,
-            "entered_at": entered_at,
-        })
-    blocks_map = acc_data.setdefault("blocks", {})
-    block_list = blocks_map.setdefault(block_name, [])
-    if sid not in block_list:
-        block_list.append(sid)
-    if path is not None:
-        save_state(state, path)
+from seminar_state import (
+    upgrade_to_v2,
+    _default_account_state,
+    merge_state,
+    load_state,
+    save_state,
+    update_entered_state,
+)
 
 
 def determine_block_name(block_arg: str) -> str:
@@ -354,13 +234,7 @@ def _state_start(state: dict, account: str, seminar_id: int) -> str:
 
 def _log_seminar(seminar_id, status: str, account: str, title: str = "", start: str = "") -> None:
     """세미나 표의 '입장' 칸을 채운다. 로깅 실패가 입장 자체를 죽이면 안 된다."""
-    try:
-        runlog.update_seminar(
-            seminar_id, phase="live", status=status, account=account or "_",
-            title=title or "", start=start or "",
-        )
-    except Exception as e:
-        print(f"[seminar_live] 세미나 로그 기록 실패({seminar_id}): {e}", file=sys.stderr)
+    runlog.log_seminar(seminar_id, phase="live", status=status, account=account, title=title, start=start, module_tag="seminar_live")
 
 
 def task_live_seminar(
@@ -525,49 +399,6 @@ def run_account(
 
 
 # ---------------------------------------------------------------------------
-# 텔레그램 요약 (notify의 emoji/축약 헬퍼 재사용)
-# ---------------------------------------------------------------------------
-
-ACCOUNT_LABELS = {"bjh7790": "승진(bjh7790)", "wonju": "원주(wonju)"}
-BLOCK_LABELS = {"lunch": "점심", "evening": "저녁", "manual": "수동"}
-
-
-def format_telegram_message(
-    results: dict, date_str: str, stay_seconds: int, block_name: str = ""
-) -> str:
-    header = f"🎥 *라이브 세미나 입장 결과* ({date_str})"
-    if block_name:
-        b_label = BLOCK_LABELS.get(block_name, block_name)
-        header += f" [{b_label}]"
-    lines = [header, ""]
-
-    for acc, r in results.items():
-        label = ACCOUNT_LABELS.get(acc, acc)
-        ls = r.get("live_seminar", {})
-        e = notify.format_status_emoji(ls.get("status", "failed"))
-        entered = ls.get("entered", [])
-        already_entered = ls.get("already_entered", [])
-        skipped = ls.get("skipped", [])
-        failed = ls.get("failed", [])
-
-        lines.append(f"{label} {e}")
-        lines.append(
-            f"  입장 {len(entered)}건(각 {stay_seconds}초) / 이미입장 {len(already_entered)}건 / 스킵 {len(skipped)}건 / 실패 {len(failed)}건"
-        )
-        if entered:
-            lines.append(f"  └ 신규 입장 seminarId: {entered}")
-        if already_entered:
-            lines.append(f"  └ 이미 입장 seminarId: {already_entered}")
-        for f in failed[:3]:
-            lines.append(f"  └ 실패 {f['seminarId']}: {notify.shorten(f.get('message', ''))}")
-        if r.get("error"):
-            lines.append(f"  └ 스크립트 예외: {notify.shorten(r['error'])}")
-        lines.append("")
-
-    return "\n".join(lines).rstrip()
-
-
-# ---------------------------------------------------------------------------
 # 메인
 # ---------------------------------------------------------------------------
 
@@ -600,20 +431,12 @@ def main():
         help="상태 무시하고 전체 세미나 재입장"
     )
     parser.add_argument(
-        "--always-notify", action="store_true",
-        help="변화가 없어도 텔레그램 전송"
-    )
-    parser.add_argument(
         "--dry-run", action="store_true",
         help="라이브 세미나 목록만 확인하고 입장은 클릭하지 않음"
     )
     parser.add_argument(
         "--headed", action="store_true",
         help="브라우저 창을 띄워서 실행 (기본: headless)"
-    )
-    parser.add_argument(
-        "--no-telegram", action="store_true",
-        help="텔레그램 전송 건너뜀"
     )
     args = parser.parse_args()
 
@@ -651,32 +474,17 @@ def main():
     print("\n=== 최종 결과 ===")
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
+    try:
+        common.write_json_atomic(SCRIPT_DIR / "logs" / "results-seminar_live.json", results)
+    except Exception as e:
+        print(f"[seminar_live] 결과 파일 저장 실패: {e}", file=sys.stderr)
+
     failed = any(
         r.get("live_seminar", {}).get("status") in {"failed", "unverified", "blocked"} or r.get("error")
         for r in results.values()
     )
 
-    if not args.no_telegram:
-        notify_level = get_notify_level(args.always_notify)
-        if notify.should_send(results, notify_level):
-            date_str = datetime.now(kst).strftime("%Y-%m-%d %H:%M")
-            msg = format_telegram_message(results, date_str, args.stay_seconds, block_name=block_name)
-            print("\n[telegram] 전송 중...")
-            ok = notify.send_telegram(msg, credentials_path=str(credentials_path))
-            print(f"[telegram] {'성공' if ok else '실패'}")
-        else:
-            print("\n[telegram] 전송 조건 미충족. 건너뜀.")
-    else:
-        print("\n[telegram] 건너뜀 (--no-telegram)")
-
     sys.exit(1 if failed else 0)
-
-
-def get_notify_level(always_notify: bool = False) -> str:
-    if always_notify:
-        return "all"
-    return notify.resolve_level(os.environ.get("NOTIFY_LEVEL"))
-
 
 
 if __name__ == "__main__":

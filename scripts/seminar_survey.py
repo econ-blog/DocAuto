@@ -11,7 +11,6 @@ seminar_live.py로 입장에 성공한 세미나는 방송 팝업에서 설문�
     python3 seminar_survey.py --account bjh7790
     python3 seminar_survey.py --seminar-id 5473   # 상태 무시하고 특정 세미나만
     python3 seminar_survey.py --headed
-    python3 seminar_survey.py --no-telegram
 
 문항 3분류 (classify_question):
     - quiz    — 화면 텍스트가 `[퀴즈]`로 시작하는 선택형. 정답이 존재하므로
@@ -121,14 +120,94 @@ from common import KST as kst, parse_dd_date, write_json_atomic
 import doctorville
 import seminar_live
 from seminar_live import upgrade_to_v2
-import notify
 import runlog
+import survey_window
+from survey_window import (
+    SURVEY_CLOSE_GRACE,
+    SURVEY_PROBE_LEAD,
+    SURVEY_STALE_AFTER,
+    SURVEY_RUNNING_GRACE,
+    parse_kst,
+    observed_end,
+    scheduled_bounds,
+    get_survey_window,
+    get_survey_cutoff,
+    evaluate_survey_cutoff,
+    scheduled_end_passed,
+    unopened_status,
+)
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_TIMEOUT_MS = doctorville.DEFAULT_TIMEOUT_MS
-DEFAULT_QUIZ_BANK_FILE = SCRIPT_DIR.parent / "survey_quiz_answers.json"
-DEFAULT_TEXT_BANK_FILE = SCRIPT_DIR.parent / "survey_text_answers.json"
-DEFAULT_LEGACY_BANK_FILE = SCRIPT_DIR.parent / "survey_answers_legacy.json"
+import survey_bank
+from survey_bank import (
+    DEFAULT_QUIZ_BANK_FILE,
+    DEFAULT_TEXT_BANK_FILE,
+    DEFAULT_LEGACY_BANK_FILE,
+    PLACEHOLDER_MARKER,
+    BLANK_ANSWER_MARKER,
+    BANK_LABELS,
+    GENERAL_OPTION_INDEX,
+    normalize,
+    strip_spaces,
+    is_quiz_badged,
+    normalize_question,
+    canonical_question,
+    build_canonical_index,
+    _coerce_answer,
+    load_bank,
+    lookup_answer,
+    load_banks,
+    bank_has_key,
+    classify_question,
+    lookup_in_banks,
+    match_option,
+    promotable_option_texts,
+    _evict_legacy_keys,
+    apply_promotions,
+    resolve_page,
+    _resolve_input,
+    _resolve_choice,
+    placeholder_value,
+    add_missing_to_bank,
+    add_missing_to_banks,
+    format_bank_counts,
+)
+import survey_detail
+from survey_detail import (
+    SURVEY_DONE_MARKER,
+    SEMINAR_END_MARKER,
+    SURVEY_DONE_MARKERS,
+    SURVEY_PENDING_MARKERS,
+    SEMINAR_RUNNING_MARKERS,
+    MOBILE_BASE,
+    MOBILE_DETAIL_URL,
+    MOBILE_FALLBACK_MARKERS,
+    MOBILE_UA,
+    MOBILE_LOGIN_MARKERS,
+    DETAIL_SETTLE_MS,
+    MOBILE_RENDER_TIMEOUT_MS,
+    MOBILE_POLL_MS,
+    DETAIL_RECHECK_WAIT_MS,
+    LAST_DETAIL_PROBE,
+    DETAIL_BUTTON_JS,
+    detect_survey_marker,
+    matched_done_marker,
+    body_text,
+    detail_url_matches,
+    read_detail_buttons,
+    seminar_ended,
+    seminar_running,
+    usable_probes,
+    probe_saw_running_seminar,
+    probe_saw_ended_seminar,
+    has_login_evidence,
+    is_mobile_session,
+    copy_probe,
+    read_detail_verdict,
+    confirm_survey_done,
+)
+
 DEFAULT_STATE_FILE = SCRIPT_DIR / "state" / "seminar_entered.json"
 BROADCAST_URL = "https://www.doctorville.co.kr/seminar/broadcastSeminarPopup?viewType=2&seminarId={sid}"
 MAX_PAGES = 10  # 무한 루프 방지 (실측 설문은 1~2페이지)
@@ -166,786 +245,16 @@ EMPTY_CONFIRM_POLLS = 6
 # 11번). 답을 넣은 뒤 다시 읽어 새로 열린 문항을 채우는 횟수 상한.
 REVEAL_ROUNDS = 3
 
-# 설문 완료의 양성 증거. 제출 직후 완료 화면이 아니라 **세미나 상세에 재접속했을
-# 때** 사이트가 보여주는 버튼으로 판정한다(2026-08-28 사용자 실측 화면):
-#   - 설문까지 마친 세미나  → '설문 참여 완료' + '세미나 종료' 두 버튼
-#   - 입장 못 했거나 제한 시간 내 미응답 → '세미나 종료' 한 버튼
-# 이 두 문구는 m(모바일) 기준이다. 자동화가 도는 www(데스크톱)는 문구가 달라
-# 아래 SURVEY_DONE_MARKERS / SURVEY_PENDING_MARKERS로 넓혔다(2026-08-31).
-# 완료 화면 문구 대조는 '제출'·'참여' 같은 흔한 단어에 걸려 오탐이 났고, 창이
-# 닫혀 버리면 아예 읽을 수도 없었다. 재접속 판정에는 두 약점이 다 없다.
-SURVEY_DONE_MARKER = "설문 참여 완료"
-SEMINAR_END_MARKER = "세미나 종료"
 
-# 같은 상세 페이지라도 도메인마다 버튼 문구가 다르다. m(모바일)은 '설문 참여 완료',
-# www(데스크톱)는 '응답완료'다 — 자동화가 도는 www에는 '설문 참여 완료'도
-# '세미나 종료'도 없어서, 실제로 제출을 마친 설문이 계속 unverified로 떨어졌다
-# (2026-08-31 세미나 5633, 두 계정 모두. 결과 JSON의 detail_buttons에
-# '응답완료'·'설문하기'가 찍혀 있었다).
-SURVEY_DONE_MARKERS = (
-    SURVEY_DONE_MARKER,   # m(모바일)
-    "응답완료",            # www(데스크톱) — 실측
-    "설문 응답 완료",
-    "설문 완료",
+from seminar_state import (
+    pending_seminar_ids,
+    get_entered_item,
+    mark_survey_status,
+    clear_survey_status,
+    get_survey_meta,
+    mark_survey_ended,
+    mark_survey_done,
 )
-# 설문에 아직 참여하지 않았다는 표시. '설문하기'는 아직 누를 수 있는 버튼이므로
-# 미참여다. 완료 표시와 같이 잡히면 완료가 이긴다(아래 detect_survey_marker).
-SURVEY_PENDING_MARKERS = (
-    SEMINAR_END_MARKER,
-    "설문하기",
-)
-
-# 방송 전·중이라는 **양성** 표식. 종전에는 "'세미나 종료'가 없다"는 부재로 진행
-# 중을 판정했는데, 로그아웃된 m 상세나 목록 페이지처럼 판정을 이미 버린 화면까지
-# 전부 '진행 중'이 됐다(2026-09-15 세미나 5671·5681 — 끝난 세미나의 팝업 실패가
-# quiet `not_ready`로 묻혔다). 부재가 아니라 표식으로 본다.
-SEMINAR_RUNNING_MARKERS = ("입장하기", "방송중", "라이브")
-# 공지된 종료가 이만큼 지나면 '진행 중' 관측을 믿지 않는다. 공지는 양쪽으로
-# 틀리지만(5639는 공지보다 1시간 넘게 갔다) 무한정 틀리지는 않는다.
-SURVEY_RUNNING_GRACE = timedelta(minutes=30)
-
-# 판정은 **모바일 상세를 먼저** 본다(2026-08-31 사용자 지시). www(데스크톱)는
-# 완료 표시가 '응답완료' 한 단어뿐이고 숨은 템플릿 버튼과 섞여 있어 사람이
-# 눈으로 확인하기도 어렵다. m(모바일)은 '설문 참여 완료'/'세미나 종료'가 그대로
-# 뜨는 화면이라 판정도 검증도 쉽다. 모바일에서 못 읽으면 www로 폴백한다.
-MOBILE_BASE = "https://m.doctorville.co.kr"
-# m에는 www와 같은 /seminar/seminarDetail 경로가 없다. 2026-08-31 실측(세미나
-# 5602)에서 그 주소는 '뒤로 가기 / 닥터빌로 이동하기'만 있는 안내 페이지로 떨어졌다.
-# 사용자가 실제로 보는 모바일 상세는 /cme/vod/{seminarId}다.
-MOBILE_DETAIL_URL = f"{MOBILE_BASE}/cme/vod"
-# m 상세를 못 열었을 때 뜨는 안내 페이지의 표식. 이게 보이면 판정 불가다.
-MOBILE_FALLBACK_MARKERS = ("닥터빌로 이동하기",)
-# m은 UA로 데스크톱을 가려내 www로 돌려보낸다. 헤더만 바꿔도 서버 판정에는 걸린다.
-MOBILE_UA = (
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 "
-    "(KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"
-)
-# 모바일 판정을 믿어도 되는지 가르는 표식. 세션 쿠키가 서브도메인으로 안 넘어가
-# 로그아웃 상태로 열리면 '설문하기'만 보여 **미참여로 오판**한다. 그래서
-# 로그인 증거가 없으면 모바일 판정은 통째로 버리고 www로 간다.
-MOBILE_LOGIN_MARKERS = ("로그아웃", "마이페이지")
-
-# 상세 페이지 로드 후 버튼 영역이 그려질 때까지의 여유.
-DETAIL_SETTLE_MS = 2000
-# m 상세는 뼈대만 먼저 그리고 버튼을 나중에 채운다. 2026-08-31 실측에서 같은
-# 세미나(5602)를 같은 시각에 열었는데 한 계정은 '설문 참여 완료'를 읽었고 다른
-# 계정은 '뒤로 가기' 하나만 잡혔다. 표식이 나올 때까지 짧게 더 기다린다.
-MOBILE_RENDER_TIMEOUT_MS = 8000
-MOBILE_POLL_MS = 500
-# 제출 직후에는 표시가 아직 안 바뀌었을 수 있어 한 번 더 열어 본다.
-DETAIL_RECHECK_WAIT_MS = 3000
-
-# 설문 창은 **공지된 일정이 아니라 실제 종료**를 따른다(2026-09-11 사용자 지시).
-# 공지가 양쪽으로 다 틀린다: 5639는 20:00 공지인데 21:00 넘어서도 방송 중이었고
-# (공지 마감에 걸려 한 계정이 조용히 `closed`), 5694는 22:00 공지인데 21:05에
-# 이미 설문이 열려 있었다. 그래서 창은 [실제 종료, 실제 종료 + 1시간]이다.
-SURVEY_CLOSE_GRACE = timedelta(hours=1)
-# 실제 종료는 관측해야 안다. 관측 전까지 요청을 아끼기 위한 사전 게이트 —
-# 공지 시작 30분 전까지는 아예 건드리지 않는다(종전 동작과 같은 요청량).
-SURVEY_PROBE_LEAD = timedelta(minutes=30)
-# 끝내 종료를 관측하지 못한 항목을 영원히 재시도하지 않기 위한 상한(공지 시작 기준).
-SURVEY_STALE_AFTER = timedelta(hours=12)
-
-
-# ---------------------------------------------------------------------------
-# 순수 함수 (테스트 대상)
-# ---------------------------------------------------------------------------
-
-def normalize(text: str) -> str:
-    return re.sub(r"\s+", " ", (text or "")).strip()
-
-
-def strip_spaces(text: str) -> str:
-    """공백을 전부 없앤 대조용 문자열. 사이트가 버튼 문구를 줄바꿈으로 쪼개도 걸린다."""
-    return re.sub(r"\s+", "", text or "")
-
-
-def detect_survey_marker(texts, allow_done: bool = True) -> str:
-    """세미나 상세에서 읽은 문자열들로 설문 참여 여부를 판정한다.
-
-    - ``done``     — '설문 참여 완료'가 있다. 설문을 실제로 마쳤다는 사이트의 표시.
-    - ``not_done`` — '세미나 종료'만 있다. 입장을 못 했거나 제한 시간 내에
-                     답을 못 낸 경우로, 설문에 참여하지 못한 상태다(실측 화면).
-    - ``unknown``  — 둘 다 없다. 방송 전·중이거나 마크업이 바뀐 것.
-
-    두 문구는 상호 배타가 아니다 — 참여 완료 화면에는 '설문 참여 완료'와
-    '세미나 종료'가 나란히 뜬다. 그래서 완료 표시를 먼저 본다.
-
-    `allow_done=False`는 완료 판정을 쓰면 안 되는 근거(페이지 본문 전체 등)에
-    쓴다. 본문에는 다른 세미나의 '응답완료'나 안내 문구가 섞여 들어오는데,
-    거짓 `done`은 상태 파일에 done으로 굳어 다시 시도조차 안 되므로 거짓
-    `not_done`(재시도로 회복된다)보다 훨씬 비싸다.
-    """
-    if allow_done and matched_done_marker(texts):
-        return "done"
-    joined = " ".join(strip_spaces(t) for t in texts if t)
-    if any(strip_spaces(m) in joined for m in SURVEY_PENDING_MARKERS):
-        return "not_done"
-    return "unknown"
-
-
-def matched_done_marker(texts) -> str:
-    """완료 표시 중 실제로 걸린 문구. 없으면 빈 문자열.
-
-    `verified_by`에 무엇을 보고 성공으로 판정했는지 그대로 싣기 위해 따로 둔다 —
-    도메인마다 문구가 달라서 '설문 참여 완료'로 뭉뚱그리면 증거가 사실과 어긋난다.
-    """
-    joined = " ".join(strip_spaces(t) for t in texts if t)
-    for marker in SURVEY_DONE_MARKERS:
-        if strip_spaces(marker) in joined:
-            return marker
-    return ""
-
-
-_QUIZ_BADGE_RE = re.compile(r"^\[\s*퀴즈\s*\]\s*")
-
-
-def is_quiz_badged(text: str) -> bool:
-    """화면 텍스트가 `[퀴즈]` 배지로 시작하는지."""
-    return bool(_QUIZ_BADGE_RE.match(normalize(text)))
-
-
-def normalize_question(text: str) -> str:
-    """문항 텍스트를 문제은행 키 형태로 정규화한다.
-
-    화면 텍스트에는 `[퀴즈]` 배지와 필수 표시 `*`가 붙는데, 같은 문항이 세미나에
-    따라 배지 유무만 다르게 나오는 경우가 있어 둘 다 제거하고 키로 삼는다.
-    """
-    t = _QUIZ_BADGE_RE.sub("", normalize(text))
-    return t.rstrip("*").strip()
-
-
-# 같은 문항이 세미나마다 아래 정도의 차이로 다르게 렌더된다(실측): 공백 유무
-# ("30 mg"/"30mg"), 대소문자("Dapagliflozin"/"dapagliflozin"), 따옴표 종류,
-# 필수·복수응답 안내 문구 유무. 이 차이만으로 문제은행이 중복 키로 불어나므로
-# 대조용 정규화 키를 따로 둔다.
-_ANNOTATION_PATTERNS = (
-    re.compile(r"\*?\(\s*(?:최소|최대)\s*\d+\s*개\s*선택\s*\)"),
-    re.compile(r"\(\s*(?:복수\s*(?:응답|선택)|중복)\s*(?:가능)?\s*\)"),
-)
-
-
-def canonical_question(text: str) -> str:
-    """대조 전용 키. 표기 흔들림(공백·대소문자·구두점·안내문구)을 제거한다."""
-    t = normalize_question(text)
-    for pat in _ANNOTATION_PATTERNS:
-        t = pat.sub("", t)
-    t = t.lower()
-    return re.sub(r"[^0-9a-z가-힣]", "", t)
-
-
-def build_canonical_index(bank: dict) -> dict:
-    """canonical 키 → 값. 서로 다른 값으로 충돌하는 키는 버린다(오답 방지)."""
-    index, conflicts = {}, set()
-    for k, v in bank.items():
-        ck = canonical_question(k)
-        if not ck:
-            continue
-        if ck in index and index[ck] != v:
-            conflicts.add(ck)
-        else:
-            index[ck] = v
-    for ck in conflicts:
-        index.pop(ck, None)
-    return index
-
-
-# 퀴즈 족보(doctorville)와 같은 문구를 쓴다. 정의는 common에 있다.
-PLACEHOLDER_MARKER = common.ANSWER_PLACEHOLDER_MARKER
-
-# 주관식을 **의도적으로 빈칸으로 제출**하겠다는 표식. 빈 문자열은 "채워 넣기
-# 대기 중"(미등록)과 구분되지 않으므로, 빈칸 제출은 별도 값으로만 지시한다.
-# 선택형에는 쓸 수 없다 — 고를 보기가 있어야 하므로 미등록으로 막는다.
-BLANK_ANSWER_MARKER = "(빈칸)"
-
-
-def _coerce_answer(value):
-    if isinstance(value, str):
-        return value.strip() or None
-    if isinstance(value, list):
-        items = [str(v).strip() for v in value if str(v).strip()]
-        if any(i == PLACEHOLDER_MARKER for i in items):
-            return None
-        return items or None
-    return None
-
-
-def load_bank(path: str | Path) -> dict:
-    return common.read_json(path, default={})
-
-
-def lookup_answer(bank: dict, question: str, index: dict = None):
-    """문제은행에서 문항의 답을 찾는다. 미등록이면 None.
-
-    ① 정규화 키 완전 일치 → ② canonical 키 일치(공백·대소문자·구두점·안내문구
-    무시) 순으로 대조한다. 유사도 기반 근사 매칭은 쓰지 않는다 — 이 문제은행에는
-    "1차 예방 당뇨병 환자에서…" / "1차 예방 중등도 위험군 환자에서…"처럼
-    difflib 유사도 0.92인 서로 다른 문항이 실제로 들어 있어, 근사 매칭은 오답을
-    제출한다.
-
-    빈 문자열·빈 리스트는 "채워 넣기 대기 중"이므로 미등록으로 취급한다.
-    """
-    answer = _coerce_answer(bank.get(normalize_question(question)))
-    if answer is not None:
-        return answer
-    if index is None:
-        index = build_canonical_index(bank)
-    return _coerce_answer(index.get(canonical_question(question)))
-
-
-# --- 문항 3분류 + 족보 묶음 -------------------------------------------------
-
-GENERAL_OPTION_INDEX = 1  # 0-based → 2번 보기
-
-
-def load_banks(
-    quiz_path: str | Path = DEFAULT_QUIZ_BANK_FILE,
-    text_path: str | Path = DEFAULT_TEXT_BANK_FILE,
-    legacy_path: str | Path = DEFAULT_LEGACY_BANK_FILE,
-) -> dict:
-    """quiz / text / legacy 족보를 한 번에 읽어 묶는다.
-
-    `paths`에는 **쓰기 가능한** 족보만 담는다. legacy는 읽기 전용이라 빠진다.
-    """
-    return {
-        "quiz": load_bank(quiz_path),
-        "text": load_bank(text_path),
-        "legacy": load_bank(legacy_path),
-        "paths": {"quiz": Path(quiz_path), "text": Path(text_path)},
-        "legacy_path": Path(legacy_path),
-    }
-
-
-def bank_has_key(bank: dict, question: str) -> bool:
-    """값의 유무와 무관하게 키 자체가 족보에 있는지(정규화·canonical 양쪽으로)."""
-    if normalize_question(question) in bank:
-        return True
-    ck = canonical_question(question)
-    return bool(ck) and ck in {canonical_question(k) for k in bank}
-
-
-def classify_question(q: dict, quiz_bank: dict = None) -> str:
-    """문항 종류를 'quiz' | 'text' | 'general'로 판정한다.
-
-    복합 문항(kind="mixed")에 대해서는 **선택 파트**의 종류를 돌려준다. 입력
-    파트는 언제나 text 족보를 쓰므로 따로 판정할 것이 없다.
-    """
-    if q.get("kind") == "input":
-        return "text"
-    if is_quiz_badged(q.get("question", "")):
-        return "quiz"
-    # 배지가 빠져 렌더되는 세미나가 있어, 이미 퀴즈로 등록된 문항은 배지 없이도
-    # 퀴즈로 취급한다. 그러지 않으면 정답 있는 문항에 "2번"을 제출하게 된다.
-    if quiz_bank and bank_has_key(quiz_bank, q.get("question", "")):
-        return "quiz"
-    return "general"
-
-
-def lookup_in_banks(banks: dict, question: str, kind: str, indexes: dict = None):
-    """종류별 족보 → legacy 폴백 순으로 답을 찾는다. (답, 출처) 또는 (None, None).
-
-    출처가 "legacy"면 호출자가 승격 대상으로 표시한다(promote).
-    """
-    if indexes is None:
-        indexes = {k: build_canonical_index(banks.get(k, {})) for k in ("quiz", "text", "legacy")}
-    answer = lookup_answer(banks.get(kind, {}), question, indexes.get(kind))
-    if answer is not None:
-        return answer, kind
-    answer = lookup_answer(banks.get("legacy", {}), question, indexes.get("legacy"))
-    return (answer, "legacy") if answer is not None else (None, None)
-
-
-def match_option(answer: str, options: list[str]) -> int | None:
-    """저장값에 해당하는 보기 인덱스. 판정 불가면 None.
-
-    저장값이 숫자만이면 **1-based 보기 번호**로 해석한다("2" = 두 번째 보기).
-    그 외에는 보기 텍스트에 부분 포함으로 유일 매칭될 때만 인정한다.
-
-    번호 방식은 위치 기반이라, 같은 문항이라도 세미나에 따라 보기 순서가 다르면
-    엉뚱한 보기를 고른다. 순서가 흔들릴 가능성이 있는 문항은 텍스트로 적어둘 것.
-    """
-    a = normalize(answer)
-    if not a:
-        return None
-    if a.isdigit():
-        idx = int(a) - 1
-        return idx if 0 <= idx < len(options) else None
-    norm = [normalize(o) for o in options]
-    # 표기 그대로 → canonical(공백·대소문자·구두점 무시) 순으로, 각 단계마다
-    # 완전 일치 → 부분 포함. 보기 텍스트를 답으로 적는 것이 기본 형식이라
-    # 하이픈 종류("–"/"-")나 괄호 앞뒤 공백 차이로 매칭이 깨지면 안 된다.
-    ca = canonical_question(a)
-    candidates = [(a, norm)]
-    if ca:
-        candidates.append((ca, [canonical_question(o) for o in options]))
-    for needle, hay in candidates:
-        exact = [i for i, o in enumerate(hay) if o == needle]
-        if len(exact) == 1:
-            return exact[0]
-        hits = [i for i, o in enumerate(hay) if needle and needle in o]
-        if len(hits) == 1:
-            return hits[0]
-    return None
-
-
-def promotable_option_texts(indices: list[int], options: list[str]):
-    """legacy 보기 번호를 승격용 보기 텍스트로 바꾼다. 왕복 검증 실패 시 None.
-
-    번호는 위치 기반이라 다른 세미나에서 보기 순서가 바뀌면 오답이 된다. 텍스트는
-    순서에 무관하므로 승격은 항상 개선이다 — 단 **그 텍스트로 다시 찾았을 때 같은
-    보기가 유일하게 나올 때만**이다. 유일하지 않으면(보기 텍스트가 서로 포함
-    관계이거나 중복이면) 승격하지 않고 legacy 값을 그대로 둔다.
-    """
-    texts = []
-    for idx in indices:
-        if not 0 <= idx < len(options):
-            return None
-        text = options[idx]
-        if not text or match_option(text, options) != idx:
-            return None
-        texts.append(text)
-    if not texts:
-        return None
-    return texts[0] if len(texts) == 1 else texts
-
-
-def _evict_legacy_keys(legacy: dict, questions: list[str]) -> dict:
-    """승격된 문항의 키를 legacy에서 지운 사본을 만든다(표기 변형 키까지 함께)."""
-    targets = {canonical_question(q) for q in questions}
-    targets.discard("")
-    return {k: v for k, v in legacy.items() if canonical_question(k) not in targets}
-
-
-def apply_promotions(banks: dict, plan: list[dict]) -> dict:
-    """plan의 승격 표시를 실제 파일에 반영한다. {족보: 승격건수}.
-
-    승격은 legacy에서 종류별 족보로 **옮기는** 것이다 — 복사만 하면 legacy가
-    영영 줄지 않아 삭제할 수 없다.
-    """
-    promotions = [s["promote"] for s in plan if s.get("promote")]
-    if not promotions:
-        return {}
-
-    counts, moved = {}, []
-    for name, path in banks.get("paths", {}).items():
-        items = [p for p in promotions if p["bank"] == name]
-        if not items:
-            continue
-        bank = load_bank(path)
-        for p in items:
-            bank[p["question"]] = p["answer"]
-            moved.append(p["question"])
-        write_json_atomic(path, dict(sorted(bank.items())))
-        banks[name] = bank
-        counts[name] = len(items)
-
-    legacy_path = banks.get("legacy_path")
-    if moved and legacy_path:
-        pruned = _evict_legacy_keys(banks.get("legacy", {}), moved)
-        if len(pruned) != len(banks.get("legacy", {})):
-            write_json_atomic(Path(legacy_path), dict(sorted(pruned.items())))
-            banks["legacy"] = pruned
-    return counts
-
-
-def resolve_page(questions: list[dict], banks: dict) -> tuple[list[dict], list[dict]]:
-    """페이지의 문항들을 종류별 규칙으로 풀어 (적용계획, 미등록문항)을 만든다.
-
-    일반 문항은 족보를 보지 않고 항상 2번 보기를 고르므로 미등록이 되지 않는다.
-    퀴즈·주관식만 미등록이 될 수 있고, 미등록 항목에는 채워 넣을 족보를 가리키는
-    `bank` 키가 붙는다(고를 보기 자체가 없으면 None).
-
-    응답 컨트롤이 없는 항목(kind="unknown")은 계획에도 미등록에도 넣지 않는다.
-
-    복합 문항(kind="mixed", 보기 + 입력란)은 두 파트를 각각 푼다. 선택 파트는
-    퀴즈/일반 규칙, 입력 파트는 text 족보다. 어느 한쪽이라도 미등록이면 페이지가
-    막힌다 — 예전처럼 보기만 찍고 입력란을 빈 채로 넘기지 않는다.
-    """
-    plan, missing = [], []
-    indexes = {k: build_canonical_index(banks.get(k, {})) for k in ("quiz", "text", "legacy")}
-    for q in questions:
-        text = q.get("question", "")
-        options = [normalize(o["text"]) for o in q.get("options", [])]
-        form = q.get("kind")
-
-        def _miss(bank_name, option_texts=None):
-            opts = options if option_texts is None else option_texts
-            missing.append({
-                "question": normalize_question(text),
-                "options": [f"{i + 1}. {o}" for i, o in enumerate(opts)],
-                # 족보에 깔아둘 보기 원문(번호 없음) — 저장값 형식이 보기 텍스트라
-                # 사람이 한 줄 남기면 그대로 매칭된다.
-                "option_texts": list(opts),
-                "bank": bank_name,
-            })
-
-        if form == "unknown":
-            # 라디오·체크박스·입력란이 하나도 없는 항목. 답할 컨트롤이 없으므로
-            # 문항이 아니라 안내문·읽기 전용 표시다(2026-08-24 세미나 5587 실측:
-            # `<p>` 두 개로만 된 항목 10건). 미등록으로 막지 않고 건너뛴다.
-            # 만약 이것이 실제로는 답해야 하는 필수 문항이었다면 진행 버튼이
-            # 먹지 않아 `seen_pages` 지문 검사가 잡는다 — 오답이 제출되지는 않는다.
-            continue
-
-        kind = classify_question(q, banks.get("quiz", {}))
-
-        # --- 선택 파트 ------------------------------------------------------
-        # 'input'·'unknown'이 아니면 보기가 있는 문항으로 본다. DOM 판독기가
-        # 'choice' 외의 값을 주더라도(테스트 픽스처의 'radio' 등) 종전과 같이
-        # 선택 파트로 처리된다.
-        if form not in ("input", "unknown"):
-            step = _resolve_choice(q, text, options, kind, banks, indexes, _miss)
-            if step is None:
-                continue
-            plan.append(step)
-
-        # --- 입력 파트 ------------------------------------------------------
-        if form in ("input", "mixed"):
-            step = _resolve_input(q, text, banks, indexes, _miss)
-            if step is not None:
-                plan.append(step)
-    return plan, missing
-
-
-def _resolve_input(q, text, banks, indexes, _miss):
-    """주관식(입력란) 파트를 푼다. 미등록이면 _miss를 부르고 None."""
-    answer, source = lookup_in_banks(banks, text, "text", indexes)
-    if answer is None:
-        # 복합 문항이라도 입력란에는 고를 보기가 없다. 보기 목록을 족보에
-        # 깔면 주관식 자리에 선택지가 들어가므로 빈 값으로 깐다.
-        _miss("text", option_texts=[])
-        return None
-    if isinstance(answer, list):
-        answer = " ".join(answer)
-    if answer == BLANK_ANSWER_MARKER:
-        answer = ""
-    name = q.get("free_name") or q.get("name")
-    step = {"kind": "input", "name": name, "value": answer}
-    if source == "legacy":
-        step["promote"] = {
-            "bank": "text",
-            "question": normalize_question(text),
-            "answer": answer,
-        }
-    return step
-
-
-def _resolve_choice(q, text, options, kind, banks, indexes, _miss):
-    """선택 파트를 푼다. 미등록이면 _miss를 부르고 None."""
-    if kind == "general":
-        if len(options) <= GENERAL_OPTION_INDEX:
-            # 보기가 2개 미만이면 "2번"이 존재하지 않는다. DOM 이상이므로
-            # 아무 보기나 찍지 않고 사람이 보게 남긴다.
-            _miss(None)
-            return None
-        return {"kind": "choice", "targets": [q["options"][GENERAL_OPTION_INDEX]]}
-
-    answer, source = lookup_in_banks(banks, text, kind, indexes)
-    if answer is None:
-        _miss(kind)
-        return None
-
-    if answer == BLANK_ANSWER_MARKER:
-        # 선택형에 빈칸 표식이 들어온 경우. 고를 보기가 없으므로 미등록.
-        _miss(kind)
-        return None
-
-    # 복수 선택은 리스트(["1", "3"])뿐 아니라 "1,3" 형태도 받는다.
-    if isinstance(answer, str) and "," in answer:
-        parts = [p.strip() for p in answer.split(",")]
-        answer = parts if all(p.isdigit() for p in parts if p) else answer
-    wanted = answer if isinstance(answer, list) else [answer]
-    indices = []
-    for w in wanted:
-        idx = match_option(w, options)
-        if idx is None:
-            _miss(kind)
-            return None
-        indices.append(idx)
-    step = {"kind": "choice", "targets": [q["options"][i] for i in indices]}
-    if source == "legacy":
-        promoted = promotable_option_texts(indices, options)
-        if promoted is not None:
-            step["promote"] = {
-                "bank": kind,
-                "question": normalize_question(text),
-                "answer": promoted,
-            }
-    return step
-
-
-def parse_kst(value) -> datetime | None:
-    """ISO 문자열을 KST datetime으로. 못 읽으면 None."""
-    if not isinstance(value, str) or not value:
-        return None
-    try:
-        dt = datetime.fromisoformat(value)
-    except (ValueError, TypeError):
-        return None
-    return dt.replace(tzinfo=common.KST) if dt.tzinfo is None else dt
-
-
-def observed_end(item: dict) -> datetime | None:
-    """관측된 실제 종료 시각. 없으면 None.
-
-    `ended_at`은 상세에서 '세미나 종료'를 처음 본 시각, 또는 설문 창이 실제로
-    열린 시각이다(설문은 세미나가 끝나야 열린다). 공지된 종료는 쓰지 않는다.
-    """
-    return parse_kst((item or {}).get("ended_at"))
-
-
-def scheduled_bounds(item: dict) -> tuple[datetime | None, datetime | None]:
-    """공지된 일정만으로 계산한 (설문 오픈, 세미나 종료). 관측은 섞지 않는다."""
-    if not isinstance(item, dict):
-        return None, None
-    start_str = item.get("start")
-    if start_str and isinstance(start_str, str):
-        s_dt, e_dt = parse_dd_date(start_str)
-        if s_dt:
-            return s_dt + timedelta(minutes=30), e_dt or (s_dt + timedelta(hours=1))
-        m = re.search(r"(\d{4}-\d{2}-\d{2})\s*\([^)]+\)\s*(\d{2}:\d{2})", start_str)
-        if m:
-            d_str, s_str = m.groups()
-            try:
-                s_dt = datetime.strptime(f"{d_str} {s_str}", "%Y-%m-%d %H:%M").replace(tzinfo=common.KST)
-                return s_dt + timedelta(minutes=30), s_dt + timedelta(hours=1)
-            except ValueError:
-                pass
-
-    ent_dt = parse_kst(item.get("entered_at"))
-    if ent_dt is not None:
-        return ent_dt + timedelta(minutes=30), ent_dt + timedelta(hours=1)
-    return None, None
-
-
-def get_survey_window(item: dict) -> tuple[datetime | None, datetime | None]:
-    """설문 가능 시간 창 (open_dt, close_dt). **실제 종료 기준**이다.
-
-    종료를 아직 관측하지 못했으면 창을 모른다 — (None, None)을 돌려주고,
-    시도 여부는 `evaluate_survey_cutoff`의 사전 게이트가 정한다.
-    """
-    ended = observed_end(item)
-    if ended is None:
-        return None, None
-    return ended, ended + SURVEY_CLOSE_GRACE
-
-
-def get_survey_cutoff(item: dict) -> datetime | None:
-    """설문 마감 시각 (실제 종료 1시간 후). 종료 미관측이면 None."""
-    return get_survey_window(item)[1]
-
-
-def evaluate_survey_cutoff(item: dict, now_dt: datetime = None) -> str:
-    """설문 시도 가능 여부 판정.
-
-    - 종료를 관측했으면 창은 [종료, 종료 + 1시간]이다.
-    - 관측 전이면 공지 시작 30분 전부터 시도한다 — 종료를 확인하려면 어차피
-      한 번은 열어 봐야 하고, 그 전에는 열어 볼 이유가 없다. 공지된 **종료**는
-      어느 쪽 판정에도 쓰지 않는다(공지가 양쪽으로 틀리는 것이 확인됐다).
-    """
-    if now_dt is None:
-        now_dt = datetime.now(common.KST)
-    elif now_dt.tzinfo is None:
-        now_dt = now_dt.replace(tzinfo=common.KST)
-
-    open_dt, close_dt = get_survey_window(item)
-    if open_dt is not None:
-        if now_dt < open_dt:
-            return "not_ready"
-        if close_dt is not None and now_dt > close_dt:
-            return "closed"
-        return "ready"
-
-    # 종료 미관측 — 사전 게이트만 본다.
-    probe_from, _ = scheduled_bounds(item)
-    if probe_from is None:
-        return "ready"
-    if now_dt < probe_from:
-        return "not_ready"
-    if now_dt > probe_from - SURVEY_PROBE_LEAD + SURVEY_STALE_AFTER:
-        return "closed"
-    return "ready"
-
-
-def scheduled_end_passed(item: dict, now_dt: datetime = None) -> bool:
-    """공지된 종료 + 여유가 지났는가. 일정을 모르면 False(판정에 쓰지 않는다)."""
-    _, end_dt = scheduled_bounds(item)
-    if end_dt is None:
-        return False
-    if now_dt is None:
-        now_dt = datetime.now(common.KST)
-    elif now_dt.tzinfo is None:
-        now_dt = now_dt.replace(tzinfo=common.KST)
-    return now_dt > end_dt + SURVEY_RUNNING_GRACE
-
-
-def unopened_status(item: dict, now_dt: datetime = None, running: bool = False) -> str:
-    """설문에 손도 못 댔을 때의 상태.
-
-    - 창이 아직 안 열렸으면 `not_ready`, 마감 후면 `closed` — 둘 다 정상이므로 quiet.
-    - **창이 열려 있는데도 못 열었으면 `unverified`**(alert). 성공도 실패도 확인
-      못 한 상태다.
-
-    2026-09-09 세미나 5627: 같은 런에서 bjh7790은 success, wonju만 `not_ready`로
-    떨어졌다. 창은 열려 있었으니 "아직 안 열림"이 아니라 그냥 못 연 것이었는데,
-    `not_ready`가 quiet이라 텔레그램에 뜨지 않았다. 손으로 재시도해서 붙였을 뿐,
-    안 봤으면 창이 닫힐 때까지 한 계정만 누락된 채로 끝났다. 창이 열린 동안의
-    실패는 조용히 넘기지 않는다.
-
-    `running=True`는 상세에서 "아직 안 끝났다"를 본 경우다. 설문은 세미나가
-    끝나야 열리므로 이때 못 여는 것은 실패가 아니다 — quiet `not_ready`.
-    **단 공지된 종료가 `SURVEY_RUNNING_GRACE`만큼 지났으면 그 관측을 믿지 않는다.**
-    2026-09-15 세미나 5671(13:00~14:00)을 14:39에 '진행 중'으로 읽고 조용히
-    넘겼다. 공지는 양쪽으로 틀리지만 40분씩 틀리지는 않는다 — 관측 쪽이 틀렸다.
-    """
-    st = evaluate_survey_cutoff(item, now_dt)
-    if st in ("not_ready", "closed"):
-        return st
-    if running and not scheduled_end_passed(item, now_dt):
-        # 세미나가 아직 안 끝났다 — 설문은 원래 이때 안 열린다. 정상이므로 quiet.
-        return "not_ready"
-    # 공지된 종료가 한참 지났는데도 '진행 중'으로 보인다면 관측 쪽이 틀렸다고
-    # 본다. 13:00~14:00 세미나가 14:39에 진행 중일 수는 없다(2026-09-15 5671).
-    return "unverified"
-
-
-def placeholder_value(option_texts: list[str] | None):
-    """족보에 깔아둘 미기입 값. 보기가 있으면 [표시, 보기…], 없으면 빈 문자열.
-
-    주관식은 고를 보기가 없으므로 종전대로 빈 문자열이다.
-    """
-    options = [normalize(o) for o in (option_texts or []) if normalize(o)]
-    return [PLACEHOLDER_MARKER, *options] if options else ""
-
-
-def add_missing_to_bank(bank_path: str | Path, missing: list[dict]) -> int:
-    """미등록 문항을 미기입 값으로 문제은행에 추가한다. 추가된 개수 반환."""
-    bank_path = Path(bank_path)
-    bank = load_bank(bank_path)
-    canon = {canonical_question(k) for k in bank}
-    added = 0
-    for m in missing:
-        key = m["question"]
-        ck = canonical_question(key)
-        if key not in bank and ck not in canon:
-            bank[key] = placeholder_value(m.get("option_texts"))
-            canon.add(ck)
-            added += 1
-    if added:
-        write_json_atomic(bank_path, dict(sorted(bank.items())))
-    return added
-
-
-def add_missing_to_banks(banks: dict, missing: list[dict]) -> dict:
-    """미등록 문항을 `bank` 키가 가리키는 족보에 나눠 넣는다. {족보: 추가건수}.
-
-    `bank`가 None인 항목(보기 자체가 없는 DOM 이상)은 어디에도 쓰지 않는다.
-    legacy는 읽기 전용이라 `banks["paths"]`에 없고, 따라서 절대 갱신되지 않는다.
-    """
-    counts = {}
-    for name, path in banks.get("paths", {}).items():
-        items = [m for m in missing if m.get("bank") == name]
-        if items:
-            counts[name] = add_missing_to_bank(path, items)
-    return counts
-
-
-BANK_LABELS = {"quiz": "퀴즈", "text": "주관식"}
-
-
-def format_bank_counts(counts: dict) -> str:
-    """{'quiz': 2, 'text': 1} → '퀴즈 2건, 주관식 1건'."""
-    parts = [f"{BANK_LABELS.get(k, k)} {v}건" for k, v in sorted(counts.items()) if v]
-    return ", ".join(parts) if parts else "추가 없음"
-
-
-def pending_seminar_ids(state: dict, account: str) -> list[int]:
-    """당일 입장했으나 아직 설문하지 않은 세미나 ID 목록."""
-    if not isinstance(state, dict):
-        return []
-    state = upgrade_to_v2(state)
-    acc = state.get("accounts", {}).get(account, {})
-    survey_map = acc.get("survey", {})
-    survey_done_list = acc.get("survey_done", [])
-    pending = []
-    for item in acc.get("entered", []):
-        sid = item["id"] if isinstance(item, dict) else int(item)
-        sid_str = str(sid)
-        if sid_str not in survey_map and sid not in survey_done_list and int(sid) not in survey_done_list:
-            pending.append(sid)
-    return pending
-
-
-def get_entered_item(state: dict, account: str, seminar_id: int | str) -> dict:
-    if isinstance(state, dict):
-        acc = state.get("accounts", {}).get(account, {})
-        for item in acc.get("entered", []):
-            if isinstance(item, dict) and str(item.get("id")) == str(seminar_id):
-                return item
-            elif isinstance(item, int) and str(item) == str(seminar_id):
-                return {"id": item}
-    return {"id": int(seminar_id) if str(seminar_id).isdigit() else seminar_id}
-
-
-def mark_survey_status(state: dict, account: str, seminar_id: int | str, status_str: str = "done", path=None) -> None:
-    if not isinstance(state, dict):
-        return
-    state = upgrade_to_v2(state)
-    acc = state.setdefault("accounts", {}).setdefault(account, {})
-    survey = acc.setdefault("survey", {})
-    sid_str = str(seminar_id)
-    survey[sid_str] = status_str
-    if path is not None:
-        seminar_live.save_state(state, path)
-
-
-def clear_survey_status(state: dict, account: str, seminar_id: int | str, path=None) -> bool:
-    """설문 이력 표시를 지운다 — 다음 런이 이 세미나를 다시 집게 된다.
-
-    잘못 박힌 `closed`를 그대로 두면 `pending_seminar_ids`가 영영 건너뛴다.
-    """
-    if not isinstance(state, dict):
-        return False
-    acc = (state.get("accounts") or {}).get(account) or {}
-    survey = acc.get("survey")
-    if not isinstance(survey, dict) or str(seminar_id) not in survey:
-        return False
-    survey.pop(str(seminar_id))
-    if path is not None:
-        seminar_live.save_state(state, path)
-    return True
-
-
-def get_survey_meta(state: dict, account: str, seminar_id: int | str) -> dict:
-    """세미나별 설문 부가 상태(진행 중 관측 시각 등). 없으면 빈 dict."""
-    if not isinstance(state, dict):
-        return {}
-    acc = (state.get("accounts") or {}).get(account) or {}
-    meta = (acc.get("survey_meta") or {}).get(str(seminar_id))
-    return meta if isinstance(meta, dict) else {}
-
-
-def mark_survey_ended(state: dict, account: str, seminar_id: int | str, at: str, path=None) -> None:
-    """"이 시각에 세미나가 끝나 있었다"를 기록한다. 설문 창의 기준점이다.
-
-    관측 시각은 실제 종료보다 뒤다(블록 간격만큼). 그래서 **가장 이른 관측**만
-    남긴다 — 나중 관측으로 덮으면 창이 통째로 뒤로 밀린다.
-    """
-    if not isinstance(state, dict) or not account:
-        return
-    state = upgrade_to_v2(state)
-    acc = state.setdefault("accounts", {}).setdefault(account, {})
-    meta = acc.setdefault("survey_meta", {}).setdefault(str(seminar_id), {})
-    prev = meta.get("ended_at")
-    if isinstance(prev, str) and prev and prev <= at:
-        return
-    meta["ended_at"] = at
-    if path is not None:
-        seminar_live.save_state(state, path)
-
-
-def mark_survey_done(state: dict, account: str, seminar_id: int | str, path=None) -> None:
-    mark_survey_status(state, account, seminar_id, "done", path)
 
 
 SURVEY_STATUS_PRIORITY = (
@@ -1338,15 +647,6 @@ def page_error_texts(survey_page) -> list[str]:
         return []
 
 
-def body_text(survey_page) -> str:
-    try:
-        if survey_page.is_closed():
-            return ""
-        return survey_page.evaluate("() => document.body ? document.body.innerText : ''") or ""
-    except Exception:
-        return ""
-
-
 ADVANCE_SELECTOR = (
     'input[type=submit], button[type=submit], input[type=button], button, a[role="button"]'
 )
@@ -1399,285 +699,6 @@ def apply_plan(survey_page, plan: list[dict]) -> None:
             continue
         for t in step["targets"]:
             option_locator(survey_page, t).check(force=True)
-
-
-# 상세 페이지의 버튼 텍스트를 긁는다. 브라우저에 넘기는 JS는 r-문자열로 쓴다
-# (2026-08-28 사고: 일반 문자열의 \n이 파이썬 단계에서 줄바꿈이 되어 SyntaxError).
-DETAIL_BUTTON_JS = r"""
-() => {
-    const sel = 'a.btn_bn, .btn_area a, .btn_area button, .btn_wrap a, .btn_wrap button, '
-              + 'a[class*="btn"], button[class*="btn"], button, input[type=button], input[type=submit]';
-    const out = [];
-    document.querySelectorAll(sel).forEach(el => {
-        const t = ((el.innerText || el.textContent || el.value || '') + '').replace(/\s+/g, ' ').trim();
-        if (!t || t.length > 40) return;
-        const cs = window.getComputedStyle(el);
-        const visible = el.getClientRects().length > 0
-                     && cs.visibility !== 'hidden'
-                     && cs.display !== 'none'
-                     && cs.opacity !== '0';
-        out.push({t: t, v: visible});
-    });
-    return out;
-}
-"""
-
-
-def detail_url_matches(url: str, seminar_id) -> bool:
-    """상세 조회가 **그 세미나 페이지**에 실제로 도달했는지 URL로 가른다.
-
-    2026-09-11 실측: 아직 끝나지 않은 세미나(5696 카보메틱스, 19:00~22:10)를
-    21:05에 조회했는데 `already_done`이 나왔다. 같은 런에서 다른 계정은
-    `unverified`였다 — 같은 페이지라면 나올 수 없는 차이다. m 상세
-    (`/cme/vod/{id}`)가 아직 없는 회차라 목록으로 떨어지고, 그 목록에 들어 있던
-    **다른 세미나의 '응답완료'**가 걸린 것으로 본다(목록 내용이 계정마다 다르니
-    계정별로 판정이 갈린 것도 설명된다). 세미나 id가 없는 주소의 판정은 버린다.
-
-    URL을 못 읽으면(테스트 mock 등) 판정 근거로 쓰지 않고 통과시킨다.
-    """
-    url = str(url or "")
-    if not url.lower().startswith("http"):
-        return True
-    sid = str(seminar_id)
-    m = re.search(r"seminarId=(\d+)", url)
-    if m:
-        return m.group(1) == sid
-    m = re.search(r"/(?:cme/)?vod/(\d+)", url)
-    if m:
-        return m.group(1) == sid
-    return False
-
-
-def read_detail_buttons(page) -> tuple[list[str], list[str]]:
-    """세미나 상세의 버튼 텍스트를 (보이는 것, 숨은 것)으로 갈라 돌려준다.
-
-    상세 페이지에는 안 보이는 팝업·템플릿 버튼이 잔뜩 들어 있다(실측: 로그아웃,
-    '동의합니다.', '세미나 제안 제출' …). 그 안에 '설문하기'와 '응답완료'가 같이
-    있어서 전부 뭉쳐 보면 상태를 가릴 수 없다. 그래서 판정은 보이는 것만 쓴다.
-
-    읽기에 실패하면 두 목록 모두 빈 목록이다 — 여기서 죽으면 설문 전체가 죽는다.
-    """
-    seen, visible, hidden = set(), [], []
-    try:
-        for entry in page.evaluate(DETAIL_BUTTON_JS) or []:
-            # 예전 형식(문자열 목록)도 받아 준다 — 판정 불가로 버리는 것보다 낫다.
-            if isinstance(entry, dict):
-                t, is_visible = normalize(entry.get("t")), bool(entry.get("v"))
-            else:
-                t, is_visible = normalize(entry), True
-            key = (t, is_visible)
-            if not t or key in seen:
-                continue
-            seen.add(key)
-            (visible if is_visible else hidden).append(t)
-    except Exception:
-        return [], []
-    return visible, hidden
-
-
-def confirm_survey_done(page, seminar_id, retries: int = 0) -> tuple[str, list[str]]:
-    """세미나 상세에 재접속해 완료 표시로 설문 완료 여부를 판정한다.
-
-    **모바일(m) 상세를 먼저 보고, 판정이 안 서면 www로 폴백한다**(2026-08-31).
-    m은 사용자가 눈으로 확인하는 화면 그대로 '설문 참여 완료'/'세미나 종료'가
-    떠서 판정도 검증도 쉽다. m이 로그아웃 상태로 열리거나 www로 튕기면 그
-    판정은 통째로 버린다 — 로그아웃 화면의 '설문하기'를 미참여로 읽으면
-    실제로 마친 설문을 놓친다.
-
-    반환: (판정, 상세에서 읽은 버튼 텍스트들). 판정은 done / not_done / unknown.
-    버튼 텍스트를 함께 돌려주는 이유는, 사이트가 문구를 바꿨을 때 결과 JSON만
-    보고도 무엇이 있었는지 알 수 있어야 하기 때문이다.
-
-    retries는 판정이 done이 아닐 때 다시 열어 보는 횟수다. 제출 직후에는 표시가
-    아직 안 바뀌었을 수 있어 1회를 준다.
-    """
-    errors: list[str] = []
-    buttons: list[str] = []
-    verdict = "unknown"
-    LAST_DETAIL_PROBE.clear()
-    for attempt in range(retries + 1):
-        if attempt:
-            page.wait_for_timeout(DETAIL_RECHECK_WAIT_MS)
-
-        # ① 모바일 상세 — 문구가 사람이 보는 화면과 같아 우선한다.
-        verdict, buttons, err = read_detail_verdict(page, seminar_id, mobile=True)
-        if err:
-            errors.append(err)
-        if verdict == "done":
-            return verdict, buttons
-
-        # ② www 상세 — 모바일이 판정 불가일 때만. 여기서 not_done을 덮어쓰지
-        #    않도록, 모바일이 낸 not_done은 www가 done일 때만 뒤집힌다.
-        m_verdict, m_buttons = verdict, buttons
-        verdict, buttons, err = read_detail_verdict(page, seminar_id, mobile=False)
-        if err:
-            errors.append(err)
-        if verdict == "unknown" and m_verdict != "unknown":
-            verdict, buttons = m_verdict, m_buttons
-        if verdict == "done":
-            return verdict, buttons
-
-    if verdict == "unknown" and not buttons and errors:
-        return "unknown", errors
-    return verdict, buttons
-
-
-# 마지막 상세 조회의 원본 기록(도메인별 URL·보이는 버튼·숨은 버튼). 진단 전용이며
-# 판정에는 쓰지 않는다 — 판정이 안 설 때 무엇을 봤는지 결과 JSON에 실어 보낸다.
-LAST_DETAIL_PROBE: dict = {}
-
-
-def copy_probe() -> dict:
-    """진단 기록의 스냅샷. 결과 JSON에 실리므로 문자열만 담는다."""
-    return {
-        host: {
-            "url": str(rec.get("url") or ""),
-            "visible": [str(t) for t in rec.get("visible") or []],
-            "hidden": [str(t) for t in rec.get("hidden") or []],
-        }
-        for host, rec in LAST_DETAIL_PROBE.items()
-    }
-
-
-def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str], str]:
-    """상세 1회 조회. (판정, 판정에 쓴 버튼들, 실패 사유) — 실패해도 예외는 안 낸다."""
-    detail_url = (
-        f"{MOBILE_DETAIL_URL}/{seminar_id}"
-        if mobile
-        else f"{doctorville.SEMINAR_DETAIL_URL}?seminarId={seminar_id}"
-    )
-    try:
-        if mobile:
-            page.set_extra_http_headers({"User-Agent": MOBILE_UA})
-        try:
-            common.goto_with_retry(
-                page, detail_url, wait_until="domcontentloaded", timeout_ms=DEFAULT_TIMEOUT_MS
-            )
-            page.wait_for_timeout(DETAIL_SETTLE_MS)
-        finally:
-            if mobile:
-                page.set_extra_http_headers({})
-    except Exception as e:
-        return "unknown", [], f"{'m' if mobile else 'www'} 상세 재접속 실패: {e}"
-
-    visible, hidden = read_detail_buttons(page)
-    body = body_text(page)
-    if mobile:
-        # 버튼이 아직 안 그려졌을 수 있다. 표식이 잡히거나 시간이 다 될 때까지만.
-        waited = 0
-        while (
-            waited < MOBILE_RENDER_TIMEOUT_MS
-            and detect_survey_marker((visible or hidden) + [body]) == "unknown"
-        ):
-            page.wait_for_timeout(MOBILE_POLL_MS)
-            waited += MOBILE_POLL_MS
-            visible, hidden = read_detail_buttons(page)
-            body = body_text(page)
-    # 보이는 버튼이 하나도 없으면 읽기 자체가 실패한 것이다. 그때만 숨은 것까지
-    # 본다 — 평소에 숨은 템플릿을 섞으면 '응답완료'가 늘 걸려 오판이 된다.
-    buttons = visible or hidden
-
-    try:
-        final_url = str(page.url or "")
-    except Exception:
-        final_url = ""
-    read_texts = visible or hidden
-    # `usable`은 아래 검증을 다 통과한 뒤에야 참이 된다. 버린 조회는 진단으로만
-    # 남고 진행 중·종료 판정에는 쓰이지 않는다.
-    rec = {
-        "url": final_url,
-        "visible": visible,
-        "hidden": hidden,
-        "ended": bool(read_texts) and seminar_ended(read_texts),
-        "running": bool(read_texts) and seminar_running(read_texts),
-        "usable": False,
-    }
-    LAST_DETAIL_PROBE["m" if mobile else "www"] = rec
-
-    # 다른 세미나 페이지(목록·안내)로 떨어졌으면 여기서 읽은 것은 전부 남의
-    # 상태다. 버튼도 본문도 쓰지 않는다.
-    if not detail_url_matches(final_url, seminar_id):
-        host = "m" if mobile else "www"
-        return "unknown", [], f"{host} 상세: 세미나 {seminar_id} 페이지가 아님({final_url})"
-
-    verdict = detect_survey_marker(buttons)
-    if verdict == "unknown":
-        # 버튼 셀렉터가 안 맞을 수도 있으니 본문 전체로 한 번 더 본다. 단
-        # 본문에는 다른 세미나의 완료 표시와 안내 문구가 섞이므로 여기서
-        # `done`은 만들지 않는다 — 놓친 완료는 다음 런이 회복하지만, 거짓
-        # 완료는 상태에 굳어 영원히 재시도되지 않는다.
-        verdict = detect_survey_marker([body], allow_done=False)
-
-    if mobile:
-        if not is_mobile_session(page, buttons + [body]):
-            return "unknown", [], "m 상세: www로 리다이렉트됐거나 안내 페이지"
-        # 완료 표시는 그대로 믿는다. 반대로 '미참여'는 로그아웃 화면에서도 똑같이
-        # 보이므로(로그인 증거가 없으면 '설문하기'만 뜬다) 채택하지 않는다.
-        if verdict == "not_done" and not has_login_evidence(buttons + [body]):
-            return "unknown", buttons, "m 상세: 로그인 증거 없이 미참여로 보임 — 판정 보류"
-    rec["usable"] = True
-    return verdict, buttons, ""
-
-
-def seminar_ended(texts) -> bool:
-    """상세에 '세미나 종료'가 떠 있는가 — 방송이 끝났다는 사이트의 표시."""
-    joined = " ".join(strip_spaces(t) for t in texts if t)
-    return strip_spaces(SEMINAR_END_MARKER) in joined
-
-
-def seminar_running(texts) -> bool:
-    """상세에 방송 전·중 표식이 떠 있는가. '세미나 종료'가 같이 있으면 아니다."""
-    if seminar_ended(texts):
-        return False
-    joined = " ".join(strip_spaces(t) for t in texts if t)
-    return any(strip_spaces(m) in joined for m in SEMINAR_RUNNING_MARKERS)
-
-
-def usable_probes() -> list:
-    """판정 근거로 써도 되는 상세 조회 기록만.
-
-    `read_detail_verdict`가 URL 불일치·로그아웃 등으로 **이미 버린** 조회도
-    진단용으로 `LAST_DETAIL_PROBE`에 남는다. 버린 기록을 진행 중 판정에 쓰면
-    남의 페이지가 "아직 안 끝났다"가 된다 — 2026-09-15 세미나 5671·5681.
-    """
-    return [
-        rec for rec in LAST_DETAIL_PROBE.values()
-        if isinstance(rec, dict) and rec.get("usable")
-    ]
-
-
-def probe_saw_running_seminar() -> bool:
-    """마지막 상세 조회에서 "아직 안 끝났다"를 관측했는가.
-
-    쓸 수 있는 조회에서 방송 전·중 표식을 봤을 때만 참이다. 같은 조회에서
-    '세미나 종료'를 봤으면 종료가 이긴다 — 설문은 세미나가 끝나야 열린다.
-    """
-    probes = usable_probes()
-    if any(rec.get("ended") for rec in probes):
-        return False
-    return any(rec.get("running") for rec in probes)
-
-
-def probe_saw_ended_seminar() -> bool:
-    """마지막 상세 조회에서 '세미나 종료'를 봤는가 — 실제 종료의 관측이다."""
-    return any(rec.get("ended") for rec in usable_probes())
-
-
-def has_login_evidence(texts) -> bool:
-    joined = " ".join(strip_spaces(t) for t in texts if t)
-    return any(strip_spaces(m) in joined for m in MOBILE_LOGIN_MARKERS)
-
-
-def is_mobile_session(page, texts) -> bool:
-    """모바일 상세가 실제로 열렸는지. www로 튕겼거나 안내 페이지면 판정 불가다."""
-    try:
-        url = page.url or ""
-    except Exception:
-        url = ""
-    if url and not url.startswith(MOBILE_BASE):
-        return False
-    joined = " ".join(strip_spaces(t) for t in texts if t)
-    return not any(strip_spaces(m) in joined for m in MOBILE_FALLBACK_MARKERS)
 
 
 def finalize_after_submit(page, seminar_id, pages_done: int, title: str = "") -> dict:
@@ -2077,13 +1098,15 @@ run_survey_for_item = run_survey
 def _log_seminar(seminar_id, status: str, account: str, item: dict = None) -> None:
     """세미나 표의 '설문' 칸을 채운다. 로깅 실패가 설문 자체를 죽이면 안 된다."""
     item = item or {}
-    try:
-        runlog.update_seminar(
-            seminar_id, phase="survey", status=status, account=account or "_",
-            title=item.get("title") or "", start=item.get("start") or "",
-        )
-    except Exception as e:
-        print(f"[seminar_survey] 세미나 로그 기록 실패({seminar_id}): {e}", file=sys.stderr)
+    runlog.log_seminar(
+        seminar_id,
+        phase="survey",
+        status=status,
+        account=account or "_",
+        title=item.get("title") or "",
+        start=item.get("start") or "",
+        module_tag="seminar_survey",
+    )
 
 
 def summarize_account(output: dict) -> dict:
@@ -2236,7 +1259,6 @@ def main():
     parser.add_argument("--state-file", default=str(DEFAULT_STATE_FILE), help="seminar_entered.json 경로")
     parser.add_argument("--seminar-id", action="append", help="상태 무시하고 특정 세미나만 처리(반복 지정 가능)")
     parser.add_argument("--headed", action="store_true")
-    parser.add_argument("--no-telegram", action="store_true")
     args = parser.parse_args()
 
     date_str = datetime.now(common.KST).strftime("%Y-%m-%d")
@@ -2282,13 +1304,10 @@ def main():
     print("\n=== 최종 결과 ===")
     print(json.dumps(results, ensure_ascii=False, indent=2))
 
-    if not args.no_telegram and any(r.get("surveys") for r in results.values()):
-        notify_level = notify.resolve_level(os.environ.get("NOTIFY_LEVEL"))
-        if notify.should_send(results, notify_level):
-            msg = notify.build_message(results, notify_level, date_str)
-            if msg:
-                ok = notify.send_telegram(msg, credentials_path=args.credentials)
-                print(f"[telegram] {'성공' if ok else '실패'}")
+    try:
+        common.write_json_atomic(SCRIPT_DIR / "logs" / "results-seminar_survey.json", results)
+    except Exception as e:
+        print(f"[seminar_survey] 결과 파일 저장 실패: {e}", file=sys.stderr)
 
     failed = any(
         r.get("status") in {"failed", "unverified", "blocked"}

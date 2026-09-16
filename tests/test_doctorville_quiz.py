@@ -281,31 +281,22 @@ def test_task_quiz_no_answer_payload(monkeypatch, tmp_path):
     assert "\n" not in res["message"]
 
 
-def test_main_seminar_task_notifications(monkeypatch):
-    mock_run = MagicMock(return_value={
-        "site": "doctorville",
-        "account": "bjh7790",
-        "seminar": {"status": "success", "applied": [101], "count": 1}
-    })
-    mock_should_send = MagicMock(return_value=True)
-    mock_build_msg = MagicMock(return_value="[Seminar Alert] Applied 1 seminar")
-    mock_send_tg = MagicMock(return_value=True)
+def test_quiz_bank_module_direct_imports():
+    import quiz_bank
+    import doctorville
 
-    monkeypatch.setattr("doctorville.run", mock_run)
-    monkeypatch.setattr("notify.should_send", mock_should_send)
-    monkeypatch.setattr("notify.build_message", mock_build_msg)
-    monkeypatch.setattr("notify.send_telegram", mock_send_tg)
+    assert quiz_bank.normalize_text is doctorville.normalize_text
+    assert quiz_bank.normalize_product is doctorville.normalize_product
+    assert quiz_bank.resolve_product_key is doctorville.resolve_product_key
+    assert quiz_bank.lookup_product_bank is doctorville.lookup_product_bank
+    assert quiz_bank.lookup_legacy_seq is doctorville.lookup_legacy_seq
+    assert quiz_bank.consolidate_products is doctorville.consolidate_products
+    assert quiz_bank.coerce_bank_answer is doctorville.coerce_bank_answer
+    assert quiz_bank.product_has_answer is doctorville.product_has_answer
+    assert quiz_bank.match_quiz_bank is doctorville.match_quiz_bank
+    assert quiz_bank.QUIZ_ANSWERS_PATH == doctorville.QUIZ_ANSWERS_PATH
+    assert quiz_bank.LEGACY_ANSWERS_PATH == doctorville.LEGACY_ANSWERS_PATH
 
-    test_args = ["doctorville.py", "--account", "bjh7790", "--task", "seminar"]
-    monkeypatch.setattr(sys, "argv", test_args)
 
-    with patch("sys.exit") as mock_exit:
-        doctorville.main()
-        mock_exit.assert_called_with(0)
-
-    assert mock_should_send.called
-    assert mock_build_msg.called
-    assert mock_send_tg.called
-    assert mock_send_tg.call_args[0][0] == "[Seminar Alert] Applied 1 seminar"
 
 

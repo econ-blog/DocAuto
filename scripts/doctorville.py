@@ -49,7 +49,6 @@ from playwright.sync_api import (
 )
 
 import common
-import notify
 import runlog
 
 DOCTORVILLE_BASE    = "https://www.doctorville.co.kr"
@@ -63,139 +62,34 @@ DEFAULT_TIMEOUT_MS  = 30000
 # 달력(오늘 셀) 마운트 대기. 없으면 "미출석"이 아니라 "아직 안 그려짐"일 뿐이다.
 ATTEND_MARKER_TIMEOUT_MS = 8000
 SCRIPT_DIR          = Path(__file__).resolve().parent
-QUIZ_ANSWERS_PATH   = SCRIPT_DIR.parent / "quiz_answers.json"
-LEGACY_ANSWERS_PATH = SCRIPT_DIR.parent / "quiz_answers_legacy.json"
-SEMINAR_APPLIED_PATH = SCRIPT_DIR.parent / "seminar_applied.json"
-APPLIED_RETENTION_DAYS = 60
+import quiz_bank
+from quiz_bank import (
+    QUIZ_ANSWERS_PATH,
+    LEGACY_ANSWERS_PATH,
+    PLACEHOLDER_MARKER,
+    normalize_text,
+    normalize_product,
+    resolve_product_key,
+    lookup_product_bank,
+    lookup_legacy_seq,
+    consolidate_products,
+    coerce_bank_answer,
+    product_has_answer,
+    match_quiz_bank,
+    save_quiz_answers,
+    save_legacy_answers,
+)
+from seminar_applied import (
+    SEMINAR_APPLIED_PATH,
+    APPLIED_PATH,
+    APPLIED_RETENTION_DAYS,
+    APPLIED_EXPIRY_DAYS,
+)
 
 
 # ---------------------------------------------------------------------------
 # 유틸
 # ---------------------------------------------------------------------------
-
-def normalize_text(text: str) -> str:
-    return re.sub(r"\s+", "", text or "").lower()
-
-
-def normalize_product(name: str) -> str:
-    """제품명 대조 키. 공백·구두점·대소문자 차이를 제거한다.
-
-    사이트가 같은 제품을 날마다 다르게 렌더한다(실측: "프리스타일리브레" /
-    "프리스타일 리브레", "더-스피로킷" / "더스피로킷"). 문자열 완전 일치로 조회하면
-    한 표기로 배운 답이 다른 표기에서 안 보여 `no_answer`로 떨어진다.
-
-    접미사가 다른 이름은 **합치지 않는다** — "아림시스"와 "아림시스주"는 실제로
-    서로 다른 제품이고 각각 다른 정답을 들고 있다. 부분 포함 매칭은 그래서 안 쓴다.
-    """
-    return re.sub(r"[^0-9a-z가-힣]", "", (name or "").lower())
-
-
-def resolve_product_key(data: dict, product: str) -> str:
-    """렌더된 제품명에 대응하는 기존 키. 없으면 렌더된 이름을 그대로 쓴다."""
-    if product in data:
-        return product
-    np = normalize_product(product)
-    if np:
-        for k in data:
-            if normalize_product(k) == np:
-                return k
-    return product
-
-
-def lookup_product_bank(answers: dict, product: str) -> dict:
-    """제품 문제은행. 표기만 다른 중복 키가 남아 있으면 합쳐서 돌려준다."""
-    np = normalize_product(product)
-    merged = {}
-    if np:
-        for k in sorted(answers):
-            v = answers[k]
-            if isinstance(v, dict) and normalize_product(k) == np:
-                merged.update(v)
-    exact = answers.get(product)
-    if isinstance(exact, dict):
-        merged.update(exact)
-    return merged
-
-
-def lookup_legacy_seq(legacy: dict, product: str) -> str | None:
-    """legacy 시퀀스. 표기 변형 키가 서로 다른 값이면 어느 쪽도 쓰지 않는다.
-
-    실제로 충돌이 있다: "더-스피로킷"=342 / "더스피로킷"=324. 둘 중 하나는 틀린
-    값이고 판별할 방법이 없으므로 찍지 않고 `no_answer`로 보낸다.
-    """
-    seq = legacy.get(product)
-    if isinstance(seq, str):
-        return seq
-    np = normalize_product(product)
-    if not np:
-        return None
-    hits = {v for k, v in legacy.items() if isinstance(v, str) and normalize_product(k) == np}
-    return hits.pop() if len(hits) == 1 else None
-
-
-def consolidate_products(data: dict) -> dict:
-    """표기만 다른 중복 제품 키를 하나로 합친다. 답이 많은 키가 대표가 된다."""
-    groups = {}
-    for k in data:
-        groups.setdefault(normalize_product(k), []).append(k)
-    out = {}
-    for keys in groups.values():
-        if len(keys) == 1:
-            out[keys[0]] = data[keys[0]]
-            continue
-        dicts = [k for k in keys if isinstance(data[k], dict)]
-        if not dicts:
-            out[sorted(keys)[0]] = data[sorted(keys)[0]]
-            continue
-        winner = max(sorted(dicts), key=lambda k: len(data[k]))
-        merged = {}
-        for k in sorted(dicts):
-            if k != winner:
-                merged.update(data[k])
-        merged.update(data[winner])
-        out[winner] = merged
-    return out
-
-
-PLACEHOLDER_MARKER = common.ANSWER_PLACEHOLDER_MARKER
-
-
-def coerce_bank_answer(value):
-    """족보 값 → 제출에 쓸 정답 텍스트. 아직 못 고르는 값이면 None.
-
-    미등록 문항은 값 자리에 `[표시줄, 보기…]`가 깔려 있다. 표시줄이 남아 있거나
-    보기가 여러 줄 남아 있으면 사람이 아직 안 고른 것이다 — 찍지 않고 `no_answer`로
-    보낸다. 정답 한 줄만 남기면 그 보기가 곧 정답이다.
-    """
-    if isinstance(value, str):
-        return value.strip() or None
-    if isinstance(value, list):
-        items = [str(v).strip() for v in value if str(v).strip()]
-        if len(items) != 1 or items[0] == PLACEHOLDER_MARKER:
-            return None
-        return items[0]
-    return None
-
-
-def product_has_answer(bank_entry) -> bool:
-    """제품 문제은행에 실제로 쓸 수 있는 정답이 하나라도 있는가."""
-    if not isinstance(bank_entry, dict):
-        return False
-    return any(coerce_bank_answer(v) is not None for v in bank_entry.values())
-
-
-def match_quiz_bank(product_name: str, bank: dict, legacy: dict) -> bool:
-    norm_p = normalize_text(product_name)
-    if not norm_p:
-        return False
-    # 미기입 자리표시자만 들어 있는 제품 키는 "정답 있음"이 아니다. 이걸 세면
-    # precheck가 익일 퀴즈를 already_done으로 덮어 알림이 안 간다.
-    usable_bank = [k for k, v in bank.items() if product_has_answer(v)]
-    for k in usable_bank + list(legacy.keys()):
-        norm_k = normalize_text(k)
-        if norm_k and norm_k in norm_p:
-            return True
-    return False
 
 
 def parse_calendar_cell(cell_html: str) -> dict:
@@ -228,86 +122,31 @@ def parse_calendar_cell(cell_html: str) -> dict:
 
 
 def load_credentials(path: Path, account: str) -> dict:
-    data = common.read_credentials(path)
-    if account not in data:
-        raise KeyError(f"credentials.json에 '{account}' 계정이 없습니다.")
-    acc = data[account]
-    if "doctorville" not in acc or "password" not in acc["doctorville"]:
-        raise KeyError(f"credentials.json의 '{account}.doctorville.password'가 없습니다.")
-    email = acc.get("email", "")
-    if not email:
-        raise KeyError(f"credentials.json의 '{account}.email'이 없습니다.")
-    return {"email": email, "password": acc["doctorville"]["password"]}
+    return common.load_credentials(path, account, "doctorville")
 
 
-def load_quiz_answers() -> dict:
-    return common.read_json(QUIZ_ANSWERS_PATH, default={})
+def load_quiz_answers(path: Path = None) -> dict:
+    return quiz_bank.load_quiz_answers(path or QUIZ_ANSWERS_PATH)
 
 
-def load_quiz_answers_legacy() -> dict:
-    return common.read_json(LEGACY_ANSWERS_PATH, default={})
+def load_quiz_answers_legacy(path: Path = None) -> dict:
+    return quiz_bank.load_legacy_answers(path or LEGACY_ANSWERS_PATH)
 
 
-def _record_answers(product: str, pairs: list[tuple[str, str]]) -> None:
-    if not pairs:
-        return
-    data = consolidate_products(load_quiz_answers())
-    key = resolve_product_key(data, product)
-    prod_dict = data.setdefault(key, {})
-    for q_text, ans_text in pairs:
-        prod_dict[q_text] = ans_text
-    common.write_json_atomic(QUIZ_ANSWERS_PATH, data)
+def _record_answers(product: str, pairs: list[tuple[str, str]], path: Path = None) -> None:
+    quiz_bank._record_answers(product, pairs, path=path or QUIZ_ANSWERS_PATH)
 
 
-def _record_missing_placeholders(product: str, missing: list[dict]) -> int:
-    """미등록 문항을 보기와 함께 문제은행에 깔아둔다. 추가된 문항 수 반환.
-
-    이미 값이 있는 문항은 건드리지 않는다 — 자리표시자로 덮으면 사람이 넣어둔
-    정답이 날아간다. 매칭에 실패한 기존 정답도 그대로 두고 `_evict_answers`에 맡긴다.
-    """
-    seeds = [
-        (m["question"], [str(o) for o in m.get("options") or []])
-        for m in missing
-        if m.get("question") and m.get("options")
-    ]
-    if not seeds:
-        return 0
-
-    data = consolidate_products(load_quiz_answers())
-    key = resolve_product_key(data, product)
-    prod_dict = data.setdefault(key, {})
-    added = 0
-    for q_text, options in seeds:
-        if q_text in prod_dict:
-            continue
-        prod_dict[q_text] = [PLACEHOLDER_MARKER, *options]
-        added += 1
-    if added:
-        common.write_json_atomic(QUIZ_ANSWERS_PATH, data)
-    return added
+def _record_missing_placeholders(product: str, missing: list[dict], path: Path = None) -> int:
+    return quiz_bank._record_missing_placeholders(product, missing, path=path or QUIZ_ANSWERS_PATH)
 
 
-def _evict_answers(product: str, q_texts: list[str]) -> None:
-    if not q_texts or not QUIZ_ANSWERS_PATH.exists():
-        return
-    data = load_quiz_answers()
-    product = resolve_product_key(data, product)
-    if product in data:
-        for q_text in q_texts:
-            data[product].pop(q_text, None)
-        common.write_json_atomic(QUIZ_ANSWERS_PATH, data)
+def _evict_answers(product: str, q_texts: list[str], path: Path = None) -> None:
+    quiz_bank._evict_answers(product, q_texts, path=path or QUIZ_ANSWERS_PATH)
 
 
-def _evict_legacy_answers(product: str) -> None:
-    if not LEGACY_ANSWERS_PATH.exists():
-        return
-    data = load_quiz_answers_legacy()
-    # 표기 변형 키까지 함께 지운다. 하나만 지우면 "더-스피로킷"/"더스피로킷" 같은
-    # 쌍이 계속 남아 legacy가 줄지 않는다.
-    np = normalize_product(product)
-    pruned = {k: v for k, v in data.items() if normalize_product(k) != np}
-    if len(pruned) != len(data):
-        common.write_json_atomic(LEGACY_ANSWERS_PATH, pruned)
+def _evict_legacy_answers(product: str, path: Path = None) -> None:
+    quiz_bank._evict_legacy_answers(product, path=path or LEGACY_ANSWERS_PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -323,150 +162,23 @@ def _evict_legacy_answers(product: str) -> None:
 # 하루가 지나면 사라지는데, 신청 이력은 방송일까지 며칠~몇 주 유지돼야 한다.
 # ---------------------------------------------------------------------------
 
-def load_applied(path: Path | str = None) -> dict:
-    return common.read_json(path or SEMINAR_APPLIED_PATH, default={})
+from seminar_applied import (
+    applied_ids,
+    filter_new_seminars,
+    load_applied,
+    prune_applied,
+    prune_applied_file,
+    record_applied,
+    save_applied,
+    _entry_expiry,
+)
 
 
 def _handle_learned_answers(source: str, product: str, pairs: list[tuple[str, str]]) -> int:
     """Legacy 정답으로 성공 시 문제은행(quiz_answers.json)으로 승격하고 legacy에서 삭제."""
-    if source == "legacy":
-        _record_answers(product, pairs)
-        _evict_legacy_answers(product)
-        return len(pairs)
-    return 0
-
-
-def save_applied(data: dict, path: Path = None) -> None:
-    path = Path(path or SEMINAR_APPLIED_PATH)
-    common.write_json_atomic(path, data, sort_keys=True)
-
-
-def applied_ids(data: dict, account: str) -> set:
-    """계정의 신청 완료 seminarId 집합(문자열)."""
-    acc = data.get(account) if isinstance(data, dict) else None
-    return set(acc.keys()) if isinstance(acc, dict) else set()
-
-
-def filter_new_seminars(seminar_ids: list, data: dict, account: str) -> list:
-    """목록에서 아직 신청 이력이 없는 세미나만 남긴다(순서·중복 유지 안 함)."""
-    known = applied_ids(data, account)
-    seen = set()
-    out = []
-    for sid in seminar_ids:
-        s = str(sid)
-        if s in known or s in seen:
-            continue
-        seen.add(s)
-        out.append(sid)
-    return out
-
-
-def record_applied(data: dict, account: str, seminar_id, title: str = "", start: str = "", now=None) -> dict:
-    ts = (now or datetime.now(common.KST)).isoformat()
-    entry = {"applied_at": ts}
-    if title:
-        entry["title"] = title
-    if start:
-        entry["start"] = start
-        s_dt, e_dt = common.parse_dd_date(start)
-        if s_dt is not None:
-            entry["date"] = s_dt.strftime("%Y-%m-%d")
-            entry["start_date"] = s_dt.strftime("%Y-%m-%d")
-            entry["year"] = s_dt.year
-            entry["month"] = s_dt.month
-            entry["day"] = s_dt.day
-            entry["start_time"] = s_dt.strftime("%H:%M")
-            entry["start_hour"] = s_dt.hour
-            entry["start_minute"] = s_dt.minute
-            if e_dt is not None:
-                entry["end_time"] = e_dt.strftime("%H:%M")
-                entry["end_hour"] = e_dt.hour
-                entry["end_minute"] = e_dt.minute
-
-    data.setdefault(account, {})[str(seminar_id)] = entry
-    return data
-
-
-def _entry_expiry(entry: dict, days: int, now):
-    """이력 1건이 만료됐는지. (만료여부, 사유)
-
-    ① `start`(상세 페이지 dd.date)가 파싱되면 **방송이 끝난 시각**이 기준이다.
-       지난 세미나는 다시 신청할 일이 없으므로 바로 버린다.
-    ② `start`가 없거나 파싱 실패면 `applied_at` + days일을 백스톱으로 쓴다.
-    """
-    if not isinstance(entry, dict):
-        return False, ""
-
-    start = entry.get("start")
-    if isinstance(start, str) and start:
-        s_dt, e_dt = common.parse_dd_date(start)
-        end = e_dt or s_dt
-        if end is not None:
-            return now > end, "past"
-
-    ts = entry.get("applied_at")
-    if isinstance(ts, str) and ts:
-        try:
-            dt = datetime.fromisoformat(ts)
-        except (ValueError, TypeError):
-            return False, ""
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=common.KST)
-        return (now - dt).days > days, "stale"
-    return False, ""
-
-
-def prune_applied(data: dict, days: int = APPLIED_RETENTION_DAYS, now=None) -> tuple[dict, dict]:
-    """날짜가 지난 세미나를 이력에서 버린다. (남은 이력, {사유: 건수}).
-
-    잘못 버려도 자기 치유된다 — 다음 런에서 상세를 한 번 열어보고 "신청취소"를
-    확인하면 그대로 다시 기록된다.
-    """
-    now = now or datetime.now(common.KST)
-    out, counts = {}, {}
-    for acc, items in (data or {}).items():
-        if not isinstance(items, dict):
-            continue
-        kept = {}
-        for sid, entry in items.items():
-            expired, reason = _entry_expiry(entry, days, now)
-            if expired:
-                counts[reason] = counts.get(reason, 0) + 1
-            else:
-                kept[sid] = entry
-        if kept:
-            out[acc] = kept
-    return out, counts
-
-
-def prune_applied_file(path: Path = None, days: int = APPLIED_RETENTION_DAYS, now=None) -> dict:
-    """이력 파일을 정리해 저장한다. daily에서 하루 1회 부른다.
-
-    30분마다 도는 seminar_block에서 하지 않는 이유: 정리 자체가 파일을 바꿔
-    커밋을 만들기 때문이다. 지난 세미나가 이력에 남아 있어도 "상세를 열지 않는다"는
-    동작은 그대로 맞다 — 정리는 순전히 파일 크기 관리다.
-    """
-    path = Path(path or SEMINAR_APPLIED_PATH)
-    data = load_applied(path)
-    pruned, counts = prune_applied(data, days=days, now=now)
-    removed = sum(counts.values())
-    if removed:
-        save_applied(pruned, path)
-    total = sum(len(v) for v in pruned.values())
-    result = {
-        "removed": removed,
-        "remaining": total,
-        "by_reason": counts,
-        "message": f"신청 이력 정리: {removed}건 제거(잔여 {total}건).",
-    }
-    # status: "success"에 verified_by가 없으면 notify가 unverified(alert)로 강등해
-    # 런이 빨갛게 된다. 지울 게 없으면 성공이 아니라 skipped(quiet)가 맞다.
-    if removed:
-        result["status"] = "success"
-        result["verified_by"] = f"seminar_applied.json rewritten: -{removed}"
-    else:
-        result["status"] = "skipped"
-    return result
+    return quiz_bank._handle_learned_answers(
+        source, product, pairs, quiz_path=QUIZ_ANSWERS_PATH, legacy_path=LEGACY_ANSWERS_PATH
+    )
 
 
 # 개인정보 동의 모달의 확인 버튼 후보. 앞에서부터 시도한다.
@@ -1466,13 +1178,7 @@ def _seminar_detail_meta(page) -> tuple[str, str]:
 
 def _log_seminar(sid, status: str, account: str, title: str = "", start: str = "") -> None:
     """세미나 표의 '신청' 칸을 채운다. 로깅 실패가 신청 자체를 죽이면 안 된다."""
-    try:
-        runlog.update_seminar(
-            sid, phase="apply", status=status, account=account or "_",
-            title=title, start=start,
-        )
-    except Exception as e:
-        print(f"[doctorville] 세미나 로그 기록 실패({sid}): {e}", file=sys.stderr)
+    runlog.log_seminar(sid, phase="apply", status=status, account=account, title=title, start=start, module_tag="doctorville")
 
 
 def task_seminar(page, creds: dict, account: str = None, applied_path: Path = None) -> dict:
@@ -1889,13 +1595,10 @@ def main():
     else:
         print(json.dumps(all_results, ensure_ascii=False, indent=2))
 
-    if args.task == "seminar":
-        notify_level = os.environ.get("NOTIFY_LEVEL", "all")
-        date_str = datetime.now(common.KST).strftime("%Y-%m-%d")
-        if notify.should_send(all_results, notify_level):
-            msg = notify.build_message(all_results, notify_level, date_str)
-            if msg:
-                notify.send_telegram(msg, credentials_path=credentials_path)
+    try:
+        common.write_json_atomic(SCRIPT_DIR / "logs" / "results-doctorville.json", all_results)
+    except Exception as e:
+        print(f"[doctorville] 결과 파일 저장 실패: {e}", file=sys.stderr)
 
     failed = any(
         acc_res.get(t, {}).get("status") in {"failed", "unverified", "blocked"}

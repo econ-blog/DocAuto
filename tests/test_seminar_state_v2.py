@@ -12,7 +12,8 @@ def test_parse_dd_date_invalid():
     assert parse_dd_date(None) == (None, None)
     assert parse_dd_date("invalid") == (None, None)
 
-def test_upgrade_to_v2():
+def test_upgrade_to_v2_discards_v1_state():
+    """v1 상태는 변환하지 않고 버린다 — CI 캐시가 날짜 단위라 v1은 복원될 수 없다."""
     v1_dict = {
         "date": "2026-07-31",
         "accounts": {
@@ -23,14 +24,12 @@ def test_upgrade_to_v2():
             }
         }
     }
-    v2 = upgrade_to_v2(v1_dict)
-    assert v2["version"] == 2
-    assert v2["accounts"]["bjh7790"]["entered"] == [
-        {"id": 5473, "title": None, "start": None, "entered_at": None}
-    ]
-    assert v2["accounts"]["bjh7790"]["survey"] == {"5473": "done"}
+    assert upgrade_to_v2(v1_dict) == {"version": 2, "accounts": {}}
+    v2 = {"version": 2, "date": "2026-07-31", "accounts": {"bjh7790": {"entered": []}}}
+    assert upgrade_to_v2(v2) is v2
 
 def test_load_state_v1_file(tmp_path):
+    """v1 파일을 만나면 그날치 빈 상태로 시작한다(입장은 목록 배지로 재판단)."""
     tmp_file = tmp_path / "seminar_entered.json"
     v1_data = {
         "date": "2026-08-01",
@@ -44,10 +43,8 @@ def test_load_state_v1_file(tmp_path):
     tmp_file.write_text(json.dumps(v1_data), encoding="utf-8")
     loaded = load_state(tmp_file, "2026-08-01")
     assert loaded["version"] == 2
-    assert loaded["accounts"]["bjh7790"]["entered"] == [
-        {"id": 100, "title": None, "start": None, "entered_at": None}
-    ]
-    assert loaded["accounts"]["bjh7790"]["survey"] == {"100": "done"}
+    assert loaded["accounts"]["bjh7790"]["entered"] == []
+    assert loaded["accounts"]["bjh7790"]["survey"] == {}
 
 def test_update_entered_state_with_metadata(tmp_path):
     state_file = tmp_path / "seminar_entered.json"
@@ -124,4 +121,44 @@ def test_task_live_seminar_actual_entry_keeps_evidence(monkeypatch):
     assert res["status"] == "success"
     assert res["verified_by"] == "popup_acquired"
     assert res["entered"] == [5473]
+
+
+def test_seminar_state_module_direct_imports():
+    import seminar_state
+    import seminar_live
+    import seminar_survey
+
+    # Live state functions match
+    assert seminar_state.upgrade_to_v2 is seminar_live.upgrade_to_v2
+    assert seminar_state.merge_state is seminar_live.merge_state
+    assert seminar_state.load_state is seminar_live.load_state
+    assert seminar_state.save_state is seminar_live.save_state
+    assert seminar_state.update_entered_state is seminar_live.update_entered_state
+
+    # Survey state functions match
+    assert seminar_state.pending_seminar_ids is seminar_survey.pending_seminar_ids
+    assert seminar_state.get_entered_item is seminar_survey.get_entered_item
+    assert seminar_state.mark_survey_status is seminar_survey.mark_survey_status
+    assert seminar_state.clear_survey_status is seminar_survey.clear_survey_status
+    assert seminar_state.get_survey_meta is seminar_survey.get_survey_meta
+    assert seminar_state.mark_survey_ended is seminar_survey.mark_survey_ended
+    assert seminar_state.mark_survey_done is seminar_survey.mark_survey_done
+
+    # Survey state operations
+    state = {"version": 2, "accounts": {"bjh7790": {"entered": [{"id": 9999, "title": "T"}], "survey": {}}}}
+    assert seminar_state.pending_seminar_ids(state, "bjh7790") == [9999]
+    item = seminar_state.get_entered_item(state, "bjh7790", 9999)
+    assert item["title"] == "T"
+
+    seminar_state.mark_survey_ended(state, "bjh7790", 9999, "18:00")
+    meta = seminar_state.get_survey_meta(state, "bjh7790", 9999)
+    assert meta["ended_at"] == "18:00"
+
+    seminar_state.mark_survey_done(state, "bjh7790", 9999)
+    assert seminar_state.pending_seminar_ids(state, "bjh7790") == []
+
+    cleared = seminar_state.clear_survey_status(state, "bjh7790", 9999)
+    assert cleared is True
+    assert seminar_state.pending_seminar_ids(state, "bjh7790") == [9999]
+
 

@@ -385,13 +385,14 @@ def test_placeholder_trimmed_to_single_option_becomes_answer():
 
 
 def test_pending_seminar_ids_excludes_done():
-    state = {"accounts": {"bjh7790": {"entered": [1, 2, 3], "survey_done": [2]}}}
+    state = {"version": 2, "accounts": {"bjh7790": {
+        "entered": [{"id": 1}, {"id": 2}, {"id": 3}], "survey": {"2": "done"}}}}
     assert pending_seminar_ids(state, "bjh7790") == [1, 3]
     assert pending_seminar_ids(state, "wonju") == []
 
 
 def test_mark_survey_done_is_idempotent():
-    state = {"accounts": {"bjh7790": {"entered": [1]}}}
+    state = {"version": 2, "accounts": {"bjh7790": {"entered": [{"id": 1}]}}}
     mark_survey_done(state, "bjh7790", 1)
     mark_survey_done(state, "bjh7790", "1")
     assert state["accounts"]["bjh7790"]["survey"] == {"1": "done"}
@@ -723,3 +724,61 @@ def test_resolve_page_mixed_blank_marker_submits_empty_text():
     )
     assert missing == []
     assert plan[1] == {"kind": "input", "name": "userQuestions.0.text", "value": ""}
+
+
+def test_survey_bank_module_direct_imports():
+    import survey_bank
+    import seminar_survey
+
+    assert survey_bank.normalize is seminar_survey.normalize
+    assert survey_bank.strip_spaces is seminar_survey.strip_spaces
+    assert survey_bank.is_quiz_badged is seminar_survey.is_quiz_badged
+    assert survey_bank.normalize_question is seminar_survey.normalize_question
+    assert survey_bank.canonical_question is seminar_survey.canonical_question
+    assert survey_bank.build_canonical_index is seminar_survey.build_canonical_index
+    assert survey_bank.load_bank is seminar_survey.load_bank
+    assert survey_bank.lookup_answer is seminar_survey.lookup_answer
+    assert survey_bank.load_banks is seminar_survey.load_banks
+    assert survey_bank.bank_has_key is seminar_survey.bank_has_key
+    assert survey_bank.classify_question is seminar_survey.classify_question
+    assert survey_bank.lookup_in_banks is seminar_survey.lookup_in_banks
+    assert survey_bank.match_option is seminar_survey.match_option
+    assert survey_bank.promotable_option_texts is seminar_survey.promotable_option_texts
+    assert survey_bank.apply_promotions is seminar_survey.apply_promotions
+    assert survey_bank.resolve_page is seminar_survey.resolve_page
+    assert survey_bank.placeholder_value is seminar_survey.placeholder_value
+    assert survey_bank.add_missing_to_bank is seminar_survey.add_missing_to_bank
+    assert survey_bank.add_missing_to_banks is seminar_survey.add_missing_to_banks
+    assert survey_bank.format_bank_counts is seminar_survey.format_bank_counts
+
+    assert survey_bank.canonical_question("[퀴즈]  질문 문항 * (복수 선택 가능)") == "질문문항"
+    assert survey_bank.is_quiz_badged("[퀴즈]  배지 문항") is True
+
+
+def test_survey_detail_module_direct_imports():
+    import survey_detail
+    import seminar_survey
+
+    assert survey_detail.detect_survey_marker is seminar_survey.detect_survey_marker
+    assert survey_detail.matched_done_marker is seminar_survey.matched_done_marker
+    assert survey_detail.detail_url_matches is seminar_survey.detail_url_matches
+    assert survey_detail.read_detail_buttons is seminar_survey.read_detail_buttons
+    assert survey_detail.confirm_survey_done is seminar_survey.confirm_survey_done
+    assert survey_detail.copy_probe is seminar_survey.copy_probe
+    assert survey_detail.read_detail_verdict is seminar_survey.read_detail_verdict
+    assert survey_detail.seminar_ended is seminar_survey.seminar_ended
+    assert survey_detail.seminar_running is seminar_survey.seminar_running
+    assert survey_detail.usable_probes is seminar_survey.usable_probes
+    assert survey_detail.probe_saw_running_seminar is seminar_survey.probe_saw_running_seminar
+    assert survey_detail.probe_saw_ended_seminar is seminar_survey.probe_saw_ended_seminar
+    assert survey_detail.has_login_evidence is seminar_survey.has_login_evidence
+    assert survey_detail.is_mobile_session is seminar_survey.is_mobile_session
+    assert survey_detail.body_text is seminar_survey.body_text
+
+    assert survey_detail.detect_survey_marker(["설문 참여 완료", "세미나 종료"]) == "done"
+    assert survey_detail.detect_survey_marker(["세미나 종료"]) == "not_done"
+    assert survey_detail.seminar_ended(["세미나 종료"]) is True
+    assert survey_detail.seminar_running(["방송중"]) is True
+    assert survey_detail.detail_url_matches("https://m.doctorville.co.kr/cme/vod/5600", 5600) is True
+    assert survey_detail.detail_url_matches("https://m.doctorville.co.kr/cme/vod/5601", 5600) is False
+

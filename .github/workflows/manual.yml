@@ -37,9 +37,6 @@ concurrency:
   group: seminar-block
   cancel-in-progress: false
 
-env:
-  NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
-
 jobs:
   manual-run:
     runs-on: ubuntu-latest
@@ -81,27 +78,18 @@ jobs:
         run: echo "$CREDENTIALS_JSON" > credentials.json
 
       - name: 닥터빌 퀴즈
+        id: quiz
         if: inputs.task == '닥터빌 퀴즈'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: xvfb-run -a python3 scripts/doctorville.py --account all --task quiz --headed
 
       - name: 세미나 신청
+        id: apply
         if: inputs.task == '세미나 신청'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: xvfb-run -a python3 scripts/doctorville.py --account all --task seminar --headed
 
       - name: 세미나 입장
+        id: live
         if: inputs.task == '세미나 입장'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: |
           xvfb-run -a python3 scripts/seminar_live.py --account all \
             --stay-seconds ${{ inputs.stay_seconds || '20' }} \
@@ -111,11 +99,8 @@ jobs:
             --headed
 
       - name: 세미나 설문
+        id: survey
         if: inputs.task == '세미나 설문'
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          NOTIFY_LEVEL: ${{ vars.NOTIFY_LEVEL }}
         run: |
           xvfb-run -a python3 scripts/seminar_survey.py --account all \
             --state-file scripts/state/seminar_entered.json \
@@ -134,6 +119,17 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python3 scripts/seminar_report.py
+
+      - name: Claude 클라우드 루틴 트리거
+        if: always()
+        continue-on-error: true
+        env:
+          CLAUDE_ROUTINE_URL: ${{ secrets.CLAUDE_ROUTINE_URL }}
+          CLAUDE_ROUTINE_TOKEN: ${{ secrets.CLAUDE_ROUTINE_TOKEN }}
+        run: |
+          python3 scripts/claude_trigger.py \
+            --results scripts/logs/results-*.json \
+            --outcome quiz=${{ steps.quiz.outcome }} apply=${{ steps.apply.outcome }} live=${{ steps.live.outcome }} survey=${{ steps.survey.outcome }}
 
       - name: 정답·족보·이력·로그 커밋 및 푸시
         if: always()

@@ -10,13 +10,11 @@ def test_daily_workflow_schedule_string():
     repo_root = Path(__file__).resolve().parent.parent
     daily_content = (repo_root / ".github/workflows/daily.yml").read_text("utf-8")
     assert "0 7 * * *" in daily_content
-    assert "NOTIFY_LEVEL" in daily_content
 
 def test_seminar_block_inbox_filter_and_dynamic_accounts():
     repo_root = Path(__file__).resolve().parent.parent
     block_content = (repo_root / ".github/workflows/seminar_block.yml").read_text("utf-8")
     assert "11" in block_content
-    assert "NOTIFY_LEVEL" in block_content
     assert "scripts/seminar_live.py --account all" in block_content
     assert "scripts/seminar_survey.py --account all" in block_content
 
@@ -118,3 +116,22 @@ def test_manual_workflow_exposes_seminar_list_recon():
     # 정찰 런은 표를 보내지 않는다(세미나 실행 결과가 없다).
     table_step = content.split("- name: 세미나 결과 표 전송")[1].split("- name:")[0]
     assert "세미나 목록 정찰" in table_step
+
+
+def test_no_notify_level_and_telegram_calls_isolated():
+    repo_root = Path(__file__).resolve().parent.parent
+    for name in ("daily.yml", "seminar_block.yml", "manual.yml"):
+        content = _workflow(name)
+        assert "NOTIFY_LEVEL" not in content, f"NOTIFY_LEVEL found in {name}"
+
+    scripts_dir = repo_root / "scripts"
+    telegram_senders = []
+    for py in sorted(scripts_dir.glob("*.py")):
+        if py.name == "notify.py":
+            continue
+        txt = py.read_text("utf-8")
+        if "notify.send_telegram" in txt or "notify.send_photo" in txt:
+            telegram_senders.append(py.name)
+    # warn_tests.py는 의도된 예외다 — pytest 게이트가 비차단이라 테스트 실패를
+    # 알리는 수단이 이 텍스트 경고뿐이다(2026-09-16 daily 전면 중단 대응).
+    assert telegram_senders == ["runlog.py", "warn_tests.py"]
