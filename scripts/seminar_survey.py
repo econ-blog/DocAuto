@@ -857,93 +857,15 @@ def format_bank_counts(counts: dict) -> str:
     return ", ".join(parts) if parts else "추가 없음"
 
 
-def pending_seminar_ids(state: dict, account: str) -> list[int]:
-    """당일 입장했으나 아직 설문하지 않은 세미나 ID 목록."""
-    if not isinstance(state, dict):
-        return []
-    state = upgrade_to_v2(state)
-    acc = state.get("accounts", {}).get(account, {})
-    survey_map = acc.get("survey", {})
-    survey_done_list = acc.get("survey_done", [])
-    pending = []
-    for item in acc.get("entered", []):
-        sid = item["id"] if isinstance(item, dict) else int(item)
-        sid_str = str(sid)
-        if sid_str not in survey_map and sid not in survey_done_list and int(sid) not in survey_done_list:
-            pending.append(sid)
-    return pending
-
-
-def get_entered_item(state: dict, account: str, seminar_id: int | str) -> dict:
-    if isinstance(state, dict):
-        acc = state.get("accounts", {}).get(account, {})
-        for item in acc.get("entered", []):
-            if isinstance(item, dict) and str(item.get("id")) == str(seminar_id):
-                return item
-            elif isinstance(item, int) and str(item) == str(seminar_id):
-                return {"id": item}
-    return {"id": int(seminar_id) if str(seminar_id).isdigit() else seminar_id}
-
-
-def mark_survey_status(state: dict, account: str, seminar_id: int | str, status_str: str = "done", path=None) -> None:
-    if not isinstance(state, dict):
-        return
-    state = upgrade_to_v2(state)
-    acc = state.setdefault("accounts", {}).setdefault(account, {})
-    survey = acc.setdefault("survey", {})
-    sid_str = str(seminar_id)
-    survey[sid_str] = status_str
-    if path is not None:
-        seminar_live.save_state(state, path)
-
-
-def clear_survey_status(state: dict, account: str, seminar_id: int | str, path=None) -> bool:
-    """설문 이력 표시를 지운다 — 다음 런이 이 세미나를 다시 집게 된다.
-
-    잘못 박힌 `closed`를 그대로 두면 `pending_seminar_ids`가 영영 건너뛴다.
-    """
-    if not isinstance(state, dict):
-        return False
-    acc = (state.get("accounts") or {}).get(account) or {}
-    survey = acc.get("survey")
-    if not isinstance(survey, dict) or str(seminar_id) not in survey:
-        return False
-    survey.pop(str(seminar_id))
-    if path is not None:
-        seminar_live.save_state(state, path)
-    return True
-
-
-def get_survey_meta(state: dict, account: str, seminar_id: int | str) -> dict:
-    """세미나별 설문 부가 상태(진행 중 관측 시각 등). 없으면 빈 dict."""
-    if not isinstance(state, dict):
-        return {}
-    acc = (state.get("accounts") or {}).get(account) or {}
-    meta = (acc.get("survey_meta") or {}).get(str(seminar_id))
-    return meta if isinstance(meta, dict) else {}
-
-
-def mark_survey_ended(state: dict, account: str, seminar_id: int | str, at: str, path=None) -> None:
-    """"이 시각에 세미나가 끝나 있었다"를 기록한다. 설문 창의 기준점이다.
-
-    관측 시각은 실제 종료보다 뒤다(블록 간격만큼). 그래서 **가장 이른 관측**만
-    남긴다 — 나중 관측으로 덮으면 창이 통째로 뒤로 밀린다.
-    """
-    if not isinstance(state, dict) or not account:
-        return
-    state = upgrade_to_v2(state)
-    acc = state.setdefault("accounts", {}).setdefault(account, {})
-    meta = acc.setdefault("survey_meta", {}).setdefault(str(seminar_id), {})
-    prev = meta.get("ended_at")
-    if isinstance(prev, str) and prev and prev <= at:
-        return
-    meta["ended_at"] = at
-    if path is not None:
-        seminar_live.save_state(state, path)
-
-
-def mark_survey_done(state: dict, account: str, seminar_id: int | str, path=None) -> None:
-    mark_survey_status(state, account, seminar_id, "done", path)
+from seminar_state import (
+    pending_seminar_ids,
+    get_entered_item,
+    mark_survey_status,
+    clear_survey_status,
+    get_survey_meta,
+    mark_survey_ended,
+    mark_survey_done,
+)
 
 
 SURVEY_STATUS_PRIORITY = (

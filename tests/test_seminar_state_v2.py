@@ -125,3 +125,43 @@ def test_task_live_seminar_actual_entry_keeps_evidence(monkeypatch):
     assert res["verified_by"] == "popup_acquired"
     assert res["entered"] == [5473]
 
+
+def test_seminar_state_module_direct_imports():
+    import seminar_state
+    import seminar_live
+    import seminar_survey
+
+    # Live state functions match
+    assert seminar_state.upgrade_to_v2 is seminar_live.upgrade_to_v2
+    assert seminar_state.merge_state is seminar_live.merge_state
+    assert seminar_state.load_state is seminar_live.load_state
+    assert seminar_state.save_state is seminar_live.save_state
+    assert seminar_state.update_entered_state is seminar_live.update_entered_state
+
+    # Survey state functions match
+    assert seminar_state.pending_seminar_ids is seminar_survey.pending_seminar_ids
+    assert seminar_state.get_entered_item is seminar_survey.get_entered_item
+    assert seminar_state.mark_survey_status is seminar_survey.mark_survey_status
+    assert seminar_state.clear_survey_status is seminar_survey.clear_survey_status
+    assert seminar_state.get_survey_meta is seminar_survey.get_survey_meta
+    assert seminar_state.mark_survey_ended is seminar_survey.mark_survey_ended
+    assert seminar_state.mark_survey_done is seminar_survey.mark_survey_done
+
+    # Survey state operations
+    state = {"version": 2, "accounts": {"bjh7790": {"entered": [{"id": 9999, "title": "T"}], "survey": {}}}}
+    assert seminar_state.pending_seminar_ids(state, "bjh7790") == [9999]
+    item = seminar_state.get_entered_item(state, "bjh7790", 9999)
+    assert item["title"] == "T"
+
+    seminar_state.mark_survey_ended(state, "bjh7790", 9999, "18:00")
+    meta = seminar_state.get_survey_meta(state, "bjh7790", 9999)
+    assert meta["ended_at"] == "18:00"
+
+    seminar_state.mark_survey_done(state, "bjh7790", 9999)
+    assert seminar_state.pending_seminar_ids(state, "bjh7790") == []
+
+    cleared = seminar_state.clear_survey_status(state, "bjh7790", 9999)
+    assert cleared is True
+    assert seminar_state.pending_seminar_ids(state, "bjh7790") == [9999]
+
+

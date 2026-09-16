@@ -163,3 +163,17 @@ def test_load_applied_on_corrupt_file(tmp_path):
     path = tmp_path / "seminar_applied.json"
     path.write_text("{ broken", encoding="utf-8")
     assert load_applied(path) == {}
+
+
+def test_seminar_applied_module_direct_imports():
+    import seminar_applied
+    import doctorville
+    assert seminar_applied.load_applied is doctorville.load_applied
+    assert seminar_applied.save_applied is doctorville.save_applied
+    assert seminar_applied.applied_ids is doctorville.applied_ids
+    assert seminar_applied.filter_new_seminars is doctorville.filter_new_seminars
+    assert seminar_applied.record_applied is doctorville.record_applied
+    assert seminar_applied.prune_applied is doctorville.prune_applied
+    assert seminar_applied.prune_applied_file is doctorville.prune_applied_file
+    assert seminar_applied.SEMINAR_APPLIED_PATH == doctorville.SEMINAR_APPLIED_PATH
+
