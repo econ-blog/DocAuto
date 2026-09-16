@@ -29,3 +29,34 @@ def test_dump_recon_data_creates_json_file():
         loaded = json.load(f)
     assert loaded["url"] == "https://example.com/survey"
     assert loaded["body"] == "Survey complete"
+
+
+def test_list_dom_js_is_raw_string():
+    """일반 문자열이면 \\d가 파이썬 단계에서 깨져 날짜 탐지가 전부 무력화된다."""
+    import recon
+    assert r"\d{4}" in recon.LIST_DOM_JS
+    assert r"\s+" in recon.LIST_DOM_JS
+
+
+def test_summarize_r5_reports_out_of_anchor_date():
+    """정찰의 목적은 '앵커 밖 어느 노드에 날짜가 있나' 한 줄이다."""
+    import recon
+    out = recon.summarize_r5({
+        "list_ready": True, "anchorCount": 66, "anchorsWithApply": 0, "anchorsWithDate": 0,
+        "dateNodes": [{"sel": "p.date", "parent": "div.group", "text": "2026.09.16 (수)"}],
+        "items": [{
+            "index": 0, "seminarId": "5700", "innerHasDate": False, "innerText": "13:00 ~14:00",
+            "ancestors": [{"depth": 1, "sel": "li.item", "ownText": "", "ownHasDate": False,
+                           "prevSiblings": [{"sel": "p.date", "text": "2026.09.16 (수)", "hasDate": True}]}],
+        }],
+    })
+    assert "p.date" in out
+    assert "앞형제" in out
+    assert "with_date=0" in out
+
+
+def test_summarize_r5_says_so_when_no_date_anywhere():
+    import recon
+    out = recon.summarize_r5({"list_ready": True, "anchorCount": 66, "anchorsWithApply": 0,
+                              "anchorsWithDate": 0, "dateNodes": [], "items": []})
+    assert "없음" in out

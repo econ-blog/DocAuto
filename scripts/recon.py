@@ -10,6 +10,7 @@
 R2: 출석 페이지 진입만으로 출석이 처리된 뒤 남는 "오늘 출석됨" 표식
 R3: 세미나 상세의 시작 시각 표기 위치 (상태 파일 v2의 `start` 필드용)
 R4: 이달의 퀴즈 캘린더에서 내일 셀에 제품명·pId가 채워지는지 (모듈 1 성립 여부)
+R5: 세미나 목록에서 방송 날짜가 어느 노드에 있는지 (앵커 밖으로 나갔는지)
 
 산출물은 scripts/logs/recon_<item>_<ts>.{json,png}. gitignore 대상이며
 설문·개인정보가 찍힐 수 있으므로 커밋하지 않는다.
@@ -268,9 +269,133 @@ def recon_r3(page, seminar_id: str | None) -> dict:
     return data
 
 
+
+# ---------------------------------------------------------------------------
+# R5: 세미나 목록에서 **방송 날짜가 어느 DOM 노드에 있는지** 찾는다.
+#
+# 2026-09-16 daily 런: a.list_detail 66건을 다 잡고 list_ready도 true인데
+# 일시 파싱 66건 전부 실패했다. raw 샘플이 "13:00 ~14:00 내분비질환 ..."로
+# **시각만 있고 날짜가 없다**. 렌더 레이스가 아니라 날짜가 앵커 밖으로
+# 나갔다는 뜻이다(그룹 헤더 등). SEMINAR_LIST_JS는 aEl.innerText만 읽으므로
+# 앵커 밖 날짜는 구조적으로 못 본다.
+#
+# 그래서 이 정찰은 앵커 자체가 아니라 **앵커의 조상 체인과 앞 형제**를 본다.
+# 부작용 없음(클릭·제출 안 함).
+# ---------------------------------------------------------------------------
+
+LIST_DOM_JS = r"""
+() => {
+  const DATE = /(\d{4}\s*[-./]\s*\d{1,2}\s*[-./]\s*\d{1,2})|(?<![\d:])\d{1,2}\s*[-./]\s*\d{1,2}(?![\d:])|\d{1,2}\s*월\s*\d{1,2}\s*일/;
+  const desc = el => {
+    if (!el) return null;
+    let s = el.tagName.toLowerCase();
+    if (el.id) s += '#' + el.id;
+    if (el.className && typeof el.className === 'string' && el.className.trim()) {
+      s += '.' + el.className.trim().split(/\s+/).join('.');
+    }
+    return s;
+  };
+  const flat = (t, n) => (t || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  // 자기 자신의 텍스트 노드만 — 자식 innerText가 섞이면 어디에 있는 값인지 모른다.
+  const ownText = el => Array.from(el.childNodes)
+    .filter(n => n.nodeType === 3).map(n => n.textContent.trim())
+    .filter(Boolean).join(' ');
+
+  const anchors = Array.from(document.querySelectorAll('a.list_detail'));
+
+  const items = anchors.slice(0, 6).map((a, i) => {
+    const chain = [];
+    let cur = a.parentElement;
+    for (let d = 0; d < 6 && cur && cur.tagName !== 'BODY'; d++) {
+      const prev = [];
+      let sib = cur.previousElementSibling;
+      for (let k = 0; k < 3 && sib; k++) {
+        const t = flat(sib.innerText, 70);
+        prev.push({ sel: desc(sib), text: t, hasDate: DATE.test(t) });
+        sib = sib.previousElementSibling;
+      }
+      const own = flat(ownText(cur), 70);
+      chain.push({ depth: d, sel: desc(cur), ownText: own, ownHasDate: DATE.test(own), prevSiblings: prev });
+      cur = cur.parentElement;
+    }
+    const inner = flat(a.innerText, 200);
+    return {
+      index: i,
+      seminarId: (() => { try { return new URL(a.href).searchParams.get('seminarId'); } catch (e) { return null; } })(),
+      innerText: inner,
+      innerHasDate: DATE.test(inner),
+      outerHTML: a.outerHTML.slice(0, 1200),
+      hasApply: !!a.querySelector('span.ico_apply'),
+      hasEnter: !!a.querySelector('span.ico_enter'),
+      spans: Array.from(a.querySelectorAll('span, em, i, dt, dd'))
+        .map(s => desc(s) + ' = ' + flat(s.innerText, 30)).slice(0, 15),
+      ancestors: chain
+    };
+  });
+
+  // 페이지 전체에서 날짜처럼 보이는 리프 노드 — 날짜가 실제로 어디 찍혀 있는지.
+  const dateNodes = [];
+  for (const el of document.querySelectorAll('body *')) {
+    if (el.children.length > 0) continue;
+    const t = flat(el.innerText, 60);
+    if (!t || !DATE.test(t)) continue;
+    dateNodes.push({ sel: desc(el), parent: desc(el.parentElement), text: t });
+    if (dateNodes.length >= 40) break;
+  }
+
+  return {
+    url: location.href,
+    anchorCount: anchors.length,
+    anchorsWithApply: anchors.filter(a => !!a.querySelector('span.ico_apply')).length,
+    anchorsWithDate: anchors.filter(a => DATE.test(flat(a.innerText, 200))).length,
+    items,
+    dateNodes
+  };
+}
+"""
+
+
+def recon_r5(page) -> dict:
+    """세미나 목록 DOM 구조. 날짜 노드의 위치를 앵커 기준으로 특정한다."""
+    common.goto_with_retry(page, doctorville.SEMINAR_MAIN_URL, wait_until="domcontentloaded")
+    # 운영 코드와 같은 대기를 쓴다 — 정찰이 더 오래 기다리면 레이스를 못 본다.
+    ready = doctorville.wait_for_seminar_list(page)
+    data = page.evaluate(LIST_DOM_JS)
+    data["list_ready"] = ready
+    data["today"] = datetime.now(common.KST).strftime("%Y-%m-%d")
+    return data
+
+
+def summarize_r5(data: dict) -> str:
+    """잡 로그에 바로 읽을 요약. 전체 덤프는 artifact JSON에 있다."""
+    lines = [
+        f"list_ready={data.get('list_ready')} anchors={data.get('anchorCount')} "
+        f"with_apply={data.get('anchorsWithApply')} with_date={data.get('anchorsWithDate')}",
+        "",
+        "-- 날짜를 담은 노드 (앵커 밖 포함) --",
+    ]
+    nodes = data.get("dateNodes") or []
+    if not nodes:
+        lines.append("(없음 — 페이지 어디에도 날짜 표기가 없다)")
+    for n in nodes[:12]:
+        lines.append(f"  {n['sel']}  (부모 {n['parent']})  = {n['text']}")
+
+    lines += ["", "-- 앵커별 조상 체인에서 날짜가 걸린 지점 --"]
+    for item in (data.get("items") or [])[:3]:
+        lines.append(f"[{item['index']}] seminarId={item['seminarId']} innerHasDate={item['innerHasDate']}")
+        lines.append(f"    innerText: {item['innerText'][:100]}")
+        for anc in item.get("ancestors", []):
+            hits = [p for p in anc.get("prevSiblings", []) if p.get("hasDate")]
+            if anc.get("ownHasDate") or hits:
+                lines.append(f"    depth{anc['depth']} {anc['sel']} own={anc['ownText']!r}")
+                for h in hits:
+                    lines.append(f"        앞형제 {h['sel']} = {h['text']}")
+    return "\n".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--item", required=True, choices=["R2", "R3", "R4"])
+    parser.add_argument("--item", required=True, choices=["R2", "R3", "R4", "R5"])
     parser.add_argument("--account", default="bjh7790")
     parser.add_argument("--seminar-id", default=None)
     parser.add_argument("--credentials", default="credentials.json")
@@ -294,6 +419,8 @@ def main():
                 data = recon_r2(page)
             elif args.item == "R4":
                 data = recon_r4(page)
+            elif args.item == "R5":
+                data = recon_r5(page)
             else:
                 data = recon_r3(page, args.seminar_id)
         finally:
@@ -302,7 +429,10 @@ def main():
 
     out = dump_recon_data(args.item, data)
     print(f"[recon] {args.item} → {out}")
-    print(json.dumps(data, ensure_ascii=False, indent=2)[:4000])
+    if args.item == "R5":
+        print(summarize_r5(data))
+    else:
+        print(json.dumps(data, ensure_ascii=False, indent=2)[:4000])
 
 
 if __name__ == "__main__":

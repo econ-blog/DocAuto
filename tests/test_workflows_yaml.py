@@ -108,3 +108,13 @@ def test_run_logs_are_committed_for_persistence():
     """러너는 런마다 새 체크아웃이라, 커밋하지 않으면 run2 이후 append가 안 된다."""
     for name in ("daily.yml", "seminar_block.yml", "manual.yml"):
         assert "logs" in _workflow(name), name
+
+
+def test_manual_workflow_exposes_seminar_list_recon():
+    """목록 DOM 정찰은 CI 자격증명이 필요해 로컬에서 못 돈다 — manual 경유가 유일한 길."""
+    content = _workflow("manual.yml")
+    assert "'세미나 목록 정찰'" in content or '"세미나 목록 정찰"' in content
+    assert "scripts/recon.py --item R5" in content
+    # 정찰 런은 표를 보내지 않는다(세미나 실행 결과가 없다).
+    table_step = content.split("- name: 세미나 결과 표 전송")[1].split("- name:")[0]
+    assert "세미나 목록 정찰" in table_step
