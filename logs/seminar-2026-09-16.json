@@ -31,6 +31,34 @@
         "wonju": "already_done"
       },
       "updated_at": "07:38"
+    },
+    "5684": {
+      "id": "5684",
+      "title": "[Libre Week] 혈당 모니터링을 넘어 행동변화로,CGM 기반 새로운 관리 모델",
+      "start": "2026-09-16(수) 13:00 ~ 14:30",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "12:06",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
+    },
+    "5686": {
+      "id": "5686",
+      "title": "제미다파정을 활용한 새로운 병용치료의 제안",
+      "start": "2026-09-16(수) 13:00 ~ 14:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "12:06",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     }
   }
 }
