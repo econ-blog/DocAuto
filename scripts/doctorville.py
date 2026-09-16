@@ -1255,6 +1255,19 @@ SEMINAR_LIST_JS = r"""
         try { sid = new URL(aEl.href).searchParams.get('seminarId'); } catch(e) { return null; }
         if (!sid) return null;
 
+        // 방송 날짜는 앵커 **밖**에 있다. 목록은 평평한 형제 나열이고
+        // 하루치 앞에 헤더가 한 번 온다:
+        //   [div.seminar_day 9/16][a.list_detail][a.list_detail]...[div.seminar_day 9/17]...
+        // 앵커 innerText에는 시각만 있어, 앞 형제를 거슬러 올라가 가장 가까운
+        // 헤더를 찾는다. 못 찾으면 raw를 그대로 둔다 — 파이썬 쪽이 fail-closed다.
+        let listDate = '';
+        let sib = aEl.previousElementSibling;
+        for (let i = 0; i < 200 && sib && !listDate; i++) {
+            const hdr = sib.matches('.seminar_day') ? sib : sib.querySelector('.seminar_day');
+            if (hdr) listDate = (hdr.innerText || '').replace(/\s+/g, ' ').trim();
+            sib = sib.previousElementSibling;
+        }
+
         const titEl = aEl.querySelector('.tit, dt, .title, strong');
         let title = titEl ? titEl.innerText.trim() : '';
         if (!title) {
@@ -1266,8 +1279,12 @@ SEMINAR_LIST_JS = r"""
             );
             title = filtered.length > 0 ? filtered[0] : '';
         }
-        const raw = (aEl.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 200);
-        return { id: sid, title: title, raw: raw, applicable: !!aEl.querySelector('span.ico_apply') };
+        const body = (aEl.innerText || '').replace(/\s+/g, ' ').trim();
+        // 날짜를 앞에 붙인다 — parse_list_datetime이 raw에서만 일시를 읽는다.
+        // slice는 붙인 뒤에 한다: 200자 자르기가 날짜를 잘라내면 안 된다.
+        const raw = (listDate ? listDate + ' ' + body : body).slice(0, 200);
+        return { id: sid, title: title, raw: raw, listDate: listDate,
+                 applicable: !!aEl.querySelector('span.ico_apply') };
     }).filter(Boolean)
 """
 
@@ -1280,7 +1297,10 @@ SEMINAR_LIST_JS = r"""
 # 5657(New WAVE Webinar, 정원 마감)이 표에서 통째로 사라진 게 그 결과다.
 # MEMORY.md에 2026-08-28부터 미해결로 적혀 있던 한계와 같은 것이다.
 #
-# 목록에는 이미 일시가 찍혀 있으니 페이지를 더 열 필요가 없다. 다만 목록 표기가
+# 목록에는 이미 일시가 찍혀 있으니 페이지를 더 열 필요가 없다. 단 **날짜는 앵커
+# 밖의 날짜별 헤더(`div.seminar_day` → `9/16`)에 있고 앵커에는 시각만 있다**
+# (2026-09-16 R5 정찰). SEMINAR_LIST_JS가 헤더를 찾아 raw 앞에 붙여 넘긴다.
+# 다만 목록 표기가
 # 상세의 `dd.date`(`2026-09-07(월) 12:30 ~ 13:30`)와 같은 형식이라는 보장이 없어
 # 원문(raw)을 그대로 받아 파이썬에서 방어적으로 판다. **파싱 실패는 fail-closed**
 # — 행을 만들지 않고 세기만 한다. 실패했는데 행을 만들면 수 주치 세미나가 오늘
