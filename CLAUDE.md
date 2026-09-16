@@ -33,16 +33,12 @@
 | 9 | HMP 지식커뮤니티 글쓰기 | `hmp.py` 내장 | 운영 |
 | 10 | 닥터빌 세미나 입장(방송 중) | `seminar_live.py` | 운영 |
 | 11 | 닥터빌 세미나 설문(종료 후) | `seminar_survey.py` | 운영 |
-| 12 | 세미나 입장·설문 상태 관리 | `seminar_state.py` | 모듈 (로드·저장·병합·v2 마이그레이션) |
-| 13 | 세미나 신청 이력 관리 | `seminar_applied.py` | 모듈 (신청 이력·만료·prune) |
-| 14 | 닥터빌 퀴즈 족보 관리 | `quiz_bank.py` | 모듈 (정규화·조회·등록·삭제) |
-| 15 | 세미나 설문 창·마감 평가 | `survey_window.py` | 모듈 (순수 윈도우/컷오프 판정) |
-| 16 | 세미나 설문 족보 관리 | `survey_bank.py` | 모듈 (정규화·canonical 조회·승격) |
-| 17 | 세미나 상세 페이지 및 마커 확인 | `survey_detail.py` | 모듈 (상세 프로브·완료 마커 판정) |
-| 18 | 텔레그램 정답 수신·반영 | `telegram_inbox.py` | 운영 |
-| 19 | 세미나 블록 결과 표 전송 | `seminar_report.py` | 운영 |
-| 20 | Claude Cloud Routine 트리거 | `claude_trigger.py` | 운영 (장애 발생 시 유지보수 세션 발사) |
+| 12 | 텔레그램 정답 수신·반영 | `telegram_inbox.py` | 운영 |
+| 13 | 세미나 블록 결과 표 전송 | `seminar_report.py` | 운영 |
+| 14 | 장애·미기입 시 Claude 세션 발사 | `claude_trigger.py` | 운영 |
 | — | 인터엠디 오늘의 퀴즈 | `intermd.py` | **수동 전용**(러너 IP 403) |
+
+라이브러리 모듈(`seminar_state`·`seminar_applied`·`quiz_bank`·`survey_window`·`survey_bank`·`survey_detail`)은 파일 맵 참조.
 
 ---
 
@@ -80,8 +76,8 @@
 | 파일 | 역할 |
 |---|---|
 | `scripts/common.py` | 자격증명(`load_credentials`)·계정 목록·스크린샷·`goto_with_retry`·`log_error` 등 공통 유틸 |
-| `scripts/notify.py` | 텔레그램 결과 표 전송 (`send_daily_table`) 및 봇 API 전송 유틸 |
-| `scripts/recon.py` | 정찰 스크립트 (CLI R3/R4, `RECON=1` R1/R2) |
+| `scripts/notify.py` | severity 판정(`severity_of`·`NEEDS_EVIDENCE`) + 텔레그램 전송 유틸 |
+| `scripts/recon.py` | 정찰 스크립트 (CLI R3·R4·R5, `RECON=1` R1/R2) |
 | `scripts/daily_runner.py` | daily 오케스트레이터 |
 | `scripts/runlog.py` | 실행 로그 적재(`logs/`) + 표 데이터 구성 + `log_seminar` 통합 로깅 |
 | `scripts/tablepng.py` | 표 HTML을 Playwright로 렌더해 PNG 저장 |
@@ -93,6 +89,7 @@
 | `scripts/survey_bank.py` | 세미나 설문 문제은행 정규화·canonical 조회·승격 (Playwright 없음) |
 | `scripts/survey_detail.py` | 세미나 상세 페이지 프로브 및 설문 완료 마커 확인 |
 | `scripts/claude_trigger.py` | Claude Cloud Routine webhook 발사 및 디듀플리케이션 |
+| `scripts/warn_tests.py` | pytest 실패를 텔레그램 ⚠️ 경고로 알린다(비차단 게이트의 유일한 신호) |
 | `scripts/bank_pending.py` | 족보 미기입 항목 조회 (`--bank`, `--json`, Playwright 없이 실행) |
 | `quiz_answers.json` | 닥터빌 퀴즈 족보 `{제품명: {문항: 정답}}` |
 | `quiz_answers_legacy.json` | 구형식 폴백 `{제품명: "111"}` |
@@ -108,7 +105,7 @@
 | `logs/errors-YYYY-MM.jsonl` | **영구 오류 로그**(append-only, prune 대상 아님). 예외 클래스·메시지·트레이스백·스크린샷·GH run |
 | `logs/claude-triggers-YYYY-MM.jsonl` | **영구 Routine 트리거 로그**(append-only, prune 대상 아님). 세션 발사 이력 및 URL |
 
-Secrets: `CREDENTIALS_JSON`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `CLAUDE_ROUTINE_TOKEN`, `CLAUDE_ROUTINE_SECRET`.
+Secrets: `CREDENTIALS_JSON`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `CLAUDE_ROUTINE_URL`, `CLAUDE_ROUTINE_TOKEN`.
 
 ---
 
@@ -127,7 +124,6 @@ Secrets: `CREDENTIALS_JSON`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `CLAUDE_R
 **코드 결함 수정은 PR을 생성하여 사용자의 머지를 받는다.**
 
 ### 금지
-- 정답 추측 제출. 미등록이면 미시도(`no_answer` / `incomplete_bank`).
 - 자동화가 막힌 항목을 "완료"로 표기.
 - 비밀번호·토큰을 코드·문서에 기록.
 - `verified_by`를 증거 없이 부여해 실패를 감추기.
@@ -140,7 +136,7 @@ Secrets: `CREDENTIALS_JSON`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `CLAUDE_R
 | Severity | status | 의미 | 세션 트리거 (`claude_trigger`) |
 |---|---|---|---|
 | `alert` | `failed`, `blocked`, `unverified` | 오류 / 긍정 증거 미비 강등 | 발사 (재시도성은 당일 2회차부터, 일일 최대 4회) |
-| `action` | `no_answer`, `incomplete_bank` | 사용자 개입 필요 (족보 미기입) | 발사 (`answer-bank` 스킬) |
+| `action` | `no_answer`, `incomplete_bank` | 족보 미기입 — 세션이 채운다 | 발사 (`answer-bank` 스킬) |
 | `ok` | `success` (`verified_by` 동반) | 성공 확정 | 발사 안 함 |
 | `quiet` | `already_done`(`verified_by` 동반), `skipped`, `no_target`, `not_ready`, `closed` | 완료·건너뜀·대상없음·마감 | 발사 안 함 |
 
