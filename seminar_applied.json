@@ -1,5 +1,21 @@
 {
   "bjh7790": {
+    "5605": {
+      "applied_at": "2026-09-17T00:18:45.677938+09:00",
+      "date": "2026-09-18",
+      "day": 18,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-18(금) 13:00 ~ 14:00",
+      "start_date": "2026-09-18",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "비공개 치매의 진단 및 치료 최신 동향",
+      "year": 2026
+    },
     "5643": {
       "applied_at": "2026-08-26T16:45:53.050655+09:00",
       "date": "2026-09-21",
@@ -446,22 +462,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "심장내과에서 바라보는 펙수클루",
-      "year": 2026
-    },
-    "5733": {
-      "applied_at": "2026-09-14T22:40:23.766696+09:00",
-      "date": "2026-09-16",
-      "day": 16,
-      "end_hour": 22,
-      "end_minute": 40,
-      "end_time": "22:40",
-      "month": 9,
-      "start": "2026-09-16(수) 19:30 ~ 22:40",
-      "start_date": "2026-09-16",
-      "start_hour": 19,
-      "start_minute": 30,
-      "start_time": "19:30",
-      "title": "CABOMETYX® VALUE UP MEETING",
       "year": 2026
     },
     "5734": {
@@ -1152,22 +1152,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "심장내과에서 바라보는 펙수클루",
-      "year": 2026
-    },
-    "5733": {
-      "applied_at": "2026-09-14T22:41:52.337611+09:00",
-      "date": "2026-09-16",
-      "day": 16,
-      "end_hour": 22,
-      "end_minute": 40,
-      "end_time": "22:40",
-      "month": 9,
-      "start": "2026-09-16(수) 19:30 ~ 22:40",
-      "start_date": "2026-09-16",
-      "start_hour": 19,
-      "start_minute": 30,
-      "start_time": "19:30",
-      "title": "CABOMETYX® VALUE UP MEETING",
       "year": 2026
     },
     "5734": {
