@@ -1093,7 +1093,7 @@ main(`3dad022`) 위에 별도 작업본의 8커밋을 cherry-pick하고 후속 �
 
 **다음 할 일**
 1. **main 머지 후 검증** — 2026-09-16 22:13 KST 머지 완료(`6ce9b82`, 머지 트리 pytest 525 통과). 첫 실전 런은 09-17 00:15 daily, 이어서 11:00 블록이다. daily 표로 출석·퀴즈 제출 경로를, 블록 표로 입장·설문·트리거 지문을 확인하고 결과를 이 섹션에 남긴다.
-2. **Claude Cloud Routine 연결** — 생성(레포 DocAuto, 커넥터 제거, setup script로 Python 3.11 + requirements) → API 트리거 토큰 → secrets `CLAUDE_ROUTINE_URL`·`CLAUDE_ROUTINE_TOKEN` → Run now로 스킬 동작과 `main` 직접 push 가부 실측 → 거부되면 `claude/**` 족보 PR 자동 머지 워크플로우를 붙인다.
+2. **Claude Cloud Routine 연결** — 2026-09-16 루틴 생성·실측 완료. `DocAuto 유지보수 (API 트리거)`(`trig_01X4KNgTrjFX2WBxUSSSmJVd`, claude-opus-5, Default 환경, 커넥터·스케줄·setup script 없음). 저장 프롬프트는 레포가 아니라 claude.ai에만 있다 — 스킬 절차를 바꾸면 프롬프트와 어긋나지 않는지 `RemoteTrigger get`으로 확인한다. Run now에 실제 미기입 1건을 `claude_trigger.py` 형식 페이로드로 넣자 78초 만에 answer-bank 스킬대로 기입하고 main에 직접 push했다(`ca1940b`) → `claude/**` 자동 머지 워크플로는 필요 없다. 남은 일(사용자, 09-17 머지 검증 후): 웹에서 API 트리거 추가·토큰 발급 → `gh secret set CLAUDE_ROUTINE_URL`·`gh secret set CLAUDE_ROUTINE_TOKEN`.
 3. 보류: 수동 신청 건이 표에 `·`로 뜨는 문제(5685). 목록의 "이미 신청" 표식을 정찰하거나, 이력·배지가 없는 오늘 방송분만 상세를 열어 버튼으로 확인한다.
 
 **문서 정리(같은 날)**: AGENTS.md는 포인터 한 줄만 남기고 지침은 CLAUDE.md 하나로 유지한다(2026-09-02에 복사본이 뒤처져 실제와 어긋난 이력이 있다). "정답 추측 제출 금지"는 사용자 지시로 해제했다 — 문항 맥락·의학 지식으로 판단해 채우고 근거를 요약에 남긴다. 증거 없는 `verified_by` 금지는 그대로다.
