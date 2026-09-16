@@ -281,4 +281,22 @@ def test_task_quiz_no_answer_payload(monkeypatch, tmp_path):
     assert "\n" not in res["message"]
 
 
+def test_quiz_bank_module_direct_imports():
+    import quiz_bank
+    import doctorville
+
+    assert quiz_bank.normalize_text is doctorville.normalize_text
+    assert quiz_bank.normalize_product is doctorville.normalize_product
+    assert quiz_bank.resolve_product_key is doctorville.resolve_product_key
+    assert quiz_bank.lookup_product_bank is doctorville.lookup_product_bank
+    assert quiz_bank.lookup_legacy_seq is doctorville.lookup_legacy_seq
+    assert quiz_bank.consolidate_products is doctorville.consolidate_products
+    assert quiz_bank.coerce_bank_answer is doctorville.coerce_bank_answer
+    assert quiz_bank.product_has_answer is doctorville.product_has_answer
+    assert quiz_bank.match_quiz_bank is doctorville.match_quiz_bank
+    assert quiz_bank.QUIZ_ANSWERS_PATH == doctorville.QUIZ_ANSWERS_PATH
+    assert quiz_bank.LEGACY_ANSWERS_PATH == doctorville.LEGACY_ANSWERS_PATH
+
+
+
 

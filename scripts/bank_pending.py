@@ -66,14 +66,14 @@ def _stub_playwright_if_missing() -> bool:
 _stub_playwright_if_missing()
 
 import common  # noqa: E402
-import doctorville  # noqa: E402
+import quiz_bank  # noqa: E402
 import seminar_survey as survey  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
 # 이름 → (파일, 중첩 여부, 미기입 판정 함수)
 BANKS = {
-    "quiz": ("quiz_answers.json", True, doctorville.coerce_bank_answer),
+    "quiz": ("quiz_answers.json", True, quiz_bank.coerce_bank_answer),
     "survey_quiz": ("survey_quiz_answers.json", False, survey._coerce_answer),
     "survey_text": ("survey_text_answers.json", False, survey._coerce_answer),
 }

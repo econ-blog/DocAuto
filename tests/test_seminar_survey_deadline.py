@@ -252,3 +252,21 @@ def test_run_survey_incomplete_bank_questions_payload(tmp_path, monkeypatch):
     ]
 
 
+def test_survey_window_module_direct_imports():
+    import survey_window
+    import seminar_survey
+
+    assert survey_window.get_survey_window is seminar_survey.get_survey_window
+    assert survey_window.get_survey_cutoff is seminar_survey.get_survey_cutoff
+    assert survey_window.evaluate_survey_cutoff is seminar_survey.evaluate_survey_cutoff
+    assert survey_window.scheduled_bounds is seminar_survey.scheduled_bounds
+    assert survey_window.observed_end is seminar_survey.observed_end
+    assert survey_window.unopened_status is seminar_survey.unopened_status
+
+    item = {"start": "2026-08-10(월) 13:00 ~ 14:00"}
+    open_dt, end_dt = survey_window.scheduled_bounds(item)
+    assert open_dt == datetime(2026, 8, 10, 13, 30, tzinfo=KST)
+    assert end_dt == datetime(2026, 8, 10, 14, 0, tzinfo=KST)
+
+
+
