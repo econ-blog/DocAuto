@@ -97,6 +97,16 @@
         "bjh7790": "success",
         "wonju": "success"
       }
+    },
+    "5750": {
+      "id": "5750",
+      "title": "CNS WEEK",
+      "start": "2026-10-20(화) 18:00 ~ 19:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:28"
     }
   }
 }

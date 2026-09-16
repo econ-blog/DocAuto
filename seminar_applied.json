@@ -64,22 +64,6 @@
       "title": "[LIVE 3인 좌담회] 노안치료제 딥다이브 : 안전하고 효과적인 첫 처방을 위하여",
       "year": 2026
     },
-    "5665": {
-      "applied_at": "2026-09-02T11:03:11.794481+09:00",
-      "date": "2026-09-16",
-      "day": 16,
-      "end_hour": 20,
-      "end_minute": 30,
-      "end_time": "20:30",
-      "month": 9,
-      "start": "2026-09-16(수) 19:00 ~ 20:30",
-      "start_date": "2026-09-16",
-      "start_hour": 19,
-      "start_minute": 0,
-      "start_time": "19:00",
-      "title": "소화기내과에서 바라보는 펙수클루",
-      "year": 2026
-    },
     "5666": {
       "applied_at": "2026-09-02T11:03:19.840055+09:00",
       "date": "2026-09-17",
@@ -94,22 +78,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "O.M.T Web Symposium",
-      "year": 2026
-    },
-    "5672": {
-      "applied_at": "2026-09-02T17:07:57.535822+09:00",
-      "date": "2026-09-16",
-      "day": 16,
-      "end_hour": 20,
-      "end_minute": 30,
-      "end_time": "20:30",
-      "month": 9,
-      "start": "2026-09-16(수) 19:00 ~ 20:30",
-      "start_date": "2026-09-16",
-      "start_hour": 19,
-      "start_minute": 0,
-      "start_time": "19:00",
-      "title": "[대한내분비학회] 제4회 ENstagram Webinar",
       "year": 2026
     },
     "5676": {
@@ -655,6 +623,22 @@
       "start_time": "18:30",
       "title": "고혈압 WEEK",
       "year": 2026
+    },
+    "5750": {
+      "applied_at": "2026-09-16T21:27:11.729734+09:00",
+      "date": "2026-10-20",
+      "day": 20,
+      "end_hour": 19,
+      "end_minute": 0,
+      "end_time": "19:00",
+      "month": 10,
+      "start": "2026-10-20(화) 18:00 ~ 19:00",
+      "start_date": "2026-10-20",
+      "start_hour": 18,
+      "start_minute": 0,
+      "start_time": "18:00",
+      "title": "CNS WEEK",
+      "year": 2026
     }
   },
   "wonju": {
@@ -722,22 +706,6 @@
       "title": "[LIVE 3인 좌담회] 노안치료제 딥다이브 : 안전하고 효과적인 첫 처방을 위하여",
       "year": 2026
     },
-    "5665": {
-      "applied_at": "2026-09-02T11:04:36.427826+09:00",
-      "date": "2026-09-16",
-      "day": 16,
-      "end_hour": 20,
-      "end_minute": 30,
-      "end_time": "20:30",
-      "month": 9,
-      "start": "2026-09-16(수) 19:00 ~ 20:30",
-      "start_date": "2026-09-16",
-      "start_hour": 19,
-      "start_minute": 0,
-      "start_time": "19:00",
-      "title": "소화기내과에서 바라보는 펙수클루",
-      "year": 2026
-    },
     "5666": {
       "applied_at": "2026-09-02T11:04:44.353285+09:00",
       "date": "2026-09-17",
@@ -752,22 +720,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "O.M.T Web Symposium",
-      "year": 2026
-    },
-    "5672": {
-      "applied_at": "2026-09-02T17:08:49.565812+09:00",
-      "date": "2026-09-16",
-      "day": 16,
-      "end_hour": 20,
-      "end_minute": 30,
-      "end_time": "20:30",
-      "month": 9,
-      "start": "2026-09-16(수) 19:00 ~ 20:30",
-      "start_date": "2026-09-16",
-      "start_hour": 19,
-      "start_minute": 0,
-      "start_time": "19:00",
-      "title": "[대한내분비학회] 제4회 ENstagram Webinar",
       "year": 2026
     },
     "5676": {
@@ -1296,6 +1248,22 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "고혈압 WEEK",
+      "year": 2026
+    },
+    "5750": {
+      "applied_at": "2026-09-16T21:28:17.306731+09:00",
+      "date": "2026-10-20",
+      "day": 20,
+      "end_hour": 19,
+      "end_minute": 0,
+      "end_time": "19:00",
+      "month": 10,
+      "start": "2026-10-20(화) 18:00 ~ 19:00",
+      "start_date": "2026-10-20",
+      "start_hour": 18,
+      "start_minute": 0,
+      "start_time": "18:00",
+      "title": "CNS WEEK",
       "year": 2026
     }
   }
