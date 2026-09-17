@@ -151,10 +151,9 @@ def get_entered_item(state: dict, account: str, seminar_id: int | str) -> dict:
     if isinstance(state, dict):
         acc = state.get("accounts", {}).get(account, {})
         for item in acc.get("entered", []):
+            # v1(id 목록)은 upgrade_to_v2가 이미 버렸으므로 항목은 dict다.
             if isinstance(item, dict) and str(item.get("id")) == str(seminar_id):
                 return item
-            elif isinstance(item, int) and str(item) == str(seminar_id):
-                return {"id": item}
     return {"id": int(seminar_id) if str(seminar_id).isdigit() else seminar_id}
 
 
