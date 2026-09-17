@@ -143,6 +143,8 @@ def unopened_status(item: dict, now_dt: datetime = None, running: bool = False) 
 
     `running=True`는 상세에서 "아직 안 끝났다"를 본 경우다. 설문은 세미나가
     끝나야 열리므로 이때 못 여는 것은 실패가 아니다 — quiet `not_ready`.
+    종료를 아직 못 봤고 공지된 종료도 안 지났으면 같은 이유로 quiet이다
+    (표식을 못 읽어도 방송 중인 시간대라는 사실은 남는다).
     **단 공지된 종료가 `SURVEY_RUNNING_GRACE`만큼 지났으면 그 관측을 믿지 않는다.**
     2026-09-15 세미나 5671(13:00~14:00)을 14:39에 '진행 중'으로 읽고 조용히
     넘겼다. 공지는 양쪽으로 틀리지만 40분씩 틀리지는 않는다 — 관측 쪽이 틀렸다.
@@ -150,6 +152,26 @@ def unopened_status(item: dict, now_dt: datetime = None, running: bool = False) 
     st = evaluate_survey_cutoff(item, now_dt)
     if st in ("not_ready", "closed"):
         return st
+
+    # 종료를 **한 번도 못 봤고** 공지된 종료도 아직 안 지났다 = 방송 중일 만한
+    # 시간대다. 설문은 원래 이때 안 열리므로 quiet이다. 2026-09-17 세미나 5666
+    # (18:30~20:00 공지, 실제 19:36 종료)처럼 공지가 틀리는 일은 흔하지만, 틀리는
+    # 쪽은 늘 "더 일찍 끝난다"이고 그건 아래에서 관측으로 잡힌다.
+    #
+    # 이 그물이 필요한 이유: 예전에는 www 상세의 홍보 문구('닥터빌 라이브세미나를
+    # 통해 …')에 든 '라이브'와 다시보기 버튼 '재입장하기'가 진행 중으로 오독돼
+    # **모든** www 조회가 running=True였고, 그 덕에 방송 중 실패가 조용했다. 그
+    # 오독을 걷어내면(2026-09-17 수정) 방송 중 정상 상황이 alert로 샌다. 침묵의
+    # 근거를 "표식을 못 찾았다"가 아니라 "끝난 것을 본 적이 없다"에 둔다.
+    # 일정을 모르면 이 그물은 쓰지 않는다 — "모른다"는 "방송 중"이 아니다.
+    _, announced_end = scheduled_bounds(item)
+    if (
+        observed_end(item) is None
+        and announced_end is not None
+        and not scheduled_end_passed(item, now_dt)
+    ):
+        return "not_ready"
+
     if running and not scheduled_end_passed(item, now_dt):
         # 세미나가 아직 안 끝났다 — 설문은 원래 이때 안 열린다. 정상이므로 quiet.
         return "not_ready"
