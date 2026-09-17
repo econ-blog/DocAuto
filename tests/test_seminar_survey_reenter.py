@@ -131,7 +131,12 @@ def test_discarded_pages_still_never_count(monkeypatch):
 # ---------------------------------------------------------------------------
 
 def test_missed_survey_after_the_end_is_an_alert_not_not_ready(monkeypatch):
-    """두 상세를 실측대로 읽은 뒤 설문 창을 못 열면 `unverified`여야 한다."""
+    """두 상세를 실측대로 읽은 뒤 설문 창을 못 열면 `unverified`여야 한다.
+
+    공지는 18:30~20:00인데 실제로는 19:36쯤 끝났다(19:37에 wonju가 설문 창을
+    열었다). 공지된 종료는 아직 안 지났으므로 **판정의 근거는 공지가 아니라
+    m 상세에서 본 '세미나 종료'**다 — 그 관측이 살아 있어야 alert가 난다.
+    """
     survey_detail.LAST_DETAIL_PROBE.clear()
     monkeypatch.setattr(
         seminar_survey, "open_survey",
@@ -158,7 +163,7 @@ def test_missed_survey_after_the_end_is_an_alert_not_not_ready(monkeypatch):
     state = {}
     result = seminar_survey.run_survey(
         MagicMock(),
-        {"id": 5666, "title": "O.M.T Web Symposium", "start": "2026-09-17(목) 19:00 ~ 19:30"},
+        {"id": 5666, "title": "O.M.T Web Symposium", "start": "2026-09-17(목) 18:30 ~ 20:00"},
         now_dt=now,
         state=state,
         account="bjh7790",
@@ -169,3 +174,36 @@ def test_missed_survey_after_the_end_is_an_alert_not_not_ready(monkeypatch):
     ended = seminar_survey.get_survey_meta(state, "bjh7790", 5666).get("ended_at")
     assert ended and ended.startswith("2026-09-17T19:37")
     survey_detail.LAST_DETAIL_PROBE.clear()
+
+
+# ---------------------------------------------------------------------------
+# ④ 방송 중에 못 여는 것은 여전히 quiet이다
+# ---------------------------------------------------------------------------
+
+def test_still_quiet_while_the_seminar_is_on_air_without_any_marker():
+    """표식을 못 읽어도 방송 중인 시간대라는 사실은 남는다.
+
+    '라이브'·'재입장하기' 오독을 걷어낸 뒤, 진행 중 표식을 하나도 못 읽는 상황이
+    곧바로 alert가 되면 방송 중 30분마다 거짓 경보가 난다. 침묵의 근거를 표식이
+    아니라 "끝난 것을 본 적이 없다"에 둔다.
+    """
+    item = {"id": 5666, "start": "2026-09-17(목) 18:30 ~ 20:00"}
+    on_air = datetime(2026, 9, 17, 19, 0, tzinfo=KST)
+    assert seminar_survey.unopened_status(item, on_air, running=False) == "not_ready"
+    assert seminar_survey.unopened_status(item, on_air, running=True) == "not_ready"
+
+
+def test_observed_end_turns_the_same_failure_into_an_alert():
+    """'세미나 종료'를 본 뒤로는 공지 종료 전이라도 못 연 것이 alert다."""
+    seen = {"id": 5666, "start": "2026-09-17(목) 18:30 ~ 20:00",
+            "ended_at": "2026-09-17T19:37:00+09:00"}
+    at = datetime(2026, 9, 17, 19, 37, tzinfo=KST)
+    assert seminar_survey.unopened_status(seen, at, running=False) == "unverified"
+
+
+def test_announced_end_long_past_is_still_an_alert():
+    """공지 종료 + 유예가 지났으면 종료를 못 봤어도 alert다(2026-09-15 5671)."""
+    item = {"id": 5671, "start": "2026-09-15(월) 13:00 ~ 14:00"}
+    assert seminar_survey.unopened_status(
+        item, datetime(2026, 9, 15, 14, 39, tzinfo=KST), running=True
+    ) == "unverified"
