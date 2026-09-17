@@ -162,3 +162,19 @@ def test_seminar_state_module_direct_imports():
     assert seminar_state.pending_seminar_ids(state, "bjh7790") == [9999]
 
 
+
+
+def test_upgrade_discards_malformed_accounts():
+    """accounts가 dict가 아니면 예외 대신 빈 v2로 시작한다."""
+    import seminar_state
+    for bad in ({"accounts": []}, {"accounts": [{"entered": []}]}, {"accounts": "x"}):
+        assert seminar_state.upgrade_to_v2(dict(bad)) == {"version": 2, "accounts": {}}
+
+
+def test_load_state_survives_malformed_accounts(tmp_path):
+    import seminar_state
+    path = tmp_path / "seminar_entered.json"
+    path.write_text('{"version": 2, "date": "2026-09-17", "accounts": [1, 2]}', encoding="utf-8")
+    state = seminar_state.load_state(path, today_str="2026-09-17")
+    assert state["accounts"]["bjh7790"]["entered"] == []
+    assert seminar_state.pending_seminar_ids(state, "bjh7790") == []

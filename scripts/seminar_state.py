@@ -12,8 +12,15 @@ import common
 
 
 def _is_v1(state: dict) -> bool:
-    """v1 표식이 있는가 — 계정에 `survey_done`이 있거나 `entered`가 id 목록이다."""
-    for acc in (state.get("accounts") or {}).values():
+    """v1 표식이 있는가 — 계정에 `survey_done`이 있거나 `entered`가 id 목록이다.
+
+    `accounts`가 dict가 아니면 v2로 볼 수 없으니 v1과 같이 버린다. 여기서
+    예외가 나면 load_state가 통째로 죽어 입장·설문이 함께 멈춘다.
+    """
+    accounts = state.get("accounts")
+    if accounts is not None and not isinstance(accounts, dict):
+        return True
+    for acc in (accounts or {}).values():
         if not isinstance(acc, dict):
             continue
         if "survey_done" in acc:
@@ -131,12 +138,11 @@ def pending_seminar_ids(state: dict, account: str) -> list[int]:
     state = upgrade_to_v2(state)
     acc = state.get("accounts", {}).get(account, {})
     survey_map = acc.get("survey", {})
-    survey_done_list = acc.get("survey_done", [])
     pending = []
     for item in acc.get("entered", []):
-        sid = item["id"] if isinstance(item, dict) else int(item)
-        sid_str = str(sid)
-        if sid_str not in survey_map and sid not in survey_done_list and int(sid) not in survey_done_list:
+        # v1(id 목록)은 upgrade_to_v2가 이미 버렸으므로 여기 오는 항목은 dict다.
+        sid = item.get("id")
+        if sid is not None and str(sid) not in survey_map:
             pending.append(sid)
     return pending
 
