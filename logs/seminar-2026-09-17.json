@@ -56,7 +56,7 @@
     },
     "5739": {
       "id": "5739",
-      "title": "[재] Approaches to Medical Management of Resistant Hypertension",
+      "title": "Approaches to Medical Management of Resistant Hypertension",
       "start": "2026-09-17(목) 17:00 ~ 18:00",
       "apply": {
         "bjh7790": "already_done",
@@ -74,7 +74,7 @@
     },
     "5740": {
       "id": "5740",
-      "title": "[재] 진심(心), Symposium",
+      "title": "진심(心), Symposium",
       "start": "2026-09-17(목) 17:00 ~ 18:30",
       "apply": {
         "bjh7790": "already_done",
@@ -116,6 +116,26 @@
         "bjh7790": "success"
       },
       "updated_at": "00:18"
+    },
+    "5751": {
+      "id": "5751",
+      "title": "[재] 실패 없는 와인 입문: 와인 제대로 알고 마시는 법",
+      "start": "2026-09-19(토) 12:00 ~ 13:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:28"
+    },
+    "5752": {
+      "id": "5752",
+      "title": "[재] 류가형 프로의<100타 탈출 클리닉> 골프 고민을 해부하다!",
+      "start": "2026-09-19(토) 14:00 ~ 15:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:28"
     }
   }
 }

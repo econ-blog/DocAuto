@@ -80,22 +80,6 @@
       "title": "[LIVE 3인 좌담회] 노안치료제 딥다이브 : 안전하고 효과적인 첫 처방을 위하여",
       "year": 2026
     },
-    "5666": {
-      "applied_at": "2026-09-02T11:03:19.840055+09:00",
-      "date": "2026-09-17",
-      "day": 17,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 9,
-      "start": "2026-09-17(목) 18:30 ~ 20:00",
-      "start_date": "2026-09-17",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "O.M.T Web Symposium",
-      "year": 2026
-    },
     "5676": {
       "applied_at": "2026-09-02T18:02:58.957811+09:00",
       "date": "2026-09-22",
@@ -464,22 +448,6 @@
       "title": "심장내과에서 바라보는 펙수클루",
       "year": 2026
     },
-    "5734": {
-      "applied_at": "2026-09-14T22:40:26.875323+09:00",
-      "date": "2026-09-17",
-      "day": 17,
-      "end_hour": 8,
-      "end_minute": 30,
-      "end_time": "08:30",
-      "month": 9,
-      "start": "2026-09-17(목) 07:30 ~ 08:30",
-      "start_date": "2026-09-17",
-      "start_hour": 7,
-      "start_minute": 30,
-      "start_time": "07:30",
-      "title": "CABOMETYX® VALUE UP MEETING",
-      "year": 2026
-    },
     "5735": {
       "applied_at": "2026-09-14T22:40:40.862092+09:00",
       "date": "2026-09-18",
@@ -542,38 +510,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "Best Combination for Liver Health(가제_미정)",
-      "year": 2026
-    },
-    "5739": {
-      "applied_at": "2026-09-15T21:29:48.668286+09:00",
-      "date": "2026-09-17",
-      "day": 17,
-      "end_hour": 18,
-      "end_minute": 0,
-      "end_time": "18:00",
-      "month": 9,
-      "start": "2026-09-17(목) 17:00 ~ 18:00",
-      "start_date": "2026-09-17",
-      "start_hour": 17,
-      "start_minute": 0,
-      "start_time": "17:00",
-      "title": "Approaches to Medical Management of Resistant Hypertension",
-      "year": 2026
-    },
-    "5740": {
-      "applied_at": "2026-09-15T21:29:35.063362+09:00",
-      "date": "2026-09-17",
-      "day": 17,
-      "end_hour": 18,
-      "end_minute": 30,
-      "end_time": "18:30",
-      "month": 9,
-      "start": "2026-09-17(목) 17:00 ~ 18:30",
-      "start_date": "2026-09-17",
-      "start_hour": 17,
-      "start_minute": 0,
-      "start_time": "17:00",
-      "title": "진심(心), Symposium",
       "year": 2026
     },
     "5741": {
@@ -719,6 +655,38 @@
       "start_time": "18:00",
       "title": "CNS WEEK",
       "year": 2026
+    },
+    "5751": {
+      "applied_at": "2026-09-17T21:27:02.960970+09:00",
+      "date": "2026-09-19",
+      "day": 19,
+      "end_hour": 13,
+      "end_minute": 0,
+      "end_time": "13:00",
+      "month": 9,
+      "start": "2026-09-19(토) 12:00 ~ 13:00",
+      "start_date": "2026-09-19",
+      "start_hour": 12,
+      "start_minute": 0,
+      "start_time": "12:00",
+      "title": "[재] 실패 없는 와인 입문: 와인 제대로 알고 마시는 법",
+      "year": 2026
+    },
+    "5752": {
+      "applied_at": "2026-09-17T21:27:17.900928+09:00",
+      "date": "2026-09-19",
+      "day": 19,
+      "end_hour": 15,
+      "end_minute": 0,
+      "end_time": "15:00",
+      "month": 9,
+      "start": "2026-09-19(토) 14:00 ~ 15:00",
+      "start_date": "2026-09-19",
+      "start_hour": 14,
+      "start_minute": 0,
+      "start_time": "14:00",
+      "title": "[재] 류가형 프로의<100타 탈출 클리닉> 골프 고민을 해부하다!",
+      "year": 2026
     }
   },
   "wonju": {
@@ -784,22 +752,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "[LIVE 3인 좌담회] 노안치료제 딥다이브 : 안전하고 효과적인 첫 처방을 위하여",
-      "year": 2026
-    },
-    "5666": {
-      "applied_at": "2026-09-02T11:04:44.353285+09:00",
-      "date": "2026-09-17",
-      "day": 17,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 9,
-      "start": "2026-09-17(목) 18:30 ~ 20:00",
-      "start_date": "2026-09-17",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "O.M.T Web Symposium",
       "year": 2026
     },
     "5676": {
@@ -1154,22 +1106,6 @@
       "title": "심장내과에서 바라보는 펙수클루",
       "year": 2026
     },
-    "5734": {
-      "applied_at": "2026-09-14T22:41:55.960832+09:00",
-      "date": "2026-09-17",
-      "day": 17,
-      "end_hour": 8,
-      "end_minute": 30,
-      "end_time": "08:30",
-      "month": 9,
-      "start": "2026-09-17(목) 07:30 ~ 08:30",
-      "start_date": "2026-09-17",
-      "start_hour": 7,
-      "start_minute": 30,
-      "start_time": "07:30",
-      "title": "CABOMETYX® VALUE UP MEETING",
-      "year": 2026
-    },
     "5735": {
       "applied_at": "2026-09-14T22:42:09.129173+09:00",
       "date": "2026-09-18",
@@ -1232,38 +1168,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "Best Combination for Liver Health(가제_미정)",
-      "year": 2026
-    },
-    "5739": {
-      "applied_at": "2026-09-15T21:32:21.205184+09:00",
-      "date": "2026-09-17",
-      "day": 17,
-      "end_hour": 18,
-      "end_minute": 0,
-      "end_time": "18:00",
-      "month": 9,
-      "start": "2026-09-17(목) 17:00 ~ 18:00",
-      "start_date": "2026-09-17",
-      "start_hour": 17,
-      "start_minute": 0,
-      "start_time": "17:00",
-      "title": "Approaches to Medical Management of Resistant Hypertension",
-      "year": 2026
-    },
-    "5740": {
-      "applied_at": "2026-09-15T21:32:07.264902+09:00",
-      "date": "2026-09-17",
-      "day": 17,
-      "end_hour": 18,
-      "end_minute": 30,
-      "end_time": "18:30",
-      "month": 9,
-      "start": "2026-09-17(목) 17:00 ~ 18:30",
-      "start_date": "2026-09-17",
-      "start_hour": 17,
-      "start_minute": 0,
-      "start_time": "17:00",
-      "title": "진심(心), Symposium",
       "year": 2026
     },
     "5741": {
@@ -1408,6 +1312,38 @@
       "start_minute": 0,
       "start_time": "18:00",
       "title": "CNS WEEK",
+      "year": 2026
+    },
+    "5751": {
+      "applied_at": "2026-09-17T21:28:31.697269+09:00",
+      "date": "2026-09-19",
+      "day": 19,
+      "end_hour": 13,
+      "end_minute": 0,
+      "end_time": "13:00",
+      "month": 9,
+      "start": "2026-09-19(토) 12:00 ~ 13:00",
+      "start_date": "2026-09-19",
+      "start_hour": 12,
+      "start_minute": 0,
+      "start_time": "12:00",
+      "title": "[재] 실패 없는 와인 입문: 와인 제대로 알고 마시는 법",
+      "year": 2026
+    },
+    "5752": {
+      "applied_at": "2026-09-17T21:28:46.657215+09:00",
+      "date": "2026-09-19",
+      "day": 19,
+      "end_hour": 15,
+      "end_minute": 0,
+      "end_time": "15:00",
+      "month": 9,
+      "start": "2026-09-19(토) 14:00 ~ 15:00",
+      "start_date": "2026-09-19",
+      "start_hour": 14,
+      "start_minute": 0,
+      "start_time": "14:00",
+      "title": "[재] 류가형 프로의<100타 탈출 클리닉> 골프 고민을 해부하다!",
       "year": 2026
     }
   }
