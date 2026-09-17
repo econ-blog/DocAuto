@@ -15,17 +15,44 @@
     "5598": {
       "id": "5598",
       "title": "56세, 66세 국가건강검진 폐기능검사로 COPD 진단하고 치료하기",
-      "start": "2026-09-17(목) 13:00 ~ 14:00"
+      "start": "2026-09-17(목) 13:00 ~ 14:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "12:07",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     },
     "5687": {
       "id": "5687",
       "title": "[Libre Week] Clinical Use of CGM in Glucose Monitoring for Patients with Diabetes",
-      "start": "2026-09-17(목) 13:00 ~ 14:00"
+      "start": "2026-09-17(목) 13:00 ~ 14:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "12:07",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     },
     "5682": {
       "id": "5682",
       "title": "개원가에서의 SGLT-2i 치료 전략",
-      "start": "2026-09-17(목) 13:00 ~ 14:00"
+      "start": "2026-09-17(목) 13:00 ~ 14:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "12:07",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     },
     "5739": {
       "id": "5739",
