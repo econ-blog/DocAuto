@@ -26,6 +26,16 @@ SURVEY_PENDING_MARKERS = (
     "설문하기",
 )
 SEMINAR_RUNNING_MARKERS = ("입장하기", "방송중", "라이브")
+# 진행 중 표식으로 읽으면 안 되는 문구. '재입장하기'(다시보기 입장)에는 '입장하기'가
+# 통째로 들어 있어 끝난 세미나에도 걸린다.
+SEMINAR_NOT_RUNNING_MARKERS = ("재입장하기",)
+# 진행 중 표식은 **버튼 라벨**에서만 읽는다. www 상세는 홍보 문구까지 버튼으로
+# 실어 오는데('닥터빌 라이브세미나를 통해 선생님의 노하우를 공유해보세요!'),
+# 거기 들어 있는 '라이브'가 걸려 www 조회는 사실상 언제나 "진행 중"이었다.
+# 2026-09-17 세미나 5666(19:37 실측, run 35210903336): m 상세가 '세미나 종료'를
+# 띄우고 있는데도 www의 '라이브'·'재입장하기'가 진행 중 근거가 되어, 설문 창을
+# 못 연 계정이 unverified(alert)가 아니라 quiet not_ready로 묻혔다.
+RUNNING_LABEL_MAX_LEN = 12
 
 MOBILE_BASE = "https://m.doctorville.co.kr"
 MOBILE_DETAIL_URL = f"{MOBILE_BASE}/cme/vod"
@@ -169,11 +179,24 @@ def seminar_ended(texts) -> bool:
 
 
 def seminar_running(texts) -> bool:
-    """상세에 방송 전·중 표식이 떠 있는가. '세미나 종료'가 같이 있으면 아니다."""
+    """상세에 방송 전·중 표식이 떠 있는가. '세미나 종료'가 같이 있으면 아니다.
+
+    진행 중 판정은 설문을 못 연 것을 quiet으로 덮는 쪽이라, 애매한 문구는 근거로
+    쓰지 않는다. 그래서 두 가지를 거른다:
+      - 문장(홍보 문구 등)은 보지 않는다. 버튼 라벨 길이만 대조한다.
+      - '재입장하기'는 다시보기 입장이라 끝난 세미나에도 남으므로 지운다.
+    """
     if seminar_ended(texts):
         return False
-    joined = " ".join(strip_spaces(t) for t in (texts or []) if t)
-    return any(strip_spaces(m) in joined for m in SEMINAR_RUNNING_MARKERS)
+    for text in texts or []:
+        label = strip_spaces(text)
+        if not label or len(label) > RUNNING_LABEL_MAX_LEN:
+            continue
+        for marker in SEMINAR_NOT_RUNNING_MARKERS:
+            label = label.replace(strip_spaces(marker), " ")
+        if any(strip_spaces(m) in label for m in SEMINAR_RUNNING_MARKERS):
+            return True
+    return False
 
 
 def usable_probes() -> list:
@@ -311,6 +334,12 @@ def read_detail_verdict(page, seminar_id, mobile: bool) -> tuple[str, list[str],
         # 완료 표시는 그대로 믿는다. 반대로 '미참여'는 로그아웃 화면에서도 똑같이
         # 보이므로(로그인 증거가 없으면 '설문하기'만 뜬다) 채택하지 않는다.
         if verdict == "not_done" and not has_login_evidence(buttons + [body]):
+            # 보류하는 것은 **설문 참여 판정**뿐이다. 페이지 신원은 위에서 이미
+            # 확인했고, '세미나 종료'는 로그인 여부와 무관한 사이트 상태이므로
+            # 종료·진행 중 관측은 살린다. 예전에는 이 기록까지 통째로 버려서,
+            # m이 '세미나 종료'를 띄우고 있는데도 www의 '재입장하기'가 유일한
+            # 근거가 되어 진행 중으로 읽혔다(2026-09-17 세미나 5666).
+            rec["usable"] = True
             return "unknown", buttons, "m 상세: 로그인 증거 없이 미참여로 보임 — 판정 보류"
     rec["usable"] = True
     return verdict, buttons, ""
