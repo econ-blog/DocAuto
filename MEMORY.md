@@ -254,6 +254,8 @@ legacy에서 답을 찾으면 그 자리에서 종류별 족보로 **옮긴다**
 
 봇은 알림 봇과 동일(`TELEGRAM_BOT_TOKEN` 재사용, 새 시크릿 없음). `getUpdates` 폴링.
 
+**토큰·chat_id 출처 (2026-09-17 변경):** `notify.resolve_credentials`는 환경변수(`TELEGRAM_BOT_TOKEN`·`TELEGRAM_CHAT_ID` secret)를 `credentials.json`의 `telegram` 블록보다 먼저 읽는다. 두 secret은 워크플로우에 참조만 있고 등록되지 않아 그동안 `credentials.json` 값으로 돌았다. 2026-09-17 14:10경 등록했고(`@sj_seminar_bot`, 사용자 개인 채팅 — `getMe`·`getChat` 확인 후), 14:30 블록 표 전송 성공으로 검증했다. 이제 `CREDENTIALS_JSON`의 telegram 값을 고쳐도 반영되지 않는다 — 표 전송·인박스가 끊기면 이 두 secret부터 본다.
+
 흐름: `getUpdates`(offset 없이) → **chat_id 필터** → 줄 단위 파싱 → 파일 갱신 → 답장 → **워크플로우가 커밋·푸시** → `--confirm-offset`으로 확정.
 
 - **offset 확정을 맨 마지막에 하는 이유:** `getUpdates?offset=N` 호출 순간 이전 업데이트가 서버에서 영구 삭제된다. 커밋 성공 후 확정해야 중간에 죽어도 다음 실행에 다시 읽힌다(중복 처리는 같은 값 덮어쓰기라 멱등).
