@@ -55,7 +55,7 @@
     },
     "5742": {
       "id": "5742",
-      "title": "[재] ENVLO WEB SYMPOSIUM",
+      "title": "ENVLO WEB SYMPOSIUM",
       "start": "2026-09-18(금) 17:00 ~ 18:30",
       "apply": {
         "bjh7790": "already_done",
@@ -84,6 +84,36 @@
         "bjh7790": "success",
         "wonju": "success"
       }
+    },
+    "5756": {
+      "id": "5756",
+      "title": "Clinical Updates in Dyslipidemia, Positioning Baroezet for Optimal Patient Care",
+      "start": "2026-09-29(화) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:07"
+    },
+    "5753": {
+      "id": "5753",
+      "title": "류가형 프로가 선생님의 골프 고민에 직접 답합니다.",
+      "start": "2026-10-12(월) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:07"
+    },
+    "5754": {
+      "id": "5754",
+      "title": "근골격질환(골다공증)",
+      "start": "2026-10-23(금) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "21:08"
     }
   }
 }

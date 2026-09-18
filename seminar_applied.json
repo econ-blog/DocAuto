@@ -1,21 +1,5 @@
 {
   "bjh7790": {
-    "5605": {
-      "applied_at": "2026-09-17T00:18:45.677938+09:00",
-      "date": "2026-09-18",
-      "day": 18,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 9,
-      "start": "2026-09-18(금) 13:00 ~ 14:00",
-      "start_date": "2026-09-18",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "비공개 치매의 진단 및 치료 최신 동향",
-      "year": 2026
-    },
     "5643": {
       "applied_at": "2026-08-26T16:45:53.050655+09:00",
       "date": "2026-09-21",
@@ -110,22 +94,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "비뇨기질환에서 프로바이오틱스의 최신지견과 의의",
-      "year": 2026
-    },
-    "5679": {
-      "applied_at": "2026-09-03T20:57:20.860989+09:00",
-      "date": "2026-09-18",
-      "day": 18,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 9,
-      "start": "2026-09-18(금) 13:00 ~ 14:00",
-      "start_date": "2026-09-18",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "전문직과 직장인을 위한 거북목·일자목 관리 전략",
       "year": 2026
     },
     "5692": {
@@ -448,22 +416,6 @@
       "title": "심장내과에서 바라보는 펙수클루",
       "year": 2026
     },
-    "5735": {
-      "applied_at": "2026-09-14T22:40:40.862092+09:00",
-      "date": "2026-09-18",
-      "day": 18,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 9,
-      "start": "2026-09-18(금) 13:00 ~ 14:00",
-      "start_date": "2026-09-18",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "True Atherosclerosis Regression with a 20-year Legacy, CRESTOR",
-      "year": 2026
-    },
     "5736": {
       "applied_at": "2026-09-15T21:30:16.593296+09:00",
       "date": "2026-10-06",
@@ -526,22 +478,6 @@
       "start_minute": 0,
       "start_time": "13:00",
       "title": "CNS WEEK",
-      "year": 2026
-    },
-    "5742": {
-      "applied_at": "2026-09-15T21:30:02.596818+09:00",
-      "date": "2026-09-18",
-      "day": 18,
-      "end_hour": 18,
-      "end_minute": 30,
-      "end_time": "18:30",
-      "month": 9,
-      "start": "2026-09-18(금) 17:00 ~ 18:30",
-      "start_date": "2026-09-18",
-      "start_hour": 17,
-      "start_minute": 0,
-      "start_time": "17:00",
-      "title": "ENVLO WEB SYMPOSIUM",
       "year": 2026
     },
     "5743": {
@@ -687,6 +623,54 @@
       "start_time": "14:00",
       "title": "[재] 류가형 프로의<100타 탈출 클리닉> 골프 고민을 해부하다!",
       "year": 2026
+    },
+    "5753": {
+      "applied_at": "2026-09-18T21:06:18.090870+09:00",
+      "date": "2026-10-12",
+      "day": 12,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 10,
+      "start": "2026-10-12(월) 13:00 ~ 14:00",
+      "start_date": "2026-10-12",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "류가형 프로가 선생님의 골프 고민에 직접 답합니다.",
+      "year": 2026
+    },
+    "5754": {
+      "applied_at": "2026-09-18T21:06:31.908154+09:00",
+      "date": "2026-10-23",
+      "day": 23,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 10,
+      "start": "2026-10-23(금) 13:00 ~ 14:00",
+      "start_date": "2026-10-23",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "근골격질환(골다공증)",
+      "year": 2026
+    },
+    "5756": {
+      "applied_at": "2026-09-18T21:06:04.283007+09:00",
+      "date": "2026-09-29",
+      "day": 29,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-29(화) 13:00 ~ 14:00",
+      "start_date": "2026-09-29",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "Clinical Updates in Dyslipidemia, Positioning Baroezet for Optimal Patient Care",
+      "year": 2026
     }
   },
   "wonju": {
@@ -784,22 +768,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "비뇨기질환에서 프로바이오틱스의 최신지견과 의의",
-      "year": 2026
-    },
-    "5679": {
-      "applied_at": "2026-09-04T00:20:04.565494+09:00",
-      "date": "2026-09-18",
-      "day": 18,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 9,
-      "start": "2026-09-18(금) 13:00 ~ 14:00",
-      "start_date": "2026-09-18",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "전문직과 직장인을 위한 거북목·일자목 관리 전략",
       "year": 2026
     },
     "5693": {
@@ -1106,22 +1074,6 @@
       "title": "심장내과에서 바라보는 펙수클루",
       "year": 2026
     },
-    "5735": {
-      "applied_at": "2026-09-14T22:42:09.129173+09:00",
-      "date": "2026-09-18",
-      "day": 18,
-      "end_hour": 14,
-      "end_minute": 0,
-      "end_time": "14:00",
-      "month": 9,
-      "start": "2026-09-18(금) 13:00 ~ 14:00",
-      "start_date": "2026-09-18",
-      "start_hour": 13,
-      "start_minute": 0,
-      "start_time": "13:00",
-      "title": "True Atherosclerosis Regression with a 20-year Legacy, CRESTOR",
-      "year": 2026
-    },
     "5736": {
       "applied_at": "2026-09-15T21:32:49.054339+09:00",
       "date": "2026-10-06",
@@ -1184,22 +1136,6 @@
       "start_minute": 0,
       "start_time": "13:00",
       "title": "CNS WEEK",
-      "year": 2026
-    },
-    "5742": {
-      "applied_at": "2026-09-15T21:32:34.770586+09:00",
-      "date": "2026-09-18",
-      "day": 18,
-      "end_hour": 18,
-      "end_minute": 30,
-      "end_time": "18:30",
-      "month": 9,
-      "start": "2026-09-18(금) 17:00 ~ 18:30",
-      "start_date": "2026-09-18",
-      "start_hour": 17,
-      "start_minute": 0,
-      "start_time": "17:00",
-      "title": "ENVLO WEB SYMPOSIUM",
       "year": 2026
     },
     "5743": {
@@ -1344,6 +1280,54 @@
       "start_minute": 0,
       "start_time": "14:00",
       "title": "[재] 류가형 프로의<100타 탈출 클리닉> 골프 고민을 해부하다!",
+      "year": 2026
+    },
+    "5753": {
+      "applied_at": "2026-09-18T21:07:53.829475+09:00",
+      "date": "2026-10-12",
+      "day": 12,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 10,
+      "start": "2026-10-12(월) 13:00 ~ 14:00",
+      "start_date": "2026-10-12",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "류가형 프로가 선생님의 골프 고민에 직접 답합니다.",
+      "year": 2026
+    },
+    "5754": {
+      "applied_at": "2026-09-18T21:08:10.847097+09:00",
+      "date": "2026-10-23",
+      "day": 23,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 10,
+      "start": "2026-10-23(금) 13:00 ~ 14:00",
+      "start_date": "2026-10-23",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "근골격질환(골다공증)",
+      "year": 2026
+    },
+    "5756": {
+      "applied_at": "2026-09-18T21:07:40.481357+09:00",
+      "date": "2026-09-29",
+      "day": 29,
+      "end_hour": 14,
+      "end_minute": 0,
+      "end_time": "14:00",
+      "month": 9,
+      "start": "2026-09-29(화) 13:00 ~ 14:00",
+      "start_date": "2026-09-29",
+      "start_hour": 13,
+      "start_minute": 0,
+      "start_time": "13:00",
+      "title": "Clinical Updates in Dyslipidemia, Positioning Baroezet for Optimal Patient Care",
       "year": 2026
     }
   }
