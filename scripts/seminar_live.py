@@ -390,6 +390,13 @@ def run_account(
 
         except Exception as e:
             output["error"] = f"예외 발생: {e}"
+            # 사유를 노드에도 남긴다. claude_trigger는 노드의 message로 재시도성
+            # (타임아웃·net::·5xx)을 판정해 일시 장애의 당일 첫 발생을 보류한다.
+            # 비어 있으면 코드 결함으로 오인해 1회차부터 세션을 발사한다
+            # (2026-09-18 19:40 seminar_block: 같은 goto 타임아웃인데
+            #  seminar_survey는 deferred, seminar_live만 fired).
+            if output.get("live_seminar", {}).get("status") == "failed":
+                output["live_seminar"]["message"] = f"예외 발생: {e}"
             shot = save_screenshot(page, "error")
             common.log_error("seminar_live", e, account=account, screenshot=shot)
         finally:
