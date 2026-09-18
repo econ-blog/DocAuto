@@ -61,7 +61,7 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "17:06",
+      "updated_at": "17:39",
       "live": {
         "bjh7790": "success",
         "wonju": "success"
@@ -74,7 +74,16 @@
     "5680": {
       "id": "5680",
       "title": "개원의가 바라보는 펙수클루",
-      "start": "2026-09-18(금) 18:30 ~ 20:00"
+      "start": "2026-09-18(금) 18:30 ~ 20:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "17:39",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     }
   }
 }
