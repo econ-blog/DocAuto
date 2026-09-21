@@ -440,6 +440,14 @@ seminar_live 17 / seminar_survey 6+1 / doctorville 4 — 전부 같은 로그인
 - 로컬 sandbox에서 Playwright 시스템 라이브러리 설치 불가(sudo 필요)해 DOM 조사는 Claude in Chrome MCP로 실제 로그인 세션에 붙어 수행했다.
 - `playOnPopup` 소스 직접 검사는 도구 필터에 걸려 `usesWindowOpen` 등 구조만 간접 확인.
 - 목록에 있어도 방문 시점에 방송 종료/미시작이면 상세에 `a.btn_bn.btn_enter`가 없다 → `skipped` 후 다음 세미나.
+- **실패 노드에 message 누락 (2026-09-18 수정)**: `run_account`의 except가 사유를 `output["error"]`에만 적고
+  `output["live_seminar"]`는 초기값 `{"status": "failed"}` 그대로 뒀다. `claude_trigger.evaluate_items`는
+  **노드의 message**로 재시도성(`common.is_retryable_error`: `net::`·`ERR_`·`Timeout`)을 판정하므로,
+  message가 비면 일시 장애도 코드 결함으로 보고 당일 1회차부터 세션을 발사한다.
+  2026-09-18 19:40 seminar_block(run 35335093788)에서 확인 — 같은 `Page.goto: Timeout 30000ms exceeded`인데
+  `seminar_survey`(노드에 message 있음)는 `retryable_first_occurrence`로 보류, `seminar_live`만 `fired`.
+  `doctorville.run`은 원래부터 미실행 태스크에 message를 넣고 있었다(동일 패턴). 회귀 테스트:
+  `tests/test_seminar_live_failure_message.py`.
 
 ---
 
