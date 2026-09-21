@@ -21,9 +21,10 @@ SURVEY_DONE_MARKERS = (
     "설문 응답 완료",
     "설문 완료",
 )
+SURVEY_OPEN_MARKER = "설문하기"
 SURVEY_PENDING_MARKERS = (
     SEMINAR_END_MARKER,
-    "설문하기",
+    SURVEY_OPEN_MARKER,
 )
 SEMINAR_RUNNING_MARKERS = ("입장하기", "방송중", "라이브")
 # 진행 중 표식으로 읽으면 안 되는 문구. '재입장하기'(다시보기 입장)에는 '입장하기'가
@@ -96,6 +97,17 @@ def detect_survey_marker(texts, allow_done: bool = True) -> str:
     if any(strip_spaces(m) in joined for m in SURVEY_PENDING_MARKERS):
         return "not_done"
     return "unknown"
+
+
+def has_survey_open_button(texts) -> bool:
+    """상세에 '설문하기'가 보이는가 — 이 계정이 설문에 들어갈 수 있다는 증거다.
+
+    `not_done` 판정은 '세미나 종료'만 보였을 때도 성립한다. 둘은 다르다:
+    전자는 설문이 열려 있는데 못 연 것(실패), 후자는 애초에 이 계정에게
+    설문이 열리지 않은 것(입장을 안 했을 때)이다.
+    """
+    joined = " ".join(strip_spaces(t) for t in (texts or []) if t)
+    return strip_spaces(SURVEY_OPEN_MARKER) in joined
 
 
 def matched_done_marker(texts) -> str:
