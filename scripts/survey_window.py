@@ -106,11 +106,18 @@ def evaluate_survey_cutoff(item: dict, now_dt: datetime = None) -> str:
         return "ready"
 
     # 종료 미관측 — 사전 게이트만 본다.
-    probe_from, _ = scheduled_bounds(item)
+    probe_from, announced_end = scheduled_bounds(item)
     if probe_from is None:
         return "ready"
     if now_dt < probe_from:
         return "not_ready"
+    # 종료를 한 번도 못 봤어도, **공지된 종료 + 관측 오차 + 창**이 다 지났으면
+    # 창은 닫혔다. 공지가 틀리는 쪽은 "더 일찍 끝난다"이고, 더 늦게 끝나는 쪽은
+    # SURVEY_RUNNING_GRACE가 상한이다 — 그 뒤 1시간까지 열려 있을 수는 없다.
+    # 이 상한이 없으면 낮에 끝난 세미나가 SURVEY_STALE_AFTER(12시간) 동안
+    # `unverified`(alert)로 남아, 창이 닫힌 지 한참인 건을 30분마다 울린다.
+    if announced_end is not None and now_dt > announced_end + SURVEY_RUNNING_GRACE + SURVEY_CLOSE_GRACE:
+        return "closed"
     if now_dt > probe_from - SURVEY_PROBE_LEAD + SURVEY_STALE_AFTER:
         return "closed"
     return "ready"
