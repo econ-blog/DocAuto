@@ -194,6 +194,7 @@ from survey_detail import (
     detect_survey_marker,
     matched_done_marker,
     has_survey_open_button,
+    probe_read_detail_page,
     body_text,
     detail_url_matches,
     read_detail_buttons,
@@ -933,17 +934,44 @@ def run_survey(
         # 이 계정에게는 설문이 열린 적이 없다 — 신청만 하고 입장하지 않은 경우다.
         # 설문 쪽 실패가 아니므로 quiet `no_target`으로 끝낸다. 입장 누락 자체는
         # 입장 모듈과 결과 표가 드러낸다.
+        #
+        # 상세가 **아무 표식도 안 주는 경우**(`unknown`)도 같은 처지다. 2026-09-21
+        # 세미나 5643(13:00~14:00)을 20:06에 조회하니 m은 '뒤로 가기'뿐이고
+        # (VOD 미등록) www는 메뉴·'관심'·'목록' 같은 껍데기만 보였다 — 종료도
+        # 설문도 아닌 빈 상세다. 그 침묵을 `unverified`(alert)로 읽어 run
+        # 35591694868이 유지보수 세션을 깨웠지만, 설문 창은 이미 6시간 전에
+        # 닫혔고 자동화가 할 일은 없었다. 다만 침묵을 조용히 넘기려면 세 가지가
+        # 같이 서야 한다:
+        #   - 상세를 정말 펼쳐 봤다(`probe_read_detail_page`). 접속 실패의
+        #     침묵까지 덮으면 장애가 묻힌다.
+        #   - 방송 중 관측이 없다. 진행 중이면 설문은 원래 아직 안 열린다.
+        #   - 공지된 종료가 지났다. 방송 전 시간대의 빈 상세는 '대상 아님'이
+        #     아니라 '아직'이다.
         if (
             item.get("from_applied")
             and not item.get("entered_at")
-            and verdict == "not_done"
             and not has_survey_open_button(detail_buttons)
+            and (
+                verdict == "not_done"
+                or (
+                    verdict == "unknown"
+                    and probe_read_detail_page()
+                    and not still_running
+                    and scheduled_end_passed(item, now_dt)
+                )
+            )
         ):
             result["status"] = "no_target"
-            result["message"] = (
-                f"{prefix}입장 이력 없음 · 상세에 '설문하기' 없음 — 설문 대상 아님."
+            seen = (
+                "상세에 '설문하기' 없음"
+                if verdict == "not_done"
+                else "상세에 설문 표식 없음(빈 상세)"
             )
+            result["message"] = f"{prefix}입장 이력 없음 · {seen} — 설문 대상 아님."
+            result["detail_verdict"] = verdict
             result["detail_buttons"] = detail_buttons
+            if LAST_DETAIL_PROBE:
+                result["detail_probe"] = copy_probe()
             return result
 
         result["status"] = unopened_status(item, now_dt, running=still_running)

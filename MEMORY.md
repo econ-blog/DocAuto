@@ -806,6 +806,32 @@ C안(한 칸에 이모지 2개)은 순서 규칙을 외워야 해서 버렸다.
 
 회귀 테스트: `tests/test_seminar_survey_false_done.py`, `tests/test_seminar_survey_deadline.py`.
 
+### 설문 대상 폴백과 `no_target` (2026-09-21)
+
+입장 이력(`scripts/state/seminar_entered.json`)은 Actions 캐시에만 살아, 블록 런이 그날
+한 번도 저장을 못 하면 통째로 빈다. 그래서 **당일 신청 이력이 폴백 후보**가 된다
+(`seminar_survey.survey_targets`, 항목에 `from_applied` 표식). 후보가 넓어진 만큼
+"이 계정에게는 애초에 설문이 없었다"를 가릴 근거가 필요하다 — 근거는 상세 페이지다.
+
+`from_applied`이고 입장 이력이 없을 때만 quiet `no_target`으로 끝낸다:
+
+| 상세 판정 | 처리 |
+|---|---|
+| `not_done`인데 '설문하기'가 없다 ('세미나 종료'만) | `no_target` |
+| `unknown`(표식이 하나도 없는 빈 상세) + 상세를 실제로 읽었고 + 진행 중 관측 없고 + 공지 종료 경과 | `no_target` |
+| 그 밖(설문하기 보임 / 상세 조회 실패 / 방송 전·중) | 종전대로 (`unverified`·`not_ready`) |
+
+빈 상세 실측 — 세미나 5643(13:00~14:00)을 20:06에 조회(run 35591694868):
+m `/cme/vod/5643`은 '뒤로 가기'뿐(VOD 미등록), www 상세는 '전체 메뉴 열기·관심·목록·
+커뮤니티' 같은 껍데기 버튼만. 숨은 템플릿에는 '설문하기'·'응답완료'가 늘 들어 있으니
+**보이는 버튼만** 본다(`read_detail_buttons`). 설문 창은 6시간 전에 닫혔는데
+`unverified`(alert)로 유지보수 세션을 깨웠다.
+
+상세 조회 실패의 침묵은 덮지 않는다 — `survey_detail.probe_read_detail_page()`가
+"버튼을 실제로 읽어 낸 usable 프로브가 있는가"를 따로 본다.
+
+회귀 테스트: `tests/test_seminar_survey_targets.py`.
+
 ## 알려진 리스크
 
 1. **구형식 legacy 시도는 하루 3회 기회 중 1회를 태운다.** 위치가 맞은 사례(모비케어 `"123"`, 아림시스 `"112"`)와 어긋난 사례(펙수클루 `"332"`→`"323"` 정정, 커밋 `394d8ec`)가 모두 있다. 안전조건은 방어일 뿐 순서 섞임 자체는 못 막는다.

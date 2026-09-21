@@ -110,6 +110,17 @@ def has_survey_open_button(texts) -> bool:
     return strip_spaces(SURVEY_OPEN_MARKER) in joined
 
 
+def probe_read_detail_page() -> bool:
+    """판정에 써도 되는 상세 조회에서 버튼을 **실제로 읽어 냈는가**.
+
+    `confirm_survey_done`은 접속 자체가 실패해도 `unknown`을 돌려준다(그때
+    돌려주는 '버튼'은 실패 사유 문자열이다). "아무 표식도 없었다"를 근거로
+    쓰려면 페이지를 정말 펼쳐 봤다는 사실이 먼저 서야 한다 — 네트워크 실패의
+    침묵과 빈 상세의 침묵은 같게 보이지만 값이 다르다.
+    """
+    return any(rec.get("visible") for rec in usable_probes())
+
+
 def matched_done_marker(texts) -> str:
     """완료 표시 중 실제로 걸린 문구. 없으면 빈 문자열.
 
