@@ -10,7 +10,11 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "13:31"
+      "updated_at": "20:06",
+      "survey": {
+        "bjh7790": "success",
+        "wonju": "success"
+      }
     },
     "5644": {
       "id": "5644",
@@ -20,7 +24,11 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "13:31"
+      "updated_at": "20:06",
+      "survey": {
+        "bjh7790": "success",
+        "wonju": "success"
+      }
     },
     "5643": {
       "id": "5643",
@@ -30,7 +38,11 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "13:31"
+      "updated_at": "20:05",
+      "survey": {
+        "bjh7790": "unverified",
+        "wonju": "unverified"
+      }
     },
     "5757": {
       "id": "5757",

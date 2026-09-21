@@ -152,3 +152,31 @@ def prune_applied_file(path: Path = None, days: int = APPLIED_RETENTION_DAYS, no
     else:
         result["status"] = "skipped"
     return result
+
+
+def applied_on(data: dict, account: str, date_str: str) -> list[dict]:
+    """그 날짜에 방송되는 신청 이력 항목들. 설문 대상의 **영속** 후보다.
+
+    입장 이력(`scripts/state/seminar_entered.json`)은 Actions 캐시에만 있어
+    블록 런이 한 번도 저장하지 못하면 통째로 비어 버린다. 그때 설문은 대상이
+    없다고 조용히 끝났다(2026-09-21 run 35590827440: "입장 이력 파일 없음").
+    신청 이력은 레포에 커밋되므로 캐시와 무관하게 남는다 — 실제 참여 여부는
+    어차피 상세 페이지가 가리므로, 후보를 넓게 잡아도 오판이 늘지 않는다.
+    """
+    acc = data.get(account) if isinstance(data, dict) else None
+    if not isinstance(acc, dict):
+        return []
+    out = []
+    for sid, entry in acc.items():
+        if not isinstance(entry, dict):
+            continue
+        if (entry.get("start_date") or entry.get("date")) != date_str:
+            continue
+        item = {"id": int(sid) if str(sid).isdigit() else sid}
+        if entry.get("title"):
+            item["title"] = entry["title"]
+        if entry.get("start"):
+            item["start"] = entry["start"]
+        out.append(item)
+    out.sort(key=lambda i: str(i["id"]))
+    return out

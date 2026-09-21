@@ -193,6 +193,8 @@ from survey_detail import (
     DETAIL_BUTTON_JS,
     detect_survey_marker,
     matched_done_marker,
+    has_survey_open_button,
+    probe_read_detail_page,
     body_text,
     detail_url_matches,
     read_detail_buttons,
@@ -246,6 +248,7 @@ EMPTY_CONFIRM_POLLS = 6
 REVEAL_ROUNDS = 3
 
 
+from seminar_applied import load_applied, applied_on
 from seminar_state import (
     pending_seminar_ids,
     get_entered_item,
@@ -258,8 +261,49 @@ from seminar_state import (
 
 
 SURVEY_STATUS_PRIORITY = (
-    "failed", "unverified", "incomplete_bank", "success", "already_done", "not_ready", "closed"
+    "failed", "unverified", "incomplete_bank", "success", "already_done", "not_ready", "closed",
+    "no_target",
 )
+
+
+def surveyed_ids(state: dict, account: str) -> set:
+    """이미 설문 결론(done/closed)이 난 세미나 ID 문자열 집합."""
+    if not isinstance(state, dict):
+        return set()
+    acc = (state.get("accounts") or {}).get(account) or {}
+    survey = acc.get("survey")
+    return {str(k) for k in survey} if isinstance(survey, dict) else set()
+
+
+def survey_targets(state: dict, account: str, applied: dict, date_str: str) -> list[dict]:
+    """설문 후보 목록. 입장 이력이 1순위, **당일 신청 이력이 폴백**이다.
+
+    입장 이력은 Actions 캐시에만 살아 블록 런이 한 번도 저장하지 못한 날에는
+    통째로 빈다. 그때 설문은 "대상 없음"으로 조용히 끝나고, 창(실제 종료 +
+    1시간)은 아무도 모르게 닫힌다 — 2026-09-21 run 35590827440.
+
+    신청 이력은 레포에 커밋되므로 캐시와 무관하다. 폴백 항목에는
+    `from_applied` 표식을 달아, 상세에 '설문하기'조차 없을 때(=애초에 이
+    계정에게 설문이 열리지 않은 것) 실패가 아니라 `no_target`으로 끝나게 한다.
+    """
+    targets = []
+    seen = set()
+    for item in (state or {}).get("accounts", {}).get(account, {}).get("entered", []) or []:
+        if not isinstance(item, dict):
+            continue
+        sid = item.get("id")
+        if sid is None or str(sid) in seen:
+            continue
+        seen.add(str(sid))
+        targets.append(dict(item))
+    done = surveyed_ids(state, account)
+    for item in applied_on(applied, account, date_str):
+        if str(item["id"]) in seen:
+            continue
+        seen.add(str(item["id"]))
+        targets.append({**item, "from_applied": True})
+    # 입장 이력에서 온 항목도 결론이 난 것은 뺀다(pending_seminar_ids와 같은 규칙).
+    return [t for t in targets if str(t.get("id")) not in done]
 
 
 def rollup_account_status(statuses: list[str]) -> str:
@@ -886,6 +930,50 @@ def run_survey(
                 mark_survey_status(state, account, sid_val, "done", state_file)
             return result
 
+        # 신청 이력에서 주운 후보인데(입장 이력 없음) 상세에 '설문하기'조차 없다면,
+        # 이 계정에게는 설문이 열린 적이 없다 — 신청만 하고 입장하지 않은 경우다.
+        # 설문 쪽 실패가 아니므로 quiet `no_target`으로 끝낸다. 입장 누락 자체는
+        # 입장 모듈과 결과 표가 드러낸다.
+        #
+        # 상세가 **아무 표식도 안 주는 경우**(`unknown`)도 같은 처지다. 2026-09-21
+        # 세미나 5643(13:00~14:00)을 20:06에 조회하니 m은 '뒤로 가기'뿐이고
+        # (VOD 미등록) www는 메뉴·'관심'·'목록' 같은 껍데기만 보였다 — 종료도
+        # 설문도 아닌 빈 상세다. 그 침묵을 `unverified`(alert)로 읽어 run
+        # 35591694868이 유지보수 세션을 깨웠지만, 설문 창은 이미 6시간 전에
+        # 닫혔고 자동화가 할 일은 없었다. 다만 침묵을 조용히 넘기려면 세 가지가
+        # 같이 서야 한다:
+        #   - 상세를 정말 펼쳐 봤다(`probe_read_detail_page`). 접속 실패의
+        #     침묵까지 덮으면 장애가 묻힌다.
+        #   - 방송 중 관측이 없다. 진행 중이면 설문은 원래 아직 안 열린다.
+        #   - 공지된 종료가 지났다. 방송 전 시간대의 빈 상세는 '대상 아님'이
+        #     아니라 '아직'이다.
+        if (
+            item.get("from_applied")
+            and not item.get("entered_at")
+            and not has_survey_open_button(detail_buttons)
+            and (
+                verdict == "not_done"
+                or (
+                    verdict == "unknown"
+                    and probe_read_detail_page()
+                    and not still_running
+                    and scheduled_end_passed(item, now_dt)
+                )
+            )
+        ):
+            result["status"] = "no_target"
+            seen = (
+                "상세에 '설문하기' 없음"
+                if verdict == "not_done"
+                else "상세에 설문 표식 없음(빈 상세)"
+            )
+            result["message"] = f"{prefix}입장 이력 없음 · {seen} — 설문 대상 아님."
+            result["detail_verdict"] = verdict
+            result["detail_buttons"] = detail_buttons
+            if LAST_DETAIL_PROBE:
+                result["detail_probe"] = copy_probe()
+            return result
+
         result["status"] = unopened_status(item, now_dt, running=still_running)
         if result["status"] == "closed" and state is not None and account:
             mark_survey_status(state, account, sid_val, "closed", state_file)
@@ -1220,9 +1308,14 @@ def run_account(
                 output["message"] = "로그인 실패"
                 return output
 
-            for sid in seminar_ids:
+            for target in seminar_ids:
+                sid = target.get("id") if isinstance(target, dict) else target
                 try:
                     item = get_entered_item(state, account, sid)
+                    if isinstance(target, dict):
+                        # 상태에서 읽은 값(entered_at 등)이 우선, 없으면 후보의
+                        # 메타(title·start)로 채운다. 창 판정이 start에 걸려 있다.
+                        item = {**target, **{k: v for k, v in item.items() if v}}
                     r = run_survey(page, item, bank_paths, state=state, state_file=state_file, account=account)
                 except Exception as e:
                     r = {"seminarId": int(sid) if str(sid).isdigit() else sid, "status": "failed", "message": f"예외 발생: {e}"}
@@ -1257,6 +1350,11 @@ def main():
     parser.add_argument("--text-bank-file", default=str(DEFAULT_TEXT_BANK_FILE), help="주관식 족보 경로")
     parser.add_argument("--legacy-bank-file", default=str(DEFAULT_LEGACY_BANK_FILE), help="구 단일 족보(읽기 전용) 경로")
     parser.add_argument("--state-file", default=str(DEFAULT_STATE_FILE), help="seminar_entered.json 경로")
+    parser.add_argument(
+        "--applied-file",
+        default=str(SCRIPT_DIR.parent / "seminar_applied.json"),
+        help="세미나 신청 이력 경로(입장 이력이 비었을 때의 폴백 후보)",
+    )
     parser.add_argument("--seminar-id", action="append", help="상태 무시하고 특정 세미나만 처리(반복 지정 가능)")
     parser.add_argument("--headed", action="store_true")
     args = parser.parse_args()
@@ -1267,19 +1365,17 @@ def main():
 
     state = None
     state_file = None
+    applied = {}
     if not args.seminar_id:
         state_file = Path(args.state_file)
-        if not state_file.exists():
-            print(json.dumps(
-                {"site": "doctorville_survey", "status": "skipped", "message": "입장 이력 파일 없음 — 설문 대상 없음."},
-                ensure_ascii=False,
-            ))
-            sys.exit(0)
+        # 파일이 없어도 멈추지 않는다. 빈 상태로 읽고 신청 이력을 폴백으로 쓴다 —
+        # 예전에는 여기서 skipped로 끝나, 캐시가 빈 날은 설문 창이 통째로 날아갔다.
         state = seminar_live.load_state(state_file, date_str)
+        applied = load_applied(Path(args.applied_file))
 
     results = {}
     for account in accounts:
-        ids = args.seminar_id if args.seminar_id else pending_seminar_ids(state, account)
+        ids = args.seminar_id if args.seminar_id else survey_targets(state, account, applied, date_str)
         results[account] = run_account(
             account,
             Path(args.credentials),
