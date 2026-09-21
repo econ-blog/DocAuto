@@ -97,3 +97,30 @@ def test_no_target_is_quiet_and_last_in_rollup_priority():
     assert seminar_survey.rollup_account_status(["no_target", "failed"]) == "failed"
     assert seminar_survey.rollup_account_status(["no_target", "success"]) == "success"
     assert seminar_survey.rollup_account_status(["no_target"]) == "no_target"
+
+
+def test_unobserved_end_closes_after_announced_end_plus_window():
+    """종료를 못 봤어도 공지된 종료 + 관측 오차 + 창이 지나면 closed(quiet)다.
+
+    2026-09-21 세미나 5643(13:00~14:00)을 20:07에 시도해 `unverified`(alert)가
+    났다. 설문 창은 실제 종료 + 1시간이라 그 시각에 열려 있을 수 없다 —
+    "못 열었다"가 아니라 "이미 닫혔다"가 사실이다.
+    """
+    from datetime import datetime
+
+    import common
+    from survey_window import evaluate_survey_cutoff, unopened_status
+
+    item = {"id": 5643, "start": "2026-09-21(월) 13:00 ~ 14:00"}
+
+    def at(hhmm):
+        return datetime.strptime(f"2026-09-21 {hhmm}", "%Y-%m-%d %H:%M").replace(tzinfo=common.KST)
+
+    assert evaluate_survey_cutoff(item, at("12:00")) == "not_ready"
+    assert evaluate_survey_cutoff(item, at("14:10")) == "ready"
+    assert evaluate_survey_cutoff(item, at("15:20")) == "ready"
+    assert evaluate_survey_cutoff(item, at("15:40")) == "closed"
+    assert evaluate_survey_cutoff(item, at("20:07")) == "closed"
+    assert unopened_status(item, at("20:07")) == "closed"
+    # 창이 실제로 열려 있는 시간대의 실패는 그대로 alert여야 한다.
+    assert unopened_status(item, at("14:40")) == "unverified"
