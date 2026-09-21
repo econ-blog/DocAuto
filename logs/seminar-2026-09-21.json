@@ -43,6 +43,86 @@
         "bjh7790": "unverified",
         "wonju": "unverified"
       }
+    },
+    "5757": {
+      "id": "5757",
+      "title": "From Continuous Monitoring to Sustained Control – CART BP Pro and Olmesartan-Based Therapy",
+      "start": "2026-09-28(월) 12:30 ~ 13:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "19:50"
+    },
+    "5758": {
+      "id": "5758",
+      "title": "Strategies in Atrial Fibrillation – Clinical value of Olmesartan",
+      "start": "2026-09-28(월) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "19:50"
+    },
+    "5764": {
+      "id": "5764",
+      "title": "크레스토 웹 심포지엄",
+      "start": "2026-09-29(화) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "19:51"
+    },
+    "5760": {
+      "id": "5760",
+      "title": "AI in healthcare - 최신 동향 및 실무활용",
+      "start": "2026-09-30(수) 13:00 ~ 14:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "19:51"
+    },
+    "5759": {
+      "id": "5759",
+      "title": "ALL 4 ONE Symposium",
+      "start": "2026-10-01(목) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "19:51"
+    },
+    "5763": {
+      "id": "5763",
+      "title": "클루타에스의 임상적효능과 안전성",
+      "start": "2026-10-06(화) 12:30 ~ 13:30",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "19:51"
+    },
+    "5762": {
+      "id": "5762",
+      "title": "심(心)포니 Web Symposium",
+      "start": "2026-10-07(수) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "19:52"
+    },
+    "5761": {
+      "id": "5761",
+      "title": "DIVE (Digital Innovation, Value & Experience) Web symposium",
+      "start": "2026-10-07(수) 18:30 ~ 20:00",
+      "apply": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "19:52"
     }
   }
 }
