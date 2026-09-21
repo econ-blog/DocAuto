@@ -1,21 +1,5 @@
 {
   "bjh7790": {
-    "5644": {
-      "applied_at": "2026-08-26T16:46:01.470536+09:00",
-      "date": "2026-09-21",
-      "day": 21,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 9,
-      "start": "2026-09-21(월) 18:30 ~ 20:00",
-      "start_date": "2026-09-21",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "No.1 Collaboration WEB Symposium",
-      "year": 2026
-    },
     "5651": {
       "applied_at": "2026-08-27T11:03:15.397831+09:00",
       "date": "2026-09-29",
@@ -512,22 +496,6 @@
       "title": "고혈압 WEEK",
       "year": 2026
     },
-    "5746": {
-      "applied_at": "2026-09-16T16:39:31.455405+09:00",
-      "date": "2026-09-21",
-      "day": 21,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 9,
-      "start": "2026-09-21(월) 18:30 ~ 20:00",
-      "start_date": "2026-09-21",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "O.M.T Web Symposium",
-      "year": 2026
-    },
     "5748": {
       "applied_at": "2026-09-16T16:39:58.934059+09:00",
       "date": "2026-10-21",
@@ -754,22 +722,6 @@
     }
   },
   "wonju": {
-    "5644": {
-      "applied_at": "2026-08-26T16:47:07.828297+09:00",
-      "date": "2026-09-21",
-      "day": 21,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 9,
-      "start": "2026-09-21(월) 18:30 ~ 20:00",
-      "start_date": "2026-09-21",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "No.1 Collaboration WEB Symposium",
-      "year": 2026
-    },
     "5651": {
       "applied_at": "2026-08-27T11:04:16.078266+09:00",
       "date": "2026-09-29",
@@ -1248,22 +1200,6 @@
       "start_minute": 30,
       "start_time": "18:30",
       "title": "고혈압 WEEK",
-      "year": 2026
-    },
-    "5746": {
-      "applied_at": "2026-09-16T16:41:23.968809+09:00",
-      "date": "2026-09-21",
-      "day": 21,
-      "end_hour": 20,
-      "end_minute": 0,
-      "end_time": "20:00",
-      "month": 9,
-      "start": "2026-09-21(월) 18:30 ~ 20:00",
-      "start_date": "2026-09-21",
-      "start_hour": 18,
-      "start_minute": 30,
-      "start_time": "18:30",
-      "title": "O.M.T Web Symposium",
       "year": 2026
     },
     "5748": {
