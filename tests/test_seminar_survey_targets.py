@@ -124,3 +124,102 @@ def test_unobserved_end_closes_after_announced_end_plus_window():
     assert unopened_status(item, at("20:07")) == "closed"
     # 창이 실제로 열려 있는 시간대의 실패는 그대로 alert여야 한다.
     assert unopened_status(item, at("14:40")) == "unverified"
+# ---------------------------------------------------------------------------
+# 빈 상세(표식 없음)도 '설문 대상 아님'이다 — 2026-09-21 세미나 5643
+# ---------------------------------------------------------------------------
+#
+# run 35591694868(20:06)에서 5643(13:00~14:00)이 `unverified`로 떠 유지보수
+# 세션을 깨웠다. m 상세는 '뒤로 가기'뿐(VOD 미등록)이고 www 상세는 메뉴·'관심'·
+# '목록' 같은 껍데기 버튼만 있었다 — 종료도 설문도 아닌 빈 상세다. 설문 창은
+# 6시간 전에 닫혔고 자동화가 할 일은 없었다.
+
+from datetime import datetime
+from unittest.mock import MagicMock
+
+from common import KST
+
+# 실측 www 상세 버튼(run 35591694868 payload)
+EMPTY_DETAIL_BUTTONS = [
+    "전체 메뉴 열기",
+    "관심",
+    "목록",
+    "닥터빌 라이브세미나를 통해 선생님의 노하우를 공유해보세요!",
+    "커뮤니티",
+    "FAMILY SITE 목록 펼치기",
+]
+
+ITEM_5643 = {
+    "id": 5643,
+    "title": "Gastro-protection Strategies in NSAIDs Therapy",
+    "start": "2026-09-21(월) 13:00 ~ 14:00",
+    "from_applied": True,
+}
+
+
+def _stub_unopened(monkeypatch, verdict, buttons, running=False, probed=True):
+    monkeypatch.setattr(seminar_survey, "open_survey", lambda page, sid: (None, "설문 참여 버튼이 없음(설문 미제공 또는 종료)."))
+    monkeypatch.setattr(seminar_survey, "confirm_survey_done", lambda page, sid, retries=0: (verdict, buttons))
+    monkeypatch.setattr(seminar_survey, "probe_saw_running_seminar", lambda: running)
+    monkeypatch.setattr(seminar_survey, "probe_saw_ended_seminar", lambda: False)
+    monkeypatch.setattr(seminar_survey, "probe_read_detail_page", lambda: probed)
+
+
+def test_empty_detail_on_applied_candidate_is_no_target(monkeypatch):
+    """5643 재현 — 빈 상세를 `unverified`로 읽어 세션을 깨우던 자리."""
+    _stub_unopened(monkeypatch, "unknown", EMPTY_DETAIL_BUTTONS)
+
+    result = seminar_survey.run_survey(
+        MagicMock(), ITEM_5643, now_dt=datetime(2026, 9, 21, 20, 6, tzinfo=KST)
+    )
+
+    assert result["status"] == "no_target"
+    assert result["detail_verdict"] == "unknown"
+    assert result["detail_buttons"] == EMPTY_DETAIL_BUTTONS
+
+
+def test_empty_detail_still_alerts_when_the_page_was_never_read(monkeypatch):
+    """접속 실패의 침묵까지 덮으면 장애가 묻힌다 — 상세를 펼쳐 봤을 때만 quiet."""
+    _stub_unopened(
+        monkeypatch, "unknown", ["www 상세 재접속 실패: Timeout 30000ms exceeded"], probed=False
+    )
+
+    result = seminar_survey.run_survey(
+        MagicMock(), ITEM_5643, now_dt=datetime(2026, 9, 21, 20, 6, tzinfo=KST)
+    )
+
+    assert result["status"] == "unverified"
+
+
+def test_empty_detail_before_the_announced_end_is_not_no_target(monkeypatch):
+    """방송 전·중의 빈 상세는 '대상 아님'이 아니라 '아직'이다."""
+    _stub_unopened(monkeypatch, "unknown", EMPTY_DETAIL_BUTTONS)
+
+    result = seminar_survey.run_survey(
+        MagicMock(), ITEM_5643, now_dt=datetime(2026, 9, 21, 13, 20, tzinfo=KST)
+    )
+
+    assert result["status"] == "not_ready"
+
+
+def test_empty_detail_on_entered_seminar_still_alerts(monkeypatch):
+    """입장한 세미나의 설문이 안 열리는 것은 실패다 — 여기선 덮지 않는다."""
+    _stub_unopened(monkeypatch, "unknown", EMPTY_DETAIL_BUTTONS)
+
+    result = seminar_survey.run_survey(
+        MagicMock(),
+        {**ITEM_5643, "from_applied": False, "entered_at": "2026-09-21T13:05:00+09:00"},
+        now_dt=datetime(2026, 9, 21, 20, 6, tzinfo=KST),
+    )
+
+    assert result["status"] == "unverified"
+
+
+def test_open_survey_button_on_applied_candidate_still_alerts(monkeypatch):
+    """'설문하기'가 보이는데 못 열었으면 그건 실패다(기존 규칙 유지)."""
+    _stub_unopened(monkeypatch, "not_done", ["세미나 종료", "설문하기"])
+
+    result = seminar_survey.run_survey(
+        MagicMock(), ITEM_5643, now_dt=datetime(2026, 9, 21, 15, 0, tzinfo=KST)
+    )
+
+    assert result["status"] == "unverified"
