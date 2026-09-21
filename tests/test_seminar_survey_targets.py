@@ -164,12 +164,18 @@ def _stub_unopened(monkeypatch, verdict, buttons, running=False, probed=True):
     monkeypatch.setattr(seminar_survey, "probe_read_detail_page", lambda: probed)
 
 
+# 시각은 20:06(실측) 대신 14:40으로 잡는다. `survey_window` 수정(공지 종료 +
+# 관측 오차 + 창)이 들어간 뒤로 20:06은 `closed`로 먼저 끝나 아래 판정에
+# 닿지 않는다. 20:06의 `closed`는 위 `test_unobserved_end_closes_...`가 덮고,
+# 여기서는 창이 실제로 열려 있는 시각의 상세 판정을 본다.
+
+
 def test_empty_detail_on_applied_candidate_is_no_target(monkeypatch):
     """5643 재현 — 빈 상세를 `unverified`로 읽어 세션을 깨우던 자리."""
     _stub_unopened(monkeypatch, "unknown", EMPTY_DETAIL_BUTTONS)
 
     result = seminar_survey.run_survey(
-        MagicMock(), ITEM_5643, now_dt=datetime(2026, 9, 21, 20, 6, tzinfo=KST)
+        MagicMock(), ITEM_5643, now_dt=datetime(2026, 9, 21, 14, 40, tzinfo=KST)
     )
 
     assert result["status"] == "no_target"
@@ -184,7 +190,7 @@ def test_empty_detail_still_alerts_when_the_page_was_never_read(monkeypatch):
     )
 
     result = seminar_survey.run_survey(
-        MagicMock(), ITEM_5643, now_dt=datetime(2026, 9, 21, 20, 6, tzinfo=KST)
+        MagicMock(), ITEM_5643, now_dt=datetime(2026, 9, 21, 14, 40, tzinfo=KST)
     )
 
     assert result["status"] == "unverified"
@@ -208,7 +214,7 @@ def test_empty_detail_on_entered_seminar_still_alerts(monkeypatch):
     result = seminar_survey.run_survey(
         MagicMock(),
         {**ITEM_5643, "from_applied": False, "entered_at": "2026-09-21T13:05:00+09:00"},
-        now_dt=datetime(2026, 9, 21, 20, 6, tzinfo=KST),
+        now_dt=datetime(2026, 9, 21, 14, 40, tzinfo=KST),
     )
 
     assert result["status"] == "unverified"
