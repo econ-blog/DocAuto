@@ -47,6 +47,14 @@ MOBILE_UA = (
 )
 MOBILE_LOGIN_MARKERS = ("로그아웃", "마이페이지")
 
+# 상세 주소가 살아 있지 않을 때 사이트가 떨궈 놓는 자리들. 여기로 튕겼다는 것은
+# "못 읽었다"가 아니라 "그 세미나 페이지가 없다"는 관측이다(2026-09-22 세미나 5678).
+SITE_HOME_URLS = (
+    MOBILE_BASE,
+    doctorville.DOCTORVILLE_BASE,
+    f"{doctorville.DOCTORVILLE_BASE}/main",
+)
+
 DEFAULT_TIMEOUT_MS = doctorville.DEFAULT_TIMEOUT_MS
 DETAIL_SETTLE_MS = 2000
 MOBILE_RENDER_TIMEOUT_MS = 8000
@@ -119,6 +127,35 @@ def probe_read_detail_page() -> bool:
     침묵과 빈 상세의 침묵은 같게 보이지만 값이 다르다.
     """
     return any(rec.get("visible") for rec in usable_probes())
+
+
+def is_site_home_url(url: str) -> bool:
+    """상세가 아니라 사이트 홈(또는 메인)으로 떨어진 주소인가."""
+    base = str(url or "").split("?")[0].split("#")[0].rstrip("/")
+    return bool(base) and base in {u.rstrip("/") for u in SITE_HOME_URLS}
+
+
+def probe_detail_gone() -> bool:
+    """상세 조회가 **두 도메인 모두 홈으로 튕겼는가** = 그 세미나 페이지가 없다.
+
+    2026-09-22 세미나 5678(18:30~19:30): 같은 내용이 5695로 다시 열렸고, 옛 id의
+    상세는 m·www 모두 홈으로 리다이렉트됐다. 두 조회 다 URL 불일치로 버려져
+    `probe_read_detail_page()`가 거짓이 되고, 창이 열려 있는 시각이라 신청만 한
+    이 후보가 `unverified`(alert)로 떠 유지보수 세션을 깨웠다. 페이지가 사라진
+    것이라 자동화가 할 일은 없다.
+
+    네트워크 실패의 침묵과 가르기 위해 세 가지를 같이 본다:
+      - 두 도메인 다 조회했고, 최종 주소가 모두 홈이다(한쪽만 홈이면 다른 쪽
+        판정이 살아 있으니 여기까지 오지 않는다).
+      - 버튼을 실제로 읽어 냈다 — 접속 실패면 목록이 비어 있다.
+      - 로그인 증거가 있다. 세션이 끊겨 튕긴 것이면 그건 장애지 빈 페이지가 아니다.
+    """
+    records = [rec for rec in LAST_DETAIL_PROBE.values() if isinstance(rec, dict)]
+    if len(records) < 2 or not all(is_site_home_url(rec.get("url")) for rec in records):
+        return False
+    if not any(rec.get("visible") for rec in records):
+        return False
+    return any(has_login_evidence(rec.get("visible") or []) for rec in records)
 
 
 def matched_done_marker(texts) -> str:

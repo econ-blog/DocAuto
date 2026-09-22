@@ -195,6 +195,7 @@ from survey_detail import (
     matched_done_marker,
     has_survey_open_button,
     probe_read_detail_page,
+    probe_detail_gone,
     body_text,
     detail_url_matches,
     read_detail_buttons,
@@ -943,7 +944,11 @@ def run_survey(
         # 닫혔고 자동화가 할 일은 없었다. 다만 침묵을 조용히 넘기려면 세 가지가
         # 같이 서야 한다:
         #   - 상세를 정말 펼쳐 봤다(`probe_read_detail_page`). 접속 실패의
-        #     침묵까지 덮으면 장애가 묻힌다.
+        #     침묵까지 덮으면 장애가 묻힌다. 상세 주소가 m·www 모두 홈으로
+        #     튕긴 경우(`probe_detail_gone`)도 같다 — 못 읽은 것이 아니라 그
+        #     세미나 페이지가 없는 것이다. 2026-09-22 세미나 5678: 같은 내용이
+        #     5695로 다시 열렸고(5695는 입장·설문 모두 success), 옛 id의 상세만
+        #     사라졌는데 신청 이력에 남아 `unverified`로 세션을 깨웠다.
         #   - 방송 중 관측이 없다. 진행 중이면 설문은 원래 아직 안 열린다.
         #   - 공지된 종료가 지났다. 방송 전 시간대의 빈 상세는 '대상 아님'이
         #     아니라 '아직'이다.
@@ -955,18 +960,21 @@ def run_survey(
                 verdict == "not_done"
                 or (
                     verdict == "unknown"
-                    and probe_read_detail_page()
+                    # 상세를 펼쳐 봤거나(빈 상세), 상세 주소 자체가 홈으로 튕겼다
+                    # (= 그 세미나 페이지가 없다, 2026-09-22 세미나 5678).
+                    and (probe_read_detail_page() or probe_detail_gone())
                     and not still_running
                     and scheduled_end_passed(item, now_dt)
                 )
             )
         ):
             result["status"] = "no_target"
-            seen = (
-                "상세에 '설문하기' 없음"
-                if verdict == "not_done"
-                else "상세에 설문 표식 없음(빈 상세)"
-            )
+            if verdict == "not_done":
+                seen = "상세에 '설문하기' 없음"
+            elif probe_detail_gone():
+                seen = "상세가 홈으로 튕김(세미나 페이지 없음)"
+            else:
+                seen = "상세에 설문 표식 없음(빈 상세)"
             result["message"] = f"{prefix}입장 이력 없음 · {seen} — 설문 대상 아님."
             result["detail_verdict"] = verdict
             result["detail_buttons"] = detail_buttons
