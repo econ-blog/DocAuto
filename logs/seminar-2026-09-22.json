@@ -56,10 +56,10 @@
         "bjh7790": "success",
         "wonju": "success"
       },
-      "updated_at": "20:08",
+      "updated_at": "20:37",
       "survey": {
-        "bjh7790": "incomplete_bank",
-        "wonju": "incomplete_bank"
+        "bjh7790": "success",
+        "wonju": "success"
       }
     },
     "5678": {
@@ -70,10 +70,10 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "20:08",
+      "updated_at": "20:37",
       "survey": {
-        "bjh7790": "unverified",
-        "wonju": "unverified"
+        "bjh7790": "no_target",
+        "wonju": "no_target"
       }
     }
   }
