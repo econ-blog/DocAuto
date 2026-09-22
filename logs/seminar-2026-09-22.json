@@ -5,7 +5,16 @@
     "5677": {
       "id": "5677",
       "title": "조기 목표혈압 도달 중요성과 약물선택",
-      "start": "2026-09-22(화) 13:00 ~ 14:00"
+      "start": "2026-09-22(화) 13:00 ~ 14:00",
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
+      },
+      "updated_at": "12:06",
+      "survey": {
+        "bjh7790": "not_ready",
+        "wonju": "not_ready"
+      }
     },
     "5676": {
       "id": "5676",
@@ -15,10 +24,14 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "11:35",
+      "updated_at": "12:06",
       "survey": {
         "bjh7790": "not_ready",
         "wonju": "not_ready"
+      },
+      "live": {
+        "bjh7790": "success",
+        "wonju": "success"
       }
     },
     "5695": {
@@ -39,7 +52,7 @@
         "bjh7790": "already_done",
         "wonju": "already_done"
       },
-      "updated_at": "11:35",
+      "updated_at": "12:06",
       "survey": {
         "bjh7790": "not_ready",
         "wonju": "not_ready"
