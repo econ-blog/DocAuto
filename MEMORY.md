@@ -819,6 +819,7 @@ C안(한 칸에 이모지 2개)은 순서 규칙을 외워야 해서 버렸다.
 |---|---|
 | `not_done`인데 '설문하기'가 없다 ('세미나 종료'만) | `no_target` |
 | `unknown`(표식이 하나도 없는 빈 상세) + 상세를 실제로 읽었고 + 진행 중 관측 없고 + 공지 종료 경과 | `no_target` |
+| `unknown` + 상세 주소가 m·www 모두 홈으로 튕김(`probe_detail_gone`) + 진행 중 관측 없고 + 공지 종료 경과 | `no_target` |
 | 그 밖(설문하기 보임 / 상세 조회 실패 / 방송 전·중) | 종전대로 (`unverified`·`not_ready`) |
 
 빈 상세 실측 — 세미나 5643(13:00~14:00)을 20:06에 조회(run 35591694868):
@@ -831,6 +832,24 @@ m `/cme/vod/5643`은 '뒤로 가기'뿐(VOD 미등록), www 상세는 '전체 �
 "버튼을 실제로 읽어 낸 usable 프로브가 있는가"를 따로 본다.
 
 회귀 테스트: `tests/test_seminar_survey_targets.py`.
+
+#### 사라진 상세 = 홈 리다이렉트 (2026-09-22)
+
+같은 세미나가 **새 id로 다시 열리면 옛 id의 상세는 사라진다.** 세미나 5678
+(18:30~19:30, '비뇨기질환에서 프로바이오틱스의 최신지견과 의의')이 5695로 다시 열렸고
+(5695는 두 계정 모두 입장·설문 success), 5678 상세는 m이 `https://m.doctorville.co.kr/`,
+www가 `https://www.doctorville.co.kr/main`으로 튕겼다(run 35719120212, 20:08).
+두 조회 다 `detail_url_matches`에서 버려져 `usable=False`가 되니
+`probe_read_detail_page()`는 거짓 — 위 빈 상세 그물에 안 걸리고, 신청 이력만 남은
+후보가 창이 열린 시각에 `unverified`(alert)로 유지보수 세션을 깨웠다. 페이지가 없는
+것이라 자동화가 할 일은 없다.
+
+`survey_detail.probe_detail_gone()`은 세 가지가 **같이** 설 때만 참이다 —
+(1) m·www 두 조회의 최종 주소가 모두 홈(`SITE_HOME_URLS`), (2) 버튼을 실제로 읽어 냄
+(접속 실패면 빈 목록), (3) 로그인 증거(`로그아웃`·`마이페이지`)가 있음. 세션이 끊겨
+튕긴 것은 장애지 빈 페이지가 아니다.
+
+회귀 테스트: `tests/test_seminar_survey_missing_detail.py`.
 
 ## 알려진 리스크
 
