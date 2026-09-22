@@ -15,3 +15,5 @@
 {"ts": "2026-09-22T13:41:00+09:00", "fp": "2026-09-22/seminar_live/live_seminar/failed/_", "run_id": "35687185837", "outcome": "deferred", "session_url": "", "reason": "retryable_first_occurrence"}
 {"ts": "2026-09-22T13:41:00+09:00", "fp": "2026-09-22/seminar_survey/_/failed/_", "run_id": "35687185837", "outcome": "deferred", "session_url": "", "reason": "retryable_first_occurrence"}
 {"ts": "2026-09-22T13:41:00+09:00", "fp": "2026-09-22/seminar_survey/_/failed/_", "run_id": "35687185837", "outcome": "deferred", "session_url": "", "reason": "retryable_first_occurrence"}
+{"ts": "2026-09-22T19:39:45+09:00", "fp": "2026-09-22/seminar_survey/_/incomplete_bank/_", "run_id": "35716419125", "outcome": "fired", "session_url": "https://claude.ai/code/cse_01M5FkqvkPPNQ4KCXW1xRDQr", "fire_id": "35716419125:193945"}
+{"ts": "2026-09-22T19:39:45+09:00", "fp": "2026-09-22/seminar_survey/surveys/incomplete_bank/5695", "run_id": "35716419125", "outcome": "fired", "session_url": "https://claude.ai/code/cse_01M5FkqvkPPNQ4KCXW1xRDQr", "fire_id": "35716419125:193945"}
